@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "cardsharp"
+version = "0.1.0"
+description = "Async Playing Card Library"
+authors = ["Matt Michie <mmichie@gmail.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+asyncio = "^3.4.3"
+
+[tool.poetry.dev-dependencies]
+black = "^23.3.0"
+pytest = "^7.3.2"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
