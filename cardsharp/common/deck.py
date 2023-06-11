@@ -82,6 +82,21 @@ class Deck:
         """
         return len(self.cards)
 
+    def is_empty(self) -> bool:
+        """
+        Check if the deck is empty.
+
+        :return: True if the deck is empty, False otherwise.
+        """
+        return len(self.cards) == 0
+
+    def reset(self):
+        """
+        Reset the deck by recreating and shuffling the cards.
+        """
+        self.cards = self.initialize_default_deck()
+        self.shuffle()
+
     def __repr__(self) -> str:
         """
         Provide a machine-readable representation of the deck.
