@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
 from cardsharp.common.hand import Hand
+from cardsharp.common.io_interface import IOInterface
 
 
 class Actor(ABC):
@@ -12,10 +13,11 @@ class Actor(ABC):
     :param deck: The deck of cards the actor uses
     """
 
-    def __init__(self, name: str, initial_money: int = 1000):
+    def __init__(self, name: str, io_interface: IOInterface, initial_money: int = 1000):
         self.name = name
         self.hands = [Hand()]
         self.money = initial_money
+        self.io_interface = io_interface
 
     @abstractmethod
     def reset_hands(self):
@@ -37,7 +39,7 @@ class Actor(ABC):
         pass
 
     @abstractmethod
-    def display_message(self, message: str):
+    async def display_message(self, message: str):
         """
         Display a message from the actor.
 
@@ -57,11 +59,6 @@ class SimplePlayer(Actor):
         Resets the player's hands to an empty state.
 
         :return: None
-
-        >>> player = SimplePlayer('Test')
-        >>> player.reset_hands()
-        >>> len(player.hands)
-        1
         """
         self.hands = [Hand()]
 
@@ -71,23 +68,14 @@ class SimplePlayer(Actor):
 
         :param amount: The amount to update the player's money by
         :return: None
-
-        >>> player = SimplePlayer('Test')
-        >>> player.update_money(200)
-        >>> player.money
-        1200
         """
         self.money += amount
 
-    def display_message(self, message: str):
+    async def display_message(self, message: str):
         """
-        Prints a message from the player.
+        Sends a message from the player to the IO interface.
 
-        :param message: The message to print
+        :param message: The message to send
         :return: None
-
-        >>> player = SimplePlayer('Test')
-        >>> player.display_message('Hello')  # doctest: +SKIP
-        Test: Hello
         """
-        print(f"{self.name}: {message}")
+        await self.io_interface.send_message(f"{self.name}: {message}")

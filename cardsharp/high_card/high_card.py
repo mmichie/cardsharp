@@ -1,13 +1,14 @@
+import asyncio
 from cardsharp.common.deck import Deck
 from cardsharp.common.actor import SimplePlayer
-
+from cardsharp.common.io_interface import ConsoleIOInterface
 
 class HighCardGame:
     def __init__(self, *players):
         self.players = players
         self.deck = Deck()
 
-    def play_round(self):
+    async def play_round(self):
         """
         Plays a round of High Card.
 
@@ -21,7 +22,7 @@ class HighCardGame:
             player.reset_hands()
             drawn_card = self.deck.deal()
             player.hands[0].add_card(drawn_card)
-            player.display_message(f"drew {drawn_card}")
+            await player.display_message(f"drew {drawn_card}")
 
             if not high_card or drawn_card.rank > high_card.rank:
                 high_card = drawn_card
@@ -30,15 +31,19 @@ class HighCardGame:
         return winner
 
 
-def main():
-    player1 = SimplePlayer("Alice")
-    player2 = SimplePlayer("Bob")
+async def main():
+    io_interface1 = ConsoleIOInterface()
+    io_interface2 = ConsoleIOInterface()
+
+    player1 = SimplePlayer("Alice", io_interface1)
+    player2 = SimplePlayer("Bob", io_interface2)
 
     game = HighCardGame(player1, player2)
-    winner = game.play_round()
+    winner = await game.play_round()
 
     print(f"The winner is {winner.name}!")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
+
