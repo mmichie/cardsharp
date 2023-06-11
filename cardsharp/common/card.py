@@ -6,6 +6,7 @@ class Suit(Enum):
     """
     Enum for suits in a card deck.
     """
+
     HEARTS = "♥"
     DIAMONDS = "♦"
     CLUBS = "♣"
@@ -20,6 +21,7 @@ class Rank(Enum):
     """
     Enum for ranks in a card deck.
     """
+
     TWO = "2"
     THREE = "3"
     FOUR = "4"
@@ -78,8 +80,7 @@ class Card:
         if self.rank == Rank.JOKER:
             return f"Card(None, Rank.JOKER)"
         else:
-            return f"Card(Suit.{self.suit.name}, Rank.{self.rank.name})"
-
+            return f"Card(Suit.{self.suit.name if self.suit else 'None'}, Rank.{self.rank.name})"
 
     def __str__(self) -> str:
         """
@@ -91,4 +92,3 @@ class Card:
             return f"{self.rank.value}"
         else:
             return f"{self.rank.value} of {str(self.suit)}"
-
