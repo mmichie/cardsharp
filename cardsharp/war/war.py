@@ -1,59 +1,143 @@
+import argparse
 import asyncio
+import time
 
 from cardsharp.common.actor import SimplePlayer
 from cardsharp.common.deck import Deck
-from cardsharp.common.io_interface import ConsoleIOInterface
+from cardsharp.common.io_interface import DummyIOInterface, IOInterface
+from cardsharp.common.state import GameState
+
+
+class WarGameState(GameState):
+    def __init__(self, player_names):
+        self.rounds_played = 0
+        self.wins = {name: 0 for name in player_names}
+        self.current_streak = {name: 0 for name in player_names}
+        self.max_streak = {name: 0 for name in player_names}
+        self.round_length = []
+
+    def get_state(self):
+        return {
+            "rounds_played": self.rounds_played,
+            "wins": self.wins,
+            "current_streak": self.current_streak,
+            "max_streak": self.max_streak,
+            "round_length": self.round_length,
+        }
+
+    def update_state(self, new_state):
+        self.rounds_played = new_state.get("rounds_played", self.rounds_played)
+        self.wins = new_state.get("wins", self.wins)
+        self.current_streak = new_state.get("current_streak", self.current_streak)
+        self.max_streak = new_state.get("max_streak", self.max_streak)
+        self.round_length = new_state.get("round_length", self.round_length)
+
+    def display_stats(self):
+        print(f"Rounds Played: {self.rounds_played}")
+        for player, wins in self.wins.items():
+            win_percentage = (wins / self.rounds_played) * 100
+            print(f"{player} won {wins} times ({win_percentage:.2f}%).")
+            print(f"{player}'s longest win streak: {self.max_streak[player]}")
+        print(
+            f"Average round length: {sum(self.round_length) / len(self.round_length)}"
+        )
 
 
 class WarGame:
-    def __init__(self, player1: SimplePlayer, player2: SimplePlayer):
+    def __init__(self, *players, io_interface: IOInterface, game_state: WarGameState):
+        self.players = players
         self.deck = Deck()
-        self.deck.shuffle()
-        self.player1 = player1
-        self.player2 = player2
+        self.io_interface = io_interface
+        self.game_state = game_state
 
-    async def start_game(self):
-        while True:
-            if self.deck.size == 0:
-                break
+    async def play_round(self):
+        self.deck.reset()
+        start_time = time.time()
 
-            await self.player1.display_message("Your turn to draw a card.")
-            card1 = self.deck.deal()
+        await self.io_interface.send_message("New round begins.")
 
-            await self.player2.display_message("Your turn to draw a card.")
-            card2 = self.deck.deal()
+        card1 = self.deck.deal()
+        card2 = self.deck.deal()
 
-            # Compare the rank of the cards
-            if card1.rank > card2.rank:
-                await self.player1.display_message("You win this round!")
-                self.player1.update_money(100)  # Alice wins and gains 100
-                self.player2.update_money(-100)  # Bob loses and loses 100
-            elif card2.rank > card1.rank:
-                await self.player2.display_message("You win this round!")
-                self.player2.update_money(100)  # Bob wins and gains 100
-                self.player1.update_money(-100)  # Alice loses and loses 100
-            else:
-                await self.player1.display_message("It's a tie!")
+        await self.io_interface.send_message(f"{self.players[0].name} drew {card1}")
+        await self.io_interface.send_message(f"{self.players[1].name} drew {card2}")
 
-        if self.player1.money > self.player2.money:
-            winner = self.player1
+        if card1.rank > card2.rank:
+            winner = self.players[0]
+        elif card2.rank > card1.rank:
+            winner = self.players[1]
         else:
-            winner = self.player2
+            winner = None
 
-        await winner.display_message("You won the game!")
+        end_time = time.time()
+        round_length = end_time - start_time
+
+        if winner:
+            self.game_state.update_state(
+                {
+                    "rounds_played": self.game_state.rounds_played + 1,
+                    "wins": {
+                        **self.game_state.wins,
+                        winner.name: self.game_state.wins.get(winner.name, 0) + 1,
+                    },
+                    "current_streak": {
+                        **{
+                            name: 0
+                            for name in self.game_state.current_streak.keys()
+                            if name != winner.name
+                        },
+                        winner.name: self.game_state.current_streak.get(winner.name, 0)
+                        + 1,
+                    },
+                    "max_streak": {
+                        **{
+                            name: self.game_state.max_streak.get(name, 0)
+                            for name in self.game_state.max_streak.keys()
+                            if name != winner.name
+                        },
+                        winner.name: max(
+                            self.game_state.max_streak.get(winner.name, 0),
+                            self.game_state.current_streak.get(winner.name, 0) + 1,
+                        ),
+                    },
+                    "round_length": self.game_state.round_length + [round_length],
+                }
+            )
+        return winner
 
 
-def main():
-    # Create a single IO interface for console interaction
-    io_interface = ConsoleIOInterface()
+def parse_args():
+    parser = argparse.ArgumentParser(description="Play a simulation of War Card Game.")
+    parser.add_argument(
+        "-r",
+        "--rounds",
+        type=int,
+        default=1000,
+        help="number of rounds to play (default: 1000)",
+    )
+    parser.add_argument(
+        "-n",
+        "--names",
+        nargs="+",
+        default=["Alice", "Bob"],
+        help="names of the players (default: Alice Bob)",
+    )
+    return parser.parse_args()
 
-    player1 = SimplePlayer("Alice", io_interface)
-    player2 = SimplePlayer("Bob", io_interface)
 
-    game = WarGame(player1, player2)
+async def main():
+    args = parse_args()
 
-    asyncio.run(game.start_game())
+    io_interface = DummyIOInterface()
+    players = [SimplePlayer(name, io_interface) for name in args.names]
+    game_state = WarGameState(args.names)
+    game = WarGame(*players, io_interface=io_interface, game_state=game_state)
+
+    for _ in range(args.rounds):
+        await game.play_round()
+
+    game_state.display_stats()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
