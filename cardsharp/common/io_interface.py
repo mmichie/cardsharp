@@ -23,14 +23,14 @@ class DummyIOInterface(IOInterface):
     async def send_message(self, message):
         pass
 
-    async def get_player_action(self, player, actions):
+    async def get_player_action(self, player, actions) -> str:
         return actions[0]
 
     async def check_numeric_response(self, response, min_val, max_val):
         return True
 
 
-class TestIOInterface:
+class TestIOInterface(IOInterface):
     __test__ = False
 
     def __init__(self):
