@@ -48,7 +48,6 @@ class HighCardGame:
         self.game_state = game_state
 
     async def play_round(self):
-        start_time = time.time()
         self.deck.reset()
         high_card = None
         winner = None
@@ -64,8 +63,6 @@ class HighCardGame:
             if not high_card or drawn_card.rank > high_card.rank:
                 high_card = drawn_card
                 winner = player
-
-        end_time = time.time()
 
         if winner:
             self.game_state.update_state(
