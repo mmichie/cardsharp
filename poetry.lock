@@ -161,6 +161,20 @@ toml = "*"
 testing = ["fields", "hunter", "process-tests", "six", "pytest-xdist", "virtualenv"]
 
 [[package]]
+name = "pytest-mock"
+version = "3.10.0"
+description = "Thin-wrapper around the mock package for easier use with pytest"
+category = "dev"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+pytest = ">=5.0"
+
+[package.extras]
+dev = ["pre-commit", "tox", "pytest-asyncio"]
+
+[[package]]
 name = "toml"
 version = "0.10.2"
 description = "Python Library for Tom's Obvious, Minimal Language"
@@ -179,7 +193,7 @@ python-versions = ">=3.7"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "d8e229a626ac3d93b48a3c2890497d9b3e8ba720f8a33b516bba656565066779"
+content-hash = "50f4c7248e59de0d8750abb346dd5dbffe9bbe4ac77c65901e201cda845c9108"
 
 [metadata.files]
 asyncio = []
@@ -196,5 +210,6 @@ platformdirs = []
 pluggy = []
 pytest = []
 pytest-cov = []
+pytest-mock = []
 toml = []
 tomli = []
