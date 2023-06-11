@@ -1,7 +1,6 @@
-from abc import ABC, abstractmethod
-
 from cardsharp.common.hand import Hand
 from cardsharp.common.io_interface import IOInterface
+from abc import ABC, abstractmethod
 
 
 class Actor(ABC):
@@ -18,6 +17,11 @@ class Actor(ABC):
         self.hands = [Hand()]
         self.money = initial_money
         self.io_interface = io_interface
+        self.current_hand_index = 0
+
+    @property
+    def current_hand(self):
+        return self.hands[self.current_hand_index]
 
     @abstractmethod
     def reset_hands(self):
@@ -54,6 +58,9 @@ class SimplePlayer(Actor):
     A simple player in a card game, extending from the Actor abstract base class.
     """
 
+    def __init__(self, name: str, io_interface: IOInterface, initial_money: int = 1000):
+        super().__init__(name, io_interface, initial_money)
+
     def reset_hands(self):
         """
         Resets the player's hands to an empty state.
@@ -61,6 +68,7 @@ class SimplePlayer(Actor):
         :return: None
         """
         self.hands = [Hand()]
+        self.current_hand_index = 0  # reset current hand index as well
 
     def update_money(self, amount: int):
         """
@@ -79,3 +87,13 @@ class SimplePlayer(Actor):
         :return: None
         """
         await self.io_interface.send_message(f"{self.name}: {message}")
+
+    def next_hand(self):
+        """
+        Switch to the next hand.
+
+        :return: None
+        """
+        self.current_hand_index = (self.current_hand_index + 1) % len(
+            self.hands
+        )  # wraps around if it's the last hand
