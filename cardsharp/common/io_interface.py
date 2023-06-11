@@ -16,6 +16,20 @@ class IOInterface(ABC):
         pass
 
 
+class DummyIOInterface(IOInterface):
+    async def display_message(self, message):
+        pass
+
+    async def send_message(self, message):
+        pass
+
+    async def get_player_action(self, player, actions):
+        return actions[0]
+
+    async def check_numeric_response(self, response, min_val, max_val):
+        return True
+
+
 class TestIOInterface:
     __test__ = False
 
