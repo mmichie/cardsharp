@@ -17,6 +17,8 @@ class IOInterface(ABC):
 
 
 class TestIOInterface:
+    __test__ = False
+
     def __init__(self):
         self.sent_messages = []
         self.player_action = None
