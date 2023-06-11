@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from cardsharp.common.card import Card, Suit, Rank
 
-class Hand(ABC):
+
+class AbstractHand(ABC):
     def __init__(self):
         self.cards = []
 
@@ -20,12 +21,12 @@ class Hand(ABC):
         pass
 
 
-class CardGameHand(Hand):
+class Hand(AbstractHand):
     def __init__(self):
         super().__init__()
 
     def __repr__(self) -> str:
-        return f"CardGameHand({self.cards!r})"
+        return f"Hand({self.cards!r})"
 
     def __str__(self) -> str:
         return ", ".join(str(card) for card in self.cards)
