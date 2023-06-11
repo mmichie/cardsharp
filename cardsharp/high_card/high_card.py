@@ -15,7 +15,6 @@ class HighCardGameState(GameState):
         self.wins = {name: 0 for name in player_names}
         self.current_streak = {name: 0 for name in player_names}
         self.max_streak = {name: 0 for name in player_names}
-        self.round_length = []
 
     def get_state(self):
         return {
@@ -23,7 +22,6 @@ class HighCardGameState(GameState):
             "wins": self.wins,
             "current_streak": self.current_streak,
             "max_streak": self.max_streak,
-            "round_length": self.round_length,
         }
 
     def update_state(self, new_state):
@@ -31,7 +29,6 @@ class HighCardGameState(GameState):
         self.wins = new_state.get("wins", self.wins)
         self.current_streak = new_state.get("current_streak", self.current_streak)
         self.max_streak = new_state.get("max_streak", self.max_streak)
-        self.round_length = new_state.get("round_length", self.round_length)
 
     def display_stats(self):
         print(f"Rounds Played: {self.rounds_played}")
@@ -39,9 +36,6 @@ class HighCardGameState(GameState):
             win_percentage = (wins / self.rounds_played) * 100
             print(f"{player} won {wins} times ({win_percentage:.2f}%).")
             print(f"{player}'s longest win streak: {self.max_streak[player]}")
-        print(
-            f"Average round length: {sum(self.round_length) / len(self.round_length)}"
-        )
 
 
 class HighCardGame:
@@ -72,7 +66,6 @@ class HighCardGame:
                 winner = player
 
         end_time = time.time()
-        round_length = end_time - start_time
 
         if winner:
             self.game_state.update_state(
@@ -102,11 +95,8 @@ class HighCardGame:
                             self.game_state.current_streak.get(winner.name, 0) + 1,
                         ),
                     },
-                    "round_length": self.game_state.round_length + [round_length],
                 }
             )
-        return winner
-
         return winner
 
 
