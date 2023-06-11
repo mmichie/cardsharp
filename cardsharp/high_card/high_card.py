@@ -116,8 +116,8 @@ def parse_args():
         "-r",
         "--rounds",
         type=int,
-        default=1000000,
-        help="number of rounds to play (default: 1000000)",
+        default=1000,
+        help="number of rounds to play (default: 1000)",
     )
     parser.add_argument(
         "-p", "--players", type=int, default=2, help="number of players (default: 2)"
