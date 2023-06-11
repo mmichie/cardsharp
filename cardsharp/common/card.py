@@ -22,23 +22,57 @@ class Rank(Enum):
     Enum for ranks in a card deck.
     """
 
-    TWO = "2"
-    THREE = "3"
-    FOUR = "4"
-    FIVE = "5"
-    SIX = "6"
-    SEVEN = "7"
-    EIGHT = "8"
-    NINE = "9"
-    TEN = "10"
-    JACK = "J"
-    QUEEN = "Q"
-    KING = "K"
-    ACE = "A"
-    JOKER = "Joker"
+    TWO = (2, "2")
+    THREE = (3, "3")
+    FOUR = (4, "4")
+    FIVE = (5, "5")
+    SIX = (6, "6")
+    SEVEN = (7, "7")
+    EIGHT = (8, "8")
+    NINE = (9, "9")
+    TEN = (10, "10")
+    JACK = (11, "J")
+    QUEEN = (12, "Q")
+    KING = (13, "K")
+    ACE = (14, "A")
+    JOKER = (15, "Joker")
+
+    def __init__(self, rank_value, rank_str):
+        self.rank_value = rank_value
+        self.rank_str = rank_str
+
+    def __gt__(self, other):
+        if isinstance(other, Rank):
+            return self.rank_value > other.rank_value
+        return NotImplemented
+
+    def __ge__(self, other):
+        if isinstance(other, Rank):
+            return self.rank_value >= other.rank_value
+        return NotImplemented
+
+    def __lt__(self, other):
+        if isinstance(other, Rank):
+            return self.rank_value < other.rank_value
+        return NotImplemented
+
+    def __le__(self, other):
+        if isinstance(other, Rank):
+            return self.rank_value <= other.rank_value
+        return NotImplemented
+
+    def __eq__(self, other):
+        if isinstance(other, Rank):
+            return self.rank_value == other.rank_value
+        return NotImplemented
+
+    def __ne__(self, other):
+        if isinstance(other, Rank):
+            return self.rank_value != other.rank_value
+        return NotImplemented
 
     def __str__(self) -> str:
-        return self.value
+        return self.rank_str
 
 
 class Card:
@@ -89,6 +123,6 @@ class Card:
         :return: A string representation of the card.
         """
         if self.rank == Rank.JOKER:
-            return f"{self.rank.value}"
+            return f"{self.rank.rank_str}"
         else:
-            return f"{self.rank.value} of {str(self.suit)}"
+            return f"{self.rank.rank_str} of {str(self.suit)}"
