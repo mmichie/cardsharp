@@ -1,7 +1,6 @@
 import argparse
 import asyncio
 import random
-import time
 
 from cardsharp.common.actor import SimplePlayer
 from cardsharp.common.deck import Deck

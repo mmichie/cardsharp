@@ -1,6 +1,5 @@
 import argparse
 import asyncio
-import time
 
 from cardsharp.common.actor import SimplePlayer
 from cardsharp.common.deck import Deck
@@ -46,7 +45,6 @@ class WarGame:
 
     async def play_round(self):
         self.deck.reset()
-        start_time = time.time()
 
         await self.io_interface.send_message("New round begins.")
 
@@ -62,8 +60,6 @@ class WarGame:
             winner = self.players[1]
         else:
             winner = None
-
-        end_time = time.time()
 
         if winner:
             self.game_state.update_state(
