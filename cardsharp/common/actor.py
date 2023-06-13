@@ -97,3 +97,7 @@ class SimplePlayer(Actor):
         self.current_hand_index = (self.current_hand_index + 1) % len(
             self.hands
         )  # wraps around if it's the last hand
+
+    def receive_card(self, card):
+        """Add a new card to the actor's current hand."""
+        self.current_hand.add_card(card)
