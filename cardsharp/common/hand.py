@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from cardsharp.common.card import Card, Suit, Rank
+from cardsharp.common.card import Card
 
 
 class AbstractHand(ABC):
