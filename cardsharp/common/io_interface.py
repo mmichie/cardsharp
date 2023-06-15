@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 
 class IOInterface(ABC):
     @abstractmethod
-    async def send_message(self, message: str):
+    async def output(self, message: str):
         pass
 
     @abstractmethod
@@ -17,10 +17,7 @@ class IOInterface(ABC):
 
 
 class DummyIOInterface(IOInterface):
-    async def display_message(self, message):
-        pass
-
-    async def send_message(self, message):
+    async def output(self, message):
         pass
 
     async def get_player_action(self, player, actions) -> str:
@@ -38,7 +35,7 @@ class TestIOInterface(IOInterface):
         self.player_action = None
         self.player_actions = []
 
-    async def send_message(self, message):
+    async def output(self, message):
         await asyncio.sleep(0)  # Simulate asynchronous behavior
         self.sent_messages.append(message)
 
@@ -64,7 +61,7 @@ class TestIOInterface(IOInterface):
 
 
 class ConsoleIOInterface(IOInterface):
-    async def send_message(self, message: str):
+    async def output(self, message: str):
         print(message)
 
     async def get_player_action(self, player: "Actor"):  # type: ignore

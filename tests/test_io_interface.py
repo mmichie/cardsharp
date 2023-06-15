@@ -11,8 +11,8 @@ from cardsharp.common.actor import SimplePlayer
 def test_dummy_io_interface_methods():
     interface = DummyIOInterface()
 
-    assert asyncio.run(interface.display_message("Test")) is None
-    assert asyncio.run(interface.send_message("Test")) is None
+    assert asyncio.run(interface.output("Test")) is None
+    assert asyncio.run(interface.output("Test")) is None
     assert (
         asyncio.run(interface.get_player_action(None, ["action1", "action2"]))
         == "action1"
@@ -23,8 +23,8 @@ def test_dummy_io_interface_methods():
 def test_test_io_interface_methods():
     interface = TestIOInterface()
 
-    # Test send_message method
-    asyncio.run(interface.send_message("Test"))
+    # Test output method
+    asyncio.run(interface.output("Test"))
     assert interface.sent_messages == ["Test"]
 
     # Test add_player_action and get_player_action methods
@@ -51,8 +51,8 @@ def test_console_io_interface_methods(mocker):
     # Mock the builtin input function
     mocker.patch("builtins.input", side_effect=["Test message", "action1", "5"])
 
-    # Test send_message method (since it uses print, we just ensure it doesn't throw an error)
-    asyncio.run(interface.send_message("Test message"))
+    # Test output method (since it uses print, we just ensure it doesn't throw an error)
+    asyncio.run(interface.output("Test message"))
 
     # Test get_player_action method
     player = SimplePlayer(
