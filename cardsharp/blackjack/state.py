@@ -59,6 +59,7 @@ class PlacingBetsState(GameState):
 class DealingState(GameState):
     def handle(self, game):
         self.deal(game)
+        self.check_blackjack(game)
         game.set_state(OfferInsuranceState())
 
     def deal(self, game):
@@ -69,6 +70,13 @@ class DealingState(GameState):
                 player.add_card(card)
                 if player != game.dealer:
                     game.io_interface.output(f"Dealt {card} to {player.name}.")
+
+    def check_blackjack(self, game):
+        for player in game.players:
+            if player.current_hand.value() == 21:
+                game.io_interface.output(f"{player.name} got a blackjack!")
+                player.payout(player.bet * 2.5)  # Blackjacks typically pay 3:2
+                player.stand()
 
 
 class OfferInsuranceState(GameState):
@@ -90,18 +98,31 @@ class OfferInsuranceState(GameState):
 class PlayersTurnState(GameState):
     def handle(self, game):
         for player in game.players:
-            while not player.is_done() and not player.is_busted():
+            while (
+                not player.is_done()
+                and not player.is_busted()
+                and player.current_hand.value() < 21
+            ):
                 game.io_interface.output(f"{player.name}'s turn.")
                 action = player.decide_action()
-                self.player_action(game, player, action)
-                if player.is_busted():
-                    game.io_interface.output(f"{player.name} has busted.")
-                    player.stand()
-                elif (
-                    not player.is_done()
-                ):  # Add this condition to break the loop if player is done
+                if action == "hit":
+                    self.player_action(game, player, action)
+                    if player.is_busted():
+                        game.io_interface.output(f"{player.name} has busted.")
+                        player.stand()
+                elif action == "stand":
+                    self.player_action(game, player, action)
                     break  # Exit the loop and move to the next player
         game.set_state(DealersTurnState())
+
+    def player_action(self, game, player, action):
+        if action == "hit":
+            card = game.deck.deal()
+            player.add_card(card)
+            game.io_interface.output(f"{player.name} hits and gets {card}.")
+        elif action == "stand":
+            player.stand()
+            game.io_interface.output(f"{player.name} stands.")
 
 
 class DealersTurnState(GameState):
