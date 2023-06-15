@@ -86,7 +86,7 @@ class SimplePlayer(Actor):
         :param message: The message to send
         :return: None
         """
-        await self.io_interface.send_message(f"{self.name}: {message}")
+        await self.io_interface.output(f"{self.name}: {message}")
 
     def next_hand(self):
         """

@@ -61,7 +61,7 @@ class TestIOInterface(IOInterface):
 
 
 class ConsoleIOInterface(IOInterface):
-    async def output(self, message: str):
+    def output(self, message: str):
         print(message)
 
     async def get_player_action(self, player: "Actor"):  # type: ignore
