@@ -16,60 +16,40 @@ class Suit(Enum):
         return self.value
 
 
-@unique
 class Rank(Enum):
     """
     Enum for ranks in a card deck.
     """
 
-    TWO = (2, "2")
-    THREE = (3, "3")
-    FOUR = (4, "4")
-    FIVE = (5, "5")
-    SIX = (6, "6")
-    SEVEN = (7, "7")
-    EIGHT = (8, "8")
-    NINE = (9, "9")
-    TEN = (10, "10")
-    JACK = (11, "J")
-    QUEEN = (12, "Q")
-    KING = (13, "K")
-    ACE = (14, "A")
-    JOKER = (15, "Joker")
+    TWO = 2
+    THREE = 3
+    FOUR = 4
+    FIVE = 5
+    SIX = 6
+    SEVEN = 7
+    EIGHT = 8
+    NINE = 9
+    TEN = 10
+    JACK = 10
+    QUEEN = 10
+    KING = 10
+    ACE = 11
+    JOKER = 0
 
-    def __init__(self, rank_value, rank_str):
-        self.rank_value = rank_value
-        self.rank_str = rank_str
+    @property
+    def rank_value(self):
+        return self.value
 
-    def __gt__(self, other):
-        if isinstance(other, Rank):
-            return self.rank_value > other.rank_value
-        return NotImplemented
-
-    def __ge__(self, other):
-        if isinstance(other, Rank):
-            return self.rank_value >= other.rank_value
-        return NotImplemented
-
-    def __lt__(self, other):
-        if isinstance(other, Rank):
-            return self.rank_value < other.rank_value
-        return NotImplemented
-
-    def __le__(self, other):
-        if isinstance(other, Rank):
-            return self.rank_value <= other.rank_value
-        return NotImplemented
-
-    def __eq__(self, other):
-        if isinstance(other, Rank):
-            return self.rank_value == other.rank_value
-        return NotImplemented
-
-    def __ne__(self, other):
-        if isinstance(other, Rank):
-            return self.rank_value != other.rank_value
-        return NotImplemented
+    @property
+    def rank_str(self):
+        if self == self.JOKER:
+            return "Joker"
+        elif self.value == 10:
+            return "10" if self == self.TEN else self.name[0]
+        elif self == self.ACE:
+            return "A"
+        else:
+            return str(self.value)
 
     def __str__(self) -> str:
         return self.rank_str
@@ -126,3 +106,17 @@ class Card:
             return f"{self.rank.rank_str}"
         else:
             return f"{self.rank.rank_str} of {str(self.suit)}"
+
+    def __eq__(self, other):
+        """
+        Checks if this card is equal to another card.
+
+        :param other: The other card to compare to.
+        :return: True if the cards have the same rank and suit, False otherwise.
+        """
+        if isinstance(other, Card):
+            return self.rank == other.rank and self.suit == other.suit
+        return NotImplemented
+
+    def __hash__(self):
+        return hash((self.suit, self.rank))
