@@ -4,6 +4,8 @@ from cardsharp.blackjack.hand import BlackjackHand
 
 
 class Player(SimplePlayer):
+    current_hand: BlackjackHand
+
     def __init__(self, name: str, io_interface: IOInterface, initial_money: int = 1000):
         super().__init__(name, io_interface, initial_money)
         self.bet = 0
