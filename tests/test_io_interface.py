@@ -52,7 +52,7 @@ def test_console_io_interface_methods(mocker):
     mocker.patch("builtins.input", side_effect=["Test message", "action1", "5"])
 
     # Test output method (since it uses print, we just ensure it doesn't throw an error)
-    asyncio.run(interface.output("Test message"))
+    interface.output("Test message")  # No asyncio.run()
 
     # Test get_player_action method
     player = SimplePlayer(
