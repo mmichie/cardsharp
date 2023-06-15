@@ -4,22 +4,18 @@ from cardsharp.common.card import Rank
 
 class BlackjackHand(Hand):
     def value(self) -> int:
-        values = []
-        for card in self.cards:
-            if card.rank in [Rank.JACK, Rank.QUEEN, Rank.KING]:
-                values.append(10)
-            elif card.rank == Rank.ACE:
-                values.append(11)
-            else:
-                values.append(
-                    card.rank.rank_value
-                )  # use the numeric value defined in the enum
+        total_value = sum(
+            card.rank.rank_value for card in self.cards if card.rank != Rank.ACE
+        )
+        num_aces = sum(card.rank == Rank.ACE for card in self.cards)
 
-        # Adjust for Aces
-        while sum(values) > 21 and 11 in values:
-            values.remove(11)
-            values.append(1)
-        return sum(values)
+        for _ in range(num_aces):
+            if total_value + Rank.ACE.rank_value <= 21:
+                total_value += Rank.ACE.rank_value
+            else:
+                total_value += Rank.ACE.rank_value - 10
+
+        return total_value
 
     def is_soft(self) -> bool:
         """

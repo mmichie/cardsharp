@@ -2,12 +2,8 @@ import asyncio
 
 from cardsharp.blackjack.actor import Dealer, Player
 from cardsharp.blackjack.state import (
-    DealersTurnState,
-    DealingState,
     EndRoundState,
-    OfferInsuranceState,
     PlacingBetsState,
-    PlayersTurnState,
     WaitingForPlayersState,
 )
 from cardsharp.common.deck import Deck
@@ -42,44 +38,13 @@ class BlackjackGame:
         if self.current_state is not None:
             await self.current_state.add_player(self, player)
 
-    def play_round(self):
+    async def play_round(self):
         while not isinstance(self.current_state, EndRoundState):
-            if isinstance(self.current_state, PlacingBetsState):
-                for player in self.players:
-                    self.current_state.place_bet(self, player, 10)
-            elif isinstance(self.current_state, DealingState):
-                self.io_interface.output("Dealing cards...")
-                self.current_state.deal(self)
-            elif isinstance(self.current_state, OfferInsuranceState):
-                self.io_interface.output("Checking for and offering insurance...")
-                for player in self.players:
-                    if isinstance(self.current_state, OfferInsuranceState):
-                        self.current_state.offer_insurance(self, player)
-            elif isinstance(self.current_state, PlayersTurnState):
-                for player in self.players:
-                    while not player.is_done() and not player.is_busted():
-                        action = player.decide_action()
-                        self.current_state.player_action(self, player, action)
-                        self.io_interface.output(f"{player.name}'s turn...")
-                        if player.is_busted():
-                            self.io_interface.output(f"{player.name} has busted.")
-                            player.stand()
-
-                    if player.is_done():
-                        self.io_interface.output(
-                            f"{player.name} has finished their turn."
-                        )
-
-                self.set_state(
-                    DealersTurnState()
-                )  # Move to the dealer's turn once all players are done
-            elif isinstance(self.current_state, DealersTurnState):
-                self.current_state.dealer_action(self)
-                self.io_interface.output("Dealer's turn...")
+            self.current_state.handle(self)
 
         self.io_interface.output("Calculating winner...")
         self.current_state.calculate_winner(self)
-        self.current_state = PlacingBetsState()
+        self.set_state(PlacingBetsState())
 
 
 async def main():
@@ -111,7 +76,7 @@ async def main():
     game.set_state(PlacingBetsState())
 
     # Play a round
-    game.play_round()
+    await game.play_round()
 
 
 if __name__ == "__main__":
