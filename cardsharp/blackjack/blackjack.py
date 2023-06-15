@@ -22,7 +22,7 @@ class BlackjackGame:
     def set_state(self, state):
         self.current_state = state
 
-    async def add_player(self, player):
+    def add_player(self, player):
         if player is None:
             self.io_interface.output("Invalid player.")
             return
@@ -36,9 +36,9 @@ class BlackjackGame:
             return
 
         if self.current_state is not None:
-            await self.current_state.add_player(self, player)
+            self.current_state.add_player(self, player)
 
-    async def play_round(self):
+    def play_round(self):
         while not isinstance(self.current_state, EndRoundState):
             self.current_state.handle(self)
 
@@ -51,7 +51,7 @@ async def main():
     # Create IO Interface
     io_interface = ConsoleIOInterface()
 
-    # Define your rules
+    # Define your rules TODO: make this use rules class
     rules = {
         "blackjack_payout": 1.5,
         "allow_insurance": True,
@@ -70,13 +70,13 @@ async def main():
 
     # Add players
     for player in players:
-        await game.add_player(player)
+        game.add_player(player)
 
     # Change state to PlacingBetsState after all players have been added
     game.set_state(PlacingBetsState())
 
     # Play a round
-    await game.play_round()
+    game.play_round()
 
 
 if __name__ == "__main__":
