@@ -1,4 +1,4 @@
-from .cards import Hand
+from cardsharp.common.hand import Hand
 
 
 class Rules:
