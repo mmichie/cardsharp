@@ -40,7 +40,7 @@ class WaitingForPlayersState(GameState):
             await asyncio.sleep(1)
         game.set_state(PlacingBetsState())
 
-    async def add_player(self, game, player):
+    def add_player(self, game, player):
         game.players.append(player)
         game.io_interface.output(f"{player.name} has joined the game.")
 
@@ -75,7 +75,7 @@ class DealingState(GameState):
         for player in game.players:
             if player.current_hand.value() == 21:
                 game.io_interface.output(f"{player.name} got a blackjack!")
-                player.payout(player.bet * 2.5)  # Blackjacks typically pay 3:2
+                player.payout(player.bet * 1.5)  # Blackjacks typically pay 3:2
                 player.stand()
 
 
