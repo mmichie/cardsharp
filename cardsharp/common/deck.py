@@ -70,6 +70,9 @@ class Deck:
         """
         return self.cards.pop()
 
+    def draw(self) -> Card:
+        return self.deal()
+
     @property
     def size(self) -> int:
         """
