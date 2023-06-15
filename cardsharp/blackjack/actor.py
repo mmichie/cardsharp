@@ -1,6 +1,7 @@
 from cardsharp.common.io_interface import IOInterface
 from cardsharp.common.actor import SimplePlayer
 from cardsharp.blackjack.hand import BlackjackHand
+from cardsharp.common.card import Rank
 
 
 class Player(SimplePlayer):
@@ -63,8 +64,7 @@ class Dealer(SimplePlayer):
         return self.hands[0]
 
     def has_ace(self):
-        if self.current_hand.cards[0].rank == "A":
-            return True
+        return self.current_hand.cards[0].rank == Rank.ACE
 
     def add_card(self, card):
         self.current_hand.add_card(card)
