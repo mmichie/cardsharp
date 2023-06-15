@@ -48,7 +48,10 @@ class Player(SimplePlayer):
             self.money -= amount
 
     def payout(self, amount: int):
-        self.money += amount
+        self.money += amount + self.bet
+        self.bet = 0
+        self.insurance = 0
+        self.done = True
 
     def add_card(self, card):
         self.current_hand.add_card(card)
