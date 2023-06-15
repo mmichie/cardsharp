@@ -46,13 +46,13 @@ class WarGame:
     async def play_round(self):
         self.deck.reset()
 
-        await self.io_interface.send_message("New round begins.")
+        await self.io_interface.output("New round begins.")
 
         card1 = self.deck.deal()
         card2 = self.deck.deal()
 
-        await self.io_interface.send_message(f"{self.players[0].name} drew {card1}")
-        await self.io_interface.send_message(f"{self.players[1].name} drew {card2}")
+        await self.io_interface.output(f"{self.players[0].name} drew {card1}")
+        await self.io_interface.output(f"{self.players[1].name} drew {card2}")
 
         if card1.rank > card2.rank:
             winner = self.players[0]
