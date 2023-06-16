@@ -17,13 +17,13 @@ class IOInterface(ABC):
 
 
 class DummyIOInterface(IOInterface):
-    async def output(self, message):
+    def output(self, message):
         pass
 
-    async def get_player_action(self, player, actions) -> str:
+    def get_player_action(self, player, actions) -> str:
         return actions[0]
 
-    async def check_numeric_response(self, response, min_val, max_val):
+    def check_numeric_response(self, response, min_val, max_val):
         return True
 
 
