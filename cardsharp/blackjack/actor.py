@@ -13,6 +13,7 @@ class Player(SimplePlayer):
         self.insurance = 0
         self.hands = [BlackjackHand()]
         self.done = False
+        self.blackjack = False
 
     def has_bet(self) -> bool:
         return self.bet > 0
@@ -30,10 +31,15 @@ class Player(SimplePlayer):
         return self.current_hand.value() > 21
 
     def decide_action(self):
-        # For this example, we'll use a simple strategy where
-        # the player hits if their hand value is less than 17 and stands otherwise
+        # If the player has busted, they should stand
+        if self.is_busted():
+            return "stand"
+
+        # If the player's hand value is less than 17, they should hit
         if self.current_hand.value() < 17:
             return "hit"
+
+        # In all other cases, the player should stand
         else:
             return "stand"
 
@@ -52,6 +58,7 @@ class Player(SimplePlayer):
         self.bet = 0
         self.insurance = 0
         self.done = True
+        self.blackjack = False
 
     def add_card(self, card):
         self.current_hand.add_card(card)
@@ -73,4 +80,6 @@ class Dealer(SimplePlayer):
         self.current_hand.add_card(card)
 
     def should_hit(self):
-        return self.current_hand.value() < 17
+        return self.current_hand.value() < 17 or (
+            self.current_hand.value() == 17 and self.current_hand.is_soft()
+        )
