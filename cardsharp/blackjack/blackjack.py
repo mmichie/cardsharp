@@ -1,13 +1,13 @@
-import asyncio
-
+import argparse
 from cardsharp.blackjack.actor import Dealer, Player
 from cardsharp.blackjack.state import (
     EndRoundState,
     PlacingBetsState,
     WaitingForPlayersState,
+    SimulationStats,
 )
 from cardsharp.common.deck import Deck
-from cardsharp.common.io_interface import ConsoleIOInterface
+from cardsharp.common.io_interface import ConsoleIOInterface, DummyIOInterface
 
 
 class BlackjackGame:
@@ -18,6 +18,7 @@ class BlackjackGame:
         self.rules = rules
         self.deck = Deck()
         self.current_state = WaitingForPlayersState()
+        self.stats = SimulationStats()
 
     def set_state(self, state):
         self.current_state = state
@@ -47,9 +48,24 @@ class BlackjackGame:
         self.set_state(PlacingBetsState())
 
 
-async def main():
-    # Create IO Interface
-    io_interface = ConsoleIOInterface()
+def main():
+    # Add this block at the start of your main() function
+    parser = argparse.ArgumentParser(description="Run a Blackjack game.")
+    parser.add_argument(
+        "--simulate",
+        action="store_true",
+        help="Run the game in simulation mode with no output.",
+        default=False,
+    )
+    parser.add_argument(
+        "--num_games", type=int, default=1, help="Number of games to simulate"
+    )
+    args = parser.parse_args()
+
+    if args.simulate:
+        io_interface = DummyIOInterface()
+    else:
+        io_interface = ConsoleIOInterface()
 
     # Define your rules TODO: make this use rules class
     rules = {
@@ -75,9 +91,17 @@ async def main():
     # Change state to PlacingBetsState after all players have been added
     game.set_state(PlacingBetsState())
 
-    # Play a round
-    game.play_round()
+    # Play games
+    for _ in range(args.num_games):
+        game.play_round()
+
+    # Get and print the statistics after all games have been played
+    stats = game.stats.report()
+    print(f"Games played: {stats['games_played']}")
+    print(f"Player wins: {stats['player_wins']}")
+    print(f"Dealer wins: {stats['dealer_wins']}")
+    print(f"Draws: {stats['draws']}")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

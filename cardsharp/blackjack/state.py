@@ -34,6 +34,31 @@ class GameState(ABC):
         pass
 
 
+class SimulationStats:
+    def __init__(self):
+        self.games_played = 0
+        self.player_wins = 0
+        self.dealer_wins = 0
+        self.draws = 0
+
+    def update(self, game):
+        self.games_played += 1
+        if game.winner == "player":
+            self.player_wins += 1
+        elif game.winner == "dealer":
+            self.dealer_wins += 1
+        else:  # Assume a draw in all other cases
+            self.draws += 1
+
+    def report(self):
+        return {
+            "games_played": self.games_played,
+            "player_wins": self.player_wins,
+            "dealer_wins": self.dealer_wins,
+            "draws": self.draws,
+        }
+
+
 class WaitingForPlayersState(GameState):
     async def handle(self, game):
         while len(game.players) < game.minimum_players:
@@ -58,6 +83,7 @@ class PlacingBetsState(GameState):
 
 class DealingState(GameState):
     def handle(self, game):
+        game.deck.reset()
         self.deal(game)
         self.check_blackjack(game)
         game.set_state(OfferInsuranceState())
@@ -76,7 +102,19 @@ class DealingState(GameState):
             if player.current_hand.value() == 21:
                 game.io_interface.output(f"{player.name} got a blackjack!")
                 player.payout(player.bet * 1.5)  # Blackjacks typically pay 3:2
-                player.stand()
+                player.blackjack = True
+                game.stats.games_played += 1
+                game.stats.player_wins += 1
+
+        # Check for dealer's blackjack
+        if game.dealer.current_hand.value() == 21:
+            game.io_interface.output(f"Dealer got a blackjack!")
+            for player in game.players:
+                if (
+                    not player.blackjack
+                ):  # If the player doesn't have a blackjack, dealer wins
+                    game.stats.games_played += 1
+                    game.stats.dealer_wins += 1
 
 
 class OfferInsuranceState(GameState):
@@ -98,21 +136,27 @@ class OfferInsuranceState(GameState):
 class PlayersTurnState(GameState):
     def handle(self, game):
         for player in game.players:
-            while (
-                not player.is_done()
-                and not player.is_busted()
-                and player.current_hand.value() < 21
-            ):
+            while not player.is_done():
                 game.io_interface.output(f"{player.name}'s turn.")
                 action = player.decide_action()
+
                 if action == "hit":
                     self.player_action(game, player, action)
+
                     if player.is_busted():
                         game.io_interface.output(f"{player.name} has busted.")
                         player.stand()
+                        break
+
+                    if player.current_hand.value() == 21:
+                        game.io_interface.output(f"{player.name} has a blackjack.")
+                        player.stand()
+                        break
+
                 elif action == "stand":
                     self.player_action(game, player, action)
                     break  # Exit the loop and move to the next player
+
         game.set_state(DealersTurnState())
 
     def player_action(self, game, player, action):
@@ -120,6 +164,7 @@ class PlayersTurnState(GameState):
             card = game.deck.deal()
             player.add_card(card)
             game.io_interface.output(f"{player.name} hits and gets {card}.")
+
         elif action == "stand":
             player.stand()
             game.io_interface.output(f"{player.name} stands.")
@@ -139,6 +184,9 @@ class DealersTurnState(GameState):
 
 class EndRoundState(GameState):
     def handle(self, game):
+        game.stats.games_played += (
+            1  # Increment games played here, not in each condition below
+        )
         self.calculate_winner(game)
         game.set_state(PlacingBetsState())
 
@@ -158,17 +206,21 @@ class EndRoundState(GameState):
 
             if player_hand_value > 21:
                 game.io_interface.output(f"{player.name} busts. Dealer wins!")
+                game.stats.dealer_wins += 1
             elif dealer_hand_value > 21 or player_hand_value > dealer_hand_value:
                 game.io_interface.output(f"{player.name} wins the round!")
                 player.payout(
                     player.bet * 2
                 )  # If player wins, they get twice their bet
+                game.stats.player_wins += 1
             elif player_hand_value < dealer_hand_value:
                 game.io_interface.output(f"Dealer wins against {player.name}!")
+                game.stats.dealer_wins += 1
             else:  # Ties go to the player in this version
                 game.io_interface.output(
                     f"{player.name} and Dealer tie! {player.name} wins on tie."
                 )
                 player.payout(player.bet * 2)
+                game.stats.player_wins += 1
 
         game.set_state(PlacingBetsState())
