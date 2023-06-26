@@ -14,6 +14,7 @@ class Player(SimplePlayer):
         self.hands = [BlackjackHand()]
         self.done = False
         self.blackjack = False
+        self.winner = None
 
     def has_bet(self) -> bool:
         return self.bet > 0
@@ -35,8 +36,10 @@ class Player(SimplePlayer):
         if self.is_busted():
             return "stand"
 
-        # If the player's hand value is less than 17, they should hit
-        if self.current_hand.value() < 17:
+        # If the player's hand value is less than 17, or is a soft 17, they should hit
+        if self.current_hand.value() < 17 or (
+            self.current_hand.value() == 17 and self.current_hand.is_soft()
+        ):
             return "hit"
 
         # In all other cases, the player should stand
@@ -47,6 +50,7 @@ class Player(SimplePlayer):
         if amount <= self.money:
             self.bet = amount
             self.money -= amount
+            self.done = False
 
     def buy_insurance(self, amount: int):
         if amount <= self.money:
@@ -68,6 +72,7 @@ class Dealer(SimplePlayer):
     def __init__(self, name: str, io_interface: IOInterface):
         super().__init__(name, io_interface, initial_money=0)
         self.hands = [BlackjackHand()]
+        self.winner = None
 
     @property
     def current_hand(self):
