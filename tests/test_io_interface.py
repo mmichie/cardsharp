@@ -11,13 +11,10 @@ from cardsharp.common.actor import SimplePlayer
 def test_dummy_io_interface_methods():
     interface = DummyIOInterface()
 
-    assert asyncio.run(interface.output("Test")) is None
-    assert asyncio.run(interface.output("Test")) is None
-    assert (
-        asyncio.run(interface.get_player_action(None, ["action1", "action2"]))
-        == "action1"
-    )
-    assert asyncio.run(interface.check_numeric_response((1, 5), 1, 5)) is True
+    assert interface.output("Test") is None
+    assert interface.output("Test") is None
+    assert interface.get_player_action(None, ["action1", "action2"]) == "action1"
+    assert interface.check_numeric_response((1, 5), 1, 5) is True
 
 
 def test_test_io_interface_methods():
