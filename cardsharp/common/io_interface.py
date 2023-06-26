@@ -21,7 +21,7 @@ class DummyIOInterface(IOInterface):
         pass
 
     def get_player_action(self, player, actions) -> str:
-        return actions[0]
+        return player.decide_action()
 
     def check_numeric_response(self, response, min_val, max_val):
         return True
