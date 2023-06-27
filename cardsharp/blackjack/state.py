@@ -43,12 +43,22 @@ class SimulationStats:
 
     def update(self, game):
         self.games_played += 1
-        if game.winner == "player":
+
+        game.io_interface.output("Updating statistics...")
+        player_win = any(player.winner == "player" for player in game.players)
+        dealer_win = any(player.winner == "dealer" for player in game.players)
+        draw = any(player.winner == "draw" for player in game.players)
+
+        if player_win:
             self.player_wins += 1
-        elif game.winner == "dealer":
+        if dealer_win:
             self.dealer_wins += 1
-        else:  # Assume a draw in all other cases
+        if draw:
             self.draws += 1
+
+        # Reset the winners for next game
+        for player in game.players:
+            player.winner = None
 
     def report(self):
         return {
@@ -69,6 +79,9 @@ class WaitingForPlayersState(GameState):
         game.players.append(player)
         game.io_interface.output(f"{player.name} has joined the game.")
 
+    def __str__(self):
+        return "WaitingForPlayersState"
+
 
 class PlacingBetsState(GameState):
     def handle(self, game):
@@ -79,6 +92,9 @@ class PlacingBetsState(GameState):
     def place_bet(self, game, player, amount):
         player.place_bet(amount)
         game.io_interface.output(f"{player.name} has placed a bet of {amount}.")
+
+    def __str__(self):
+        return "PlacingBetsState"
 
 
 class DealingState(GameState):
@@ -103,18 +119,23 @@ class DealingState(GameState):
                 game.io_interface.output(f"{player.name} got a blackjack!")
                 player.payout(player.bet * 1.5)  # Blackjacks typically pay 3:2
                 player.blackjack = True
-                game.stats.games_played += 1
-                game.stats.player_wins += 1
+                player.winner = "player"
 
         # Check for dealer's blackjack
         if game.dealer.current_hand.value() == 21:
             game.io_interface.output(f"Dealer got a blackjack!")
+            dealer_win = True
             for player in game.players:
-                if (
-                    not player.blackjack
-                ):  # If the player doesn't have a blackjack, dealer wins
-                    game.stats.games_played += 1
-                    game.stats.dealer_wins += 1
+                if player.blackjack:  # If the player also has a blackjack, it's a draw
+                    game.stats.draws += 1
+                    dealer_win = False
+                else:  # If the player doesn't have a blackjack, dealer wins
+                    player.winner = "dealer"
+            if dealer_win:
+                game.dealer.winner = "dealer"
+
+    def __str__(self):
+        return "DealingState"
 
 
 class OfferInsuranceState(GameState):
@@ -131,6 +152,9 @@ class OfferInsuranceState(GameState):
             game.io_interface.output("Dealer has an Ace!")
             player.buy_insurance(10)
             game.io_interface.output(f"{player.name} has bought insurance.")
+
+    def __str__(self):
+        return "OfferInsuranceState"
 
 
 class PlayersTurnState(GameState):
@@ -169,11 +193,15 @@ class PlayersTurnState(GameState):
             player.stand()
             game.io_interface.output(f"{player.name} stands.")
 
+    def __str__(self):
+        return "PlayersTurnState"
+
 
 class DealersTurnState(GameState):
     def handle(self, game):
         while game.dealer.should_hit():
             self.dealer_action(game)
+        game.io_interface.output("Dealer stands.")
         game.set_state(EndRoundState())
 
     def dealer_action(self, game):
@@ -181,14 +209,14 @@ class DealersTurnState(GameState):
         game.dealer.add_card(card)
         game.io_interface.output(f"Dealer hits and gets {card}.")
 
+    def __str__(self):
+        return "DealersTurnState"
+
 
 class EndRoundState(GameState):
     def handle(self, game):
-        game.stats.games_played += (
-            1  # Increment games played here, not in each condition below
-        )
         self.calculate_winner(game)
-        game.set_state(PlacingBetsState())
+        game.stats.update(game)
 
     def calculate_winner(self, game):
         dealer_hand_value = game.dealer.current_hand.value()
@@ -206,21 +234,20 @@ class EndRoundState(GameState):
 
             if player_hand_value > 21:
                 game.io_interface.output(f"{player.name} busts. Dealer wins!")
-                game.stats.dealer_wins += 1
+                player.winner = "dealer"
             elif dealer_hand_value > 21 or player_hand_value > dealer_hand_value:
                 game.io_interface.output(f"{player.name} wins the round!")
-                player.payout(
-                    player.bet * 2
-                )  # If player wins, they get twice their bet
-                game.stats.player_wins += 1
+                player.payout(player.bet * 2)
+                player.winner = "player"
             elif player_hand_value < dealer_hand_value:
                 game.io_interface.output(f"Dealer wins against {player.name}!")
-                game.stats.dealer_wins += 1
-            else:  # Ties go to the player in this version
-                game.io_interface.output(
-                    f"{player.name} and Dealer tie! {player.name} wins on tie."
-                )
-                player.payout(player.bet * 2)
-                game.stats.player_wins += 1
+                player.winner = "dealer"
+            else:
+                game.io_interface.output(f"{player.name} and Dealer tie! It's a push.")
+                player.payout(player.bet)
+                player.winner = "draw"
 
         game.set_state(PlacingBetsState())
+
+    def __str__(self):
+        return "EndRoundState"

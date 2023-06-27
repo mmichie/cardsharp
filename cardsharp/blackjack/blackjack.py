@@ -21,6 +21,7 @@ class BlackjackGame:
         self.stats = SimulationStats()
 
     def set_state(self, state):
+        self.io_interface.output(f"Changing state to {state}.")
         self.current_state = state
 
     def add_player(self, player):
@@ -41,11 +42,11 @@ class BlackjackGame:
 
     def play_round(self):
         while not isinstance(self.current_state, EndRoundState):
+            self.io_interface.output("Current state: " + str(self.current_state))
             self.current_state.handle(self)
 
         self.io_interface.output("Calculating winner...")
-        self.current_state.calculate_winner(self)
-        self.set_state(PlacingBetsState())
+        self.current_state.handle(self)
 
 
 def main():
@@ -77,7 +78,6 @@ def main():
     }
 
     players = [
-        Player("Alice", io_interface),
         Player("Bob", io_interface),
     ]
 
