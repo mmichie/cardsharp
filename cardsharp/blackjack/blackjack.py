@@ -103,10 +103,18 @@ def main():
 
     # Get and print the statistics after all games have been played
     stats = game.stats.report()
-    print(f"Games played: {stats['games_played']}")
-    print(f"Player wins: {stats['player_wins']}")
-    print(f"Dealer wins: {stats['dealer_wins']}")
-    print(f"Draws: {stats['draws']}")
+    games_played = stats["games_played"]
+    player_wins = stats["player_wins"]
+    dealer_wins = stats["dealer_wins"]
+    draws = stats["draws"]
+
+    win_loss_ratio = player_wins / games_played
+
+    print(f"Games played: {games_played}")
+    print(f"Player wins: {player_wins}")
+    print(f"Dealer wins: {dealer_wins}")
+    print(f"Draws: {draws}")
+    print(f"Win/Loss ratio: {win_loss_ratio:.2f}")
 
 
 if __name__ == "__main__":
