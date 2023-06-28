@@ -48,6 +48,11 @@ class BlackjackGame:
         self.io_interface.output("Calculating winner...")
         self.current_state.handle(self)
 
+    def reset(self):
+        self.deck = Deck()
+        for player in self.players:
+            player.reset()
+
 
 def main():
     # Add this block at the start of your main() function
@@ -94,6 +99,7 @@ def main():
     # Play games
     for _ in range(args.num_games):
         game.play_round()
+        game.reset()
 
     # Get and print the statistics after all games have been played
     stats = game.stats.report()

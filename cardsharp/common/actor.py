@@ -24,9 +24,9 @@ class Actor(ABC):
         return self.hands[self.current_hand_index]
 
     @abstractmethod
-    def reset_hands(self):
+    def reset(self):
         """
-        Reset the actor's hands to an empty state.
+        Reset the actor's hands and money
 
         :return: None
         """
@@ -61,14 +61,15 @@ class SimplePlayer(Actor):
     def __init__(self, name: str, io_interface: IOInterface, initial_money: int = 1000):
         super().__init__(name, io_interface, initial_money)
 
-    def reset_hands(self):
+    def reset(self):
         """
-        Resets the player's hands to an empty state.
+        Resets the player's hands and money
 
         :return: None
         """
         self.hands = [Hand()]
         self.current_hand_index = 0  # reset current hand index as well
+        self.money = 1000
 
     def update_money(self, amount: int):
         """

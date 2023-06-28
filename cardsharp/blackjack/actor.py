@@ -67,6 +67,14 @@ class Player(SimplePlayer):
     def add_card(self, card):
         self.current_hand.add_card(card)
 
+    def reset(self):
+        self.hands = [BlackjackHand()]
+        self.done = False
+        self.blackjack = False
+        self.winner = None
+        self.money = 1000
+        self.bet = 0
+
 
 class Dealer(SimplePlayer):
     def __init__(self, name: str, io_interface: IOInterface):
