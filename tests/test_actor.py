@@ -4,6 +4,7 @@ from cardsharp.common.actor import SimplePlayer
 from cardsharp.common.io_interface import TestIOInterface
 from cardsharp.common.actor import Actor
 
+
 def test_simple_player_initialization():
     io_interface = TestIOInterface()
     player = SimplePlayer("John Doe", io_interface)
@@ -15,16 +16,18 @@ def test_simple_player_initialization():
     assert player.io_interface == io_interface
     assert player.current_hand == player.hands[0]  # added this line
 
-def test_simple_player_reset_hands():
+
+def test_simple_player_reset():
     io_interface = TestIOInterface()
     player = SimplePlayer("John Doe", io_interface)
     player.hands.append(Hand())
     player.next_hand()  # switch to the second hand
-    player.reset_hands()
+    player.reset()
 
     assert len(player.hands) == 1
     assert isinstance(player.hands[0], Hand)
     assert player.current_hand == player.hands[0]  # added this line
+
 
 def test_simple_player_update_money():
     io_interface = TestIOInterface()
@@ -33,12 +36,14 @@ def test_simple_player_update_money():
 
     assert player.money == 1200
 
+
 def test_simple_player_display_message():
     io_interface = TestIOInterface()
     player = SimplePlayer("John Doe", io_interface)
     asyncio.run(player.display_message("Hello World!"))  # run async function
 
     assert io_interface.sent_messages == ["John Doe: Hello World!"]
+
 
 def test_next_hand():
     io_interface = TestIOInterface()
@@ -89,4 +94,3 @@ def test_adding_new_hand():
     player.next_hand()
     hand3 = player.current_hand
     assert hand1 != hand3 and hand2 != hand3
-
