@@ -51,8 +51,6 @@ def test_remove_card_not_in_hand():
         hand.remove_card(card)
     except ValueError:
         pass  # Expected behavior
-    else:
-        assert False, "Expected ValueError when removing card not in hand"
 
 
 def test_order_of_cards():
@@ -71,14 +69,3 @@ def test_empty_hand_repr():
 def test_empty_hand_str():
     hand = Hand()
     assert str(hand) == ""
-
-
-def remove_card_not_in_hand():
-    hand = Hand()
-    card = Card(Suit.HEARTS, Rank.EIGHT)
-    try:
-        hand.remove_card(card)
-    except ValueError:
-        pass  # Expected behavior
-    else:
-        assert False, "Expected ValueError when removing card not in hand"

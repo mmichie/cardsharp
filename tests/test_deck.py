@@ -48,8 +48,3 @@ def test_deck_repr():
 def test_deck_str():
     deck = Deck()
     assert str(deck) == f"Deck of {len(deck.cards)} cards"
-
-
-if __name__ == "__main__":
-    pytest.main()
-
