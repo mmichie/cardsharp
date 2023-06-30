@@ -1,7 +1,6 @@
 import pytest
-from cardsharp.common.card import Card, Rank, Suit
-from cardsharp.blackjack.actor import Player
-from cardsharp.blackjack.blackjack import BlackjackGame
+
+from cardsharp.blackjack.actor import InsufficientFundsError, Player
 from cardsharp.common.io_interface import TestIOInterface
 
 
@@ -26,14 +25,16 @@ def test_place_bet(player):
     assert player.money == 990
 
     # Place a bet greater than the available money
-    player.place_bet(10000)
+    with pytest.raises(InsufficientFundsError):
+        player.place_bet(10000)
     assert player.bet == 10  # Bet should not be updated
     assert player.money == 990  # Money should remain unchanged
 
 
 def test_place_bet_insufficient_money(player):
     # Place a bet greater than the available money
-    player.place_bet(10000)
+    with pytest.raises(InsufficientFundsError):
+        player.place_bet(10000)
     assert player.bet == 0  # Bet should not be updated
     assert player.money == 1000  # Money should remain unchanged
 
