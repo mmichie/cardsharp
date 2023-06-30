@@ -50,13 +50,15 @@ class DummyIOInterface(IOInterface):
         Simulates numeric response check.
     """
 
-    def output(self, message):
-        pass
+    async def output(self, message):
+        await asyncio.sleep(0)
 
-    def get_player_action(self, player, actions) -> str:
+    async def get_player_action(self, player):  # type: ignore
+        await asyncio.sleep(0)
         return player.decide_action()
 
-    def check_numeric_response(self, response, min_val, max_val):
+    async def check_numeric_response(self, response, min_val, max_val):
+        await asyncio.sleep(0)
         return True
 
 
@@ -86,7 +88,6 @@ class TestIOInterface(IOInterface):
 
     def __init__(self):
         self.sent_messages = []
-        self.player_action = None
         self.player_actions = []
 
     async def output(self, message):
@@ -97,20 +98,20 @@ class TestIOInterface(IOInterface):
         self.player_actions.append(action)
 
     async def get_player_action(self, player: "Actor") -> str:  # type: ignore
-        # Simulate player action by popping the next action from the queue
+        await asyncio.sleep(0)  # Simulate asynchronous behavior
         if self.player_actions:
             return self.player_actions.pop(0)
         else:
             raise ValueError("No more actions left in TestIOInterface queue.")
 
     async def check_numeric_response(self, ctx):
-        # You can implement this method based on your needs
+        await asyncio.sleep(0)  # Simulate asynchronous behavior
         pass
 
     async def prompt_user_action(
         self, player: "Actor", valid_actions: list[str]  # type: ignore
     ) -> str:
-        # In the test interface, prompt_user_action is equivalent to get_player_action
+        await asyncio.sleep(0)  # Simulate asynchronous behavior
         return await self.get_player_action(player)
 
 
@@ -133,16 +134,18 @@ class ConsoleIOInterface(IOInterface):
         Prompt a player for an action.
     """
 
-    def output(self, message: str):
+    async def output(self, message: str):
         print(message)
 
     async def get_player_action(self, player: "Actor"):  # type: ignore
         action = input(f"{player.name}, it's your turn. What's your action? ")
+        await asyncio.sleep(0)  # Simulate asynchronous behavior
         return action
 
     async def check_numeric_response(self, ctx):
         while True:
             response = input(ctx)
+            await asyncio.sleep(0)  # Simulate asynchronous behavior
             try:
                 return int(response)
             except ValueError:
@@ -178,12 +181,14 @@ class LoggingIOInterface(IOInterface):
         self.log_file_path = log_file_path
 
     async def output(self, message):
-        await asyncio.sleep(0)  # Simulate asynchronous behavior
         with open(self.log_file_path, "a") as log_file:
             log_file.write(message + "\n")
+        await asyncio.sleep(0)  # Simulate asynchronous behavior
 
     async def get_player_action(self, player: "Actor"):  # type: ignore
+        await asyncio.sleep(0)  # Simulate asynchronous behavior
         return player.decide_action()
 
     async def check_numeric_response(self, ctx):
+        await asyncio.sleep(0)  # Simulate asynchronous behavior
         pass

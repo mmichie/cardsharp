@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 
 from cardsharp.blackjack.actor import Dealer, Player
 from cardsharp.blackjack.state import (
@@ -8,7 +9,11 @@ from cardsharp.blackjack.state import (
 )
 from cardsharp.blackjack.stats import SimulationStats
 from cardsharp.common.deck import Deck
-from cardsharp.common.io_interface import ConsoleIOInterface, DummyIOInterface
+from cardsharp.common.io_interface import (
+    ConsoleIOInterface,
+    DummyIOInterface,
+    LoggingIOInterface,
+)
 
 
 class BlackjackGame:
@@ -42,12 +47,12 @@ class BlackjackGame:
         self.current_state = WaitingForPlayersState()
         self.stats = SimulationStats()
 
-    def set_state(self, state):
+    async def set_state(self, state):
         """Change the current state of the game."""
-        self.io_interface.output(f"Changing state to {state}.")
+        await self.io_interface.output(f"Changing state to {state}.")
         self.current_state = state
 
-    def add_player(self, player):
+    async def add_player(self, player):
         """Add a player to the game."""
         if player is None:
             self.io_interface.output("Invalid player.")
@@ -62,16 +67,16 @@ class BlackjackGame:
             return
 
         if self.current_state is not None:
-            self.current_state.add_player(self, player)
+            await self.current_state.add_player(self, player)
 
-    def play_round(self):
+    async def play_round(self):
         """Play a round of the game until it reaches the end state."""
         while not isinstance(self.current_state, EndRoundState):
             self.io_interface.output("Current state: " + str(self.current_state))
             self.current_state.handle(self)
 
         self.io_interface.output("Calculating winner...")
-        self.current_state.handle(self)
+        await self.current_state.handle(self)
 
     def reset(self):
         """Reset the game by creating a new deck and resetting all players."""
@@ -80,24 +85,27 @@ class BlackjackGame:
             player.reset()
 
 
-def main():
-    """
-    Main function to run a game of Blackjack. Allows for setting simulation mode,
-    defining the number of games to simulate, and defining rules for the game.
-    """
+async def main():
     parser = argparse.ArgumentParser(description="Run a Blackjack game.")
     parser.add_argument(
         "--simulate",
         action="store_true",
-        help="Run the game in simulation mode with no output.",
+        help="Run the game in simulation mode with no console output. If --log_file is provided, output will be logged.",
         default=False,
     )
     parser.add_argument(
         "--num_games", type=int, default=1, help="Number of games to simulate"
     )
+    parser.add_argument(
+        "--log_file",
+        type=str,
+        help="Log game output to the specified file. If not provided, output goes to the console.",
+    )
     args = parser.parse_args()
 
-    if args.simulate:
+    if args.log_file:
+        io_interface = LoggingIOInterface(args.log_file)
+    elif args.simulate:
         io_interface = DummyIOInterface()
     else:
         io_interface = ConsoleIOInterface()
@@ -120,14 +128,14 @@ def main():
 
     # Add players
     for player in players:
-        game.add_player(player)
+        await game.add_player(player)
 
     # Change state to PlacingBetsState after all players have been added
-    game.set_state(PlacingBetsState())
+    await game.set_state(PlacingBetsState())
 
     # Play games
     for _ in range(args.num_games):
-        game.play_round()
+        await game.play_round()
         game.reset()
 
     # Get and print the statistics after all games have been played
@@ -147,4 +155,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
