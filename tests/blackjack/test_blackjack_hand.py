@@ -69,3 +69,36 @@ def test_hand_value_exact_21_with_different_combinations():
     for card in cards:
         hand.add_card(card)
     assert hand.value() == 21
+
+
+def test_value_with_face_cards():
+    hand = BlackjackHand()
+    cards = [
+        Card(Suit.HEARTS, Rank.KING),
+        Card(Suit.CLUBS, Rank.QUEEN),
+        Card(Suit.DIAMONDS, Rank.JACK),
+    ]
+    for card in cards:
+        hand.add_card(card)
+    assert hand.value() == 30
+
+
+def test_is_soft_with_multiple_aces():
+    hand = BlackjackHand()
+    cards = [
+        Card(Suit.HEARTS, Rank.ACE),
+        Card(Suit.CLUBS, Rank.ACE),
+        Card(Suit.DIAMONDS, Rank.THREE),
+    ]
+    for card in cards:
+        hand.add_card(card)
+    assert hand.is_soft()
+
+
+def test_changing_from_soft_to_hard():
+    hand = BlackjackHand()
+    hand.add_card(Card(Suit.HEARTS, Rank.ACE))
+    hand.add_card(Card(Suit.CLUBS, Rank.TWO))
+    assert hand.is_soft()
+    hand.add_card(Card(Suit.DIAMONDS, Rank.NINE))
+    assert not hand.is_soft()
