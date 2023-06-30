@@ -156,3 +156,34 @@ class ConsoleIOInterface(IOInterface):
             if action in valid_actions:
                 return action
             print(f"Invalid action, valid actions are: {', '.join(valid_actions)}")
+
+
+class LoggingIOInterface(IOInterface):
+    """
+    A logging IO interface for recording purposes. Writes output messages to a log file.
+
+    Methods
+    -------
+    async def output(self, message):
+        Write an output message to the log file.
+
+    async def get_player_action(self, player: "Actor") -> str:
+        Retrieve an action from a player.
+
+    async def check_numeric_response(self, ctx):
+        Simulates numeric response check.
+    """
+
+    def __init__(self, log_file_path):
+        self.log_file_path = log_file_path
+
+    async def output(self, message):
+        await asyncio.sleep(0)  # Simulate asynchronous behavior
+        with open(self.log_file_path, "a") as log_file:
+            log_file.write(message + "\n")
+
+    async def get_player_action(self, player: "Actor"):  # type: ignore
+        return player.decide_action()
+
+    async def check_numeric_response(self, ctx):
+        pass
