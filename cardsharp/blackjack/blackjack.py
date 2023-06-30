@@ -1,11 +1,12 @@
 import argparse
+
 from cardsharp.blackjack.actor import Dealer, Player
 from cardsharp.blackjack.state import (
     EndRoundState,
     PlacingBetsState,
     WaitingForPlayersState,
-    SimulationStats,
 )
+from cardsharp.blackjack.stats import SimulationStats
 from cardsharp.common.deck import Deck
 from cardsharp.common.io_interface import ConsoleIOInterface, DummyIOInterface
 
