@@ -46,7 +46,7 @@ class WaitingForPlayersState(GameState):
         """
         while len(game.players) < game.minimum_players:
             await asyncio.sleep(1)
-        game.set_state(PlacingBetsState())
+        await game.set_state(PlacingBetsState())
 
     async def add_player(self, game, player):
         """
@@ -70,7 +70,7 @@ class PlacingBetsState(GameState):
         """
         for player in game.players:
             await self.place_bet(game, player, 10)
-        game.set_state(DealingState())
+        await game.set_state(DealingState())
 
     async def place_bet(self, game, player, amount):
         """
@@ -95,7 +95,7 @@ class DealingState(GameState):
         game.deck.reset()
         await self.deal(game)
         await self.check_blackjack(game)
-        game.set_state(OfferInsuranceState())
+        await game.set_state(OfferInsuranceState())
 
     async def deal(self, game):
         """
@@ -151,7 +151,7 @@ class OfferInsuranceState(GameState):
         await game.io_interface.output(
             "Dealer's face up card is: " + str(game.dealer.current_hand.cards[0])
         )
-        game.set_state(PlayersTurnState())
+        await game.set_state(PlayersTurnState())
 
     async def offer_insurance(self, game, player):
         """
@@ -199,7 +199,7 @@ class PlayersTurnState(GameState):
                     await self.player_action(game, player, action)
                     break  # Exit the loop and move to the next player
 
-        game.set_state(DealersTurnState())
+        await game.set_state(DealersTurnState())
 
     async def player_action(self, game, player, action):
         """
@@ -233,7 +233,7 @@ class DealersTurnState(GameState):
             await self.dealer_action(game)
 
         await game.io_interface.output("Dealer stands.")
-        game.set_state(EndRoundState())
+        await game.set_state(EndRoundState())
 
     async def dealer_action(self, game):
         """
@@ -257,7 +257,7 @@ class EndRoundState(GameState):
         Handles the calculation of the winner, updates the statistics, and changes the game state to PlacingBetsState.
         """
         await self.calculate_winner(game)
-        game.stats.update(game)
+        await game.stats.update(game)
 
     async def calculate_winner(self, game):
         """
@@ -297,7 +297,7 @@ class EndRoundState(GameState):
                 player.payout(player.bet)
                 player.winner = "draw"
 
-        game.set_state(PlacingBetsState())
+        await game.set_state(PlacingBetsState())
 
     def __str__(self):
         return "EndRoundState"

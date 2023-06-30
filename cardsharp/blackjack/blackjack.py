@@ -55,15 +55,15 @@ class BlackjackGame:
     async def add_player(self, player):
         """Add a player to the game."""
         if player is None:
-            self.io_interface.output("Invalid player.")
+            await self.io_interface.output("Invalid player.")
             return
 
         if len(self.players) >= self.rules["max_players"]:
-            self.io_interface.output("Game is full.")
+            await self.io_interface.output("Game is full.")
             return
 
         if not isinstance(self.current_state, WaitingForPlayersState):
-            self.io_interface.output("Game has already started.")
+            await self.io_interface.output("Game has already started.")
             return
 
         if self.current_state is not None:
@@ -72,10 +72,10 @@ class BlackjackGame:
     async def play_round(self):
         """Play a round of the game until it reaches the end state."""
         while not isinstance(self.current_state, EndRoundState):
-            self.io_interface.output("Current state: " + str(self.current_state))
-            self.current_state.handle(self)
+            await self.io_interface.output("Current state: " + str(self.current_state))
+            await self.current_state.handle(self)
 
-        self.io_interface.output("Calculating winner...")
+        await self.io_interface.output("Calculating winner...")
         await self.current_state.handle(self)
 
     def reset(self):

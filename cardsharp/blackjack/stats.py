@@ -12,13 +12,13 @@ class SimulationStats:
         self.dealer_wins = 0
         self.draws = 0
 
-    def update(self, game):
+    async def update(self, game):
         """
         Updates the statistics based on the current state of the game.
         """
         self.games_played += 1
 
-        game.io_interface.output("Updating statistics...")
+        await game.io_interface.output("Updating statistics...")
         player_win = any(player.winner == "player" for player in game.players)
         dealer_win = any(player.winner == "dealer" for player in game.players)
         draw = any(player.winner == "draw" for player in game.players)
