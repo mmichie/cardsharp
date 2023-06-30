@@ -11,6 +11,27 @@ from cardsharp.common.io_interface import ConsoleIOInterface, DummyIOInterface
 
 
 class BlackjackGame:
+    """
+    A class to represent a game of Blackjack.
+
+    Attributes
+    ----------
+    players : list
+        List of Player objects participating in the game.
+    io_interface : IOInterface
+        Interface for input and output operations.
+    dealer : Dealer
+        Dealer for the game.
+    rules : dict
+        Dictionary defining game rules.
+    deck : Deck
+        Deck of cards for the game.
+    current_state : GameState
+        Current state of the game.
+    stats : SimulationStats
+        Statistics for the game.
+    """
+
     def __init__(self, rules, io_interface):
         self.players = []
         self.io_interface = io_interface
@@ -21,10 +42,12 @@ class BlackjackGame:
         self.stats = SimulationStats()
 
     def set_state(self, state):
+        """Change the current state of the game."""
         self.io_interface.output(f"Changing state to {state}.")
         self.current_state = state
 
     def add_player(self, player):
+        """Add a player to the game."""
         if player is None:
             self.io_interface.output("Invalid player.")
             return
@@ -41,6 +64,7 @@ class BlackjackGame:
             self.current_state.add_player(self, player)
 
     def play_round(self):
+        """Play a round of the game until it reaches the end state."""
         while not isinstance(self.current_state, EndRoundState):
             self.io_interface.output("Current state: " + str(self.current_state))
             self.current_state.handle(self)
@@ -49,13 +73,17 @@ class BlackjackGame:
         self.current_state.handle(self)
 
     def reset(self):
+        """Reset the game by creating a new deck and resetting all players."""
         self.deck = Deck()
         for player in self.players:
             player.reset()
 
 
 def main():
-    # Add this block at the start of your main() function
+    """
+    Main function to run a game of Blackjack. Allows for setting simulation mode,
+    defining the number of games to simulate, and defining rules for the game.
+    """
     parser = argparse.ArgumentParser(description="Run a Blackjack game.")
     parser.add_argument(
         "--simulate",
