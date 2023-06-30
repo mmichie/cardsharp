@@ -35,13 +35,23 @@ class GameState(ABC):
 
 
 class SimulationStats:
+    """
+    A class that holds the statistics of the simulation.
+    """
+
     def __init__(self):
+        """
+        Initializes the SimulationStats with default values.
+        """
         self.games_played = 0
         self.player_wins = 0
         self.dealer_wins = 0
         self.draws = 0
 
     def update(self, game):
+        """
+        Updates the statistics based on the current state of the game.
+        """
         self.games_played += 1
 
         game.io_interface.output("Updating statistics...")
@@ -61,6 +71,9 @@ class SimulationStats:
             player.winner = None
 
     def report(self):
+        """
+        Returns a dictionary containing the current statistics.
+        """
         return {
             "games_played": self.games_played,
             "player_wins": self.player_wins,
@@ -70,12 +83,23 @@ class SimulationStats:
 
 
 class WaitingForPlayersState(GameState):
+    """
+    The game state while the game is waiting for players to join.
+    """
+
     async def handle(self, game):
+        """
+        Continuously checks if the minimum number of players have joined.
+        If so, it changes the game state to PlacingBetsState.
+        """
         while len(game.players) < game.minimum_players:
             await asyncio.sleep(1)
         game.set_state(PlacingBetsState())
 
     def add_player(self, game, player):
+        """
+        Adds a player to the game and notifies the interface.
+        """
         game.players.append(player)
         game.io_interface.output(f"{player.name} has joined the game.")
 
@@ -84,12 +108,22 @@ class WaitingForPlayersState(GameState):
 
 
 class PlacingBetsState(GameState):
+    """
+    The game state where players are placing their bets.
+    """
+
     def handle(self, game):
+        """
+        Handles the player bets and changes the game state to DealingState.
+        """
         for player in game.players:
             self.place_bet(game, player, 10)
         game.set_state(DealingState())
 
     def place_bet(self, game, player, amount):
+        """
+        Handles the bet placement of a player and notifies the interface.
+        """
         player.place_bet(amount)
         game.io_interface.output(f"{player.name} has placed a bet of {amount}.")
 
@@ -98,13 +132,23 @@ class PlacingBetsState(GameState):
 
 
 class DealingState(GameState):
+    """
+    The game state where the dealer is dealing the cards.
+    """
+
     def handle(self, game):
+        """
+        Handles the card dealing, checks for blackjack, and changes the game state to OfferInsuranceState.
+        """
         game.deck.reset()
         self.deal(game)
         self.check_blackjack(game)
         game.set_state(OfferInsuranceState())
 
     def deal(self, game):
+        """
+        Handles the card dealing and notifies the interface.
+        """
         game.deck.shuffle()
         for _ in range(2):
             for player in game.players + [game.dealer]:
@@ -114,6 +158,9 @@ class DealingState(GameState):
                     game.io_interface.output(f"Dealt {card} to {player.name}.")
 
     def check_blackjack(self, game):
+        """
+        Checks for blackjack for all players and handles the payouts.
+        """
         for player in game.players:
             if player.current_hand.value() == 21:
                 game.io_interface.output(f"{player.name} got a blackjack!")
@@ -139,7 +186,14 @@ class DealingState(GameState):
 
 
 class OfferInsuranceState(GameState):
+    """
+    The game state where insurance is offered if the dealer has an Ace.
+    """
+
     def handle(self, game):
+        """
+        Offers insurance to the players if the dealer has an Ace, and changes the game state to PlayersTurnState.
+        """
         for player in game.players:
             self.offer_insurance(game, player)
         game.io_interface.output(
@@ -148,6 +202,9 @@ class OfferInsuranceState(GameState):
         game.set_state(PlayersTurnState())
 
     def offer_insurance(self, game, player):
+        """
+        Offers insurance to a player and handles the insurance purchase.
+        """
         if game.dealer.has_ace():
             game.io_interface.output("Dealer has an Ace!")
             player.buy_insurance(10)
@@ -158,7 +215,14 @@ class OfferInsuranceState(GameState):
 
 
 class PlayersTurnState(GameState):
+    """
+    The game state where it's the players' turn to play.
+    """
+
     def handle(self, game):
+        """
+        Handles the players' actions and changes the game state to DealersTurnState.
+        """
         for player in game.players:
             while not player.is_done():
                 game.io_interface.output(f"{player.name}'s turn.")
@@ -184,6 +248,9 @@ class PlayersTurnState(GameState):
         game.set_state(DealersTurnState())
 
     def player_action(self, game, player, action):
+        """
+        Handles a player action and notifies the interface.
+        """
         if action == "hit":
             card = game.deck.deal()
             player.add_card(card)
@@ -198,13 +265,23 @@ class PlayersTurnState(GameState):
 
 
 class DealersTurnState(GameState):
+    """
+    The game state where it's the dealer's turn to play.
+    """
+
     def handle(self, game):
+        """
+        Handles the dealer's actions and changes the game state to EndRoundState.
+        """
         while game.dealer.should_hit():
             self.dealer_action(game)
         game.io_interface.output("Dealer stands.")
         game.set_state(EndRoundState())
 
     def dealer_action(self, game):
+        """
+        Handles a dealer action and notifies the interface.
+        """
         card = game.deck.deal()
         game.dealer.add_card(card)
         game.io_interface.output(f"Dealer hits and gets {card}.")
@@ -214,11 +291,21 @@ class DealersTurnState(GameState):
 
 
 class EndRoundState(GameState):
+    """
+    The game state where the round is ending.
+    """
+
     def handle(self, game):
+        """
+        Handles the calculation of the winner, updates the statistics, and changes the game state to PlacingBetsState.
+        """
         self.calculate_winner(game)
         game.stats.update(game)
 
     def calculate_winner(self, game):
+        """
+        Calculates the winner of the round and handles the payouts.
+        """
         dealer_hand_value = game.dealer.current_hand.value()
         dealer_cards = ", ".join(str(card) for card in game.dealer.current_hand.cards)
         game.io_interface.output(f"Dealer's final cards: {dealer_cards}")
