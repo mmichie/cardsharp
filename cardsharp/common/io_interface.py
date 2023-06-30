@@ -3,6 +3,24 @@ from abc import ABC, abstractmethod
 
 
 class IOInterface(ABC):
+    """
+    Abstract base class for an IO interface.
+
+    Methods
+    -------
+    @abstractmethod
+    async def output(self, message: str):
+        Output a message to the interface.
+
+    @abstractmethod
+    async def get_player_action(self, player: "Actor"):
+        Retrieve an action from a player.
+
+    @abstractmethod
+    async def check_numeric_response(self, ctx):
+        Check if a response is numeric.
+    """
+
     @abstractmethod
     async def output(self, message: str):
         pass
@@ -17,6 +35,21 @@ class IOInterface(ABC):
 
 
 class DummyIOInterface(IOInterface):
+    """
+    A dummy IO interface for simulation purposes. Does not perform any actual IO.
+
+    Methods
+    -------
+    def output(self, message):
+        Simulates output operation.
+
+    def get_player_action(self, player, actions) -> str:
+        Retrieve an action from a player.
+
+    def check_numeric_response(self, response, min_val, max_val):
+        Simulates numeric response check.
+    """
+
     def output(self, message):
         pass
 
@@ -28,6 +61,27 @@ class DummyIOInterface(IOInterface):
 
 
 class TestIOInterface(IOInterface):
+    """
+    A test IO interface for testing purposes. Collects output messages and simulates input actions.
+
+    Methods
+    -------
+    async def output(self, message):
+        Collect an output message.
+
+    def add_player_action(self, action: str):
+        Add a player action to the queue.
+
+    async def get_player_action(self, player: "Actor") -> str:
+        Retrieve an action from a player.
+
+    async def check_numeric_response(self, ctx):
+        Simulates numeric response check.
+
+    async def prompt_user_action(self, player: "Actor", valid_actions: list[str]) -> str:
+        Prompt a player for an action.
+    """
+
     __test__ = False
 
     def __init__(self):
@@ -61,6 +115,24 @@ class TestIOInterface(IOInterface):
 
 
 class ConsoleIOInterface(IOInterface):
+    """
+    A console IO interface for interactive gameplay.
+
+    Methods
+    -------
+    def output(self, message: str):
+        Output a message to the console.
+
+    async def get_player_action(self, player: "Actor"):
+        Retrieve an action from a player.
+
+    async def check_numeric_response(self, ctx):
+        Check if a response is numeric.
+
+    async def prompt_user_action(self, player: "Actor", valid_actions: list[str]) -> str:
+        Prompt a player for an action.
+    """
+
     def output(self, message: str):
         print(message)
 
