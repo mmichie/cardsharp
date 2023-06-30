@@ -4,6 +4,10 @@ from cardsharp.blackjack.hand import BlackjackHand
 from cardsharp.common.card import Rank
 
 
+class InsufficientFundsError(Exception):
+    pass
+
+
 class Player(SimplePlayer):
     current_hand: BlackjackHand
 
@@ -47,7 +51,11 @@ class Player(SimplePlayer):
             return "stand"
 
     def place_bet(self, amount: int):
-        if amount <= self.money:
+        if amount > self.money:
+            raise InsufficientFundsError(
+                f"{self.name} does not have enough money to place a bet of {amount}"
+            )
+        else:
             self.bet = amount
             self.money -= amount
             self.done = False
