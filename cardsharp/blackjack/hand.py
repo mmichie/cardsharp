@@ -31,5 +31,5 @@ class BlackjackHand(Hand):
         ]
         return (
             Rank.ACE in (card.rank for card in self.cards)
-            and sum(values_without_ace) <= 10
+            and sum(values_without_ace) + 11 <= 21
         )
