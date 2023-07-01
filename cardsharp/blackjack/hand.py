@@ -40,3 +40,17 @@ class BlackjackHand(Hand):
         and their combined value is 21.
         """
         return len(self.cards) == 2 and self.value() == 21
+
+    def can_double(self) -> bool:
+        """
+        Returns True if the hand can be doubled down, which means it contains exactly two cards.
+        This does not consider whether the player has enough money to double down.
+        """
+        return len(self.cards) == 2
+
+    def can_split(self) -> bool:
+        """
+        Returns True if the hand can be split, which means it contains exactly two cards of the same rank.
+        This does not consider whether the player has enough money to split.
+        """
+        return len(self.cards) == 2 and self.cards[0].rank == self.cards[1].rank
