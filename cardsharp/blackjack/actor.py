@@ -10,6 +10,10 @@ class InsufficientFundsError(Exception):
     pass
 
 
+class InvalidActionError(Exception):
+    pass
+
+
 class Player(SimplePlayer):
     current_hand: BlackjackHand
 
@@ -35,6 +39,20 @@ class Player(SimplePlayer):
     def is_done(self) -> bool:
         """Check if player has finished their turn."""
         return self.done
+
+    def split(self):
+        if not self.current_hand.can_split():
+            raise InvalidActionError(f"{self.name} cannot split at this time.")
+
+        if self.bet > self.money:
+            raise InsufficientFundsError(
+                f"{self.name} does not have enough money to split."
+            )
+
+        self.money -= self.bet
+        new_hand = BlackjackHand()
+        new_hand.add_card(self.current_hand.cards.pop())
+        self.hands.append(new_hand)
 
     def stand(self):
         """Player chooses to stop taking more cards."""

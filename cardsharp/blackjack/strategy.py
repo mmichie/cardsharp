@@ -22,51 +22,61 @@ class DealerStrategy(Strategy):
 
 
 class BasicStrategy(Strategy):
+    def __init__(self):
+        pass
+
     def decide_action(self, player, dealer_up_card) -> Action:
-        if player.current_hand.is_blackjack():
+        current_hand = player.current_hand
+        if current_hand.is_blackjack():
             return Action.STAND
 
-        dealer_up_card_value = (
-            1 if dealer_up_card.rank == Rank.ACE else dealer_up_card.rank.rank_value
-        )
-
-        # Hard hands
-        if not player.current_hand.is_soft():
-            if player.current_hand.value() < 12:
-                # Check conditions for double down
-                if player.current_hand.value() in [
-                    9,
-                    10,
-                    11,
-                ] and dealer_up_card_value in range(2, 7):
-                    return Action.DOUBLE
-                return Action.HIT
-            elif player.current_hand.value() == 12:
-                if dealer_up_card_value >= 4 and dealer_up_card_value <= 6:
-                    return Action.STAND
-                else:
-                    return Action.HIT
+        # Split
+        if current_hand.can_split():
+            player_rank = current_hand.cards[0].rank
+            dealer_rank = dealer_up_card.rank
+            if player_rank in [Rank.ACE, Rank.EIGHT]:
+                return Action.SPLIT
             elif (
-                player.current_hand.value() >= 13 and player.current_hand.value() <= 16
+                player_rank in [Rank.TWO, Rank.THREE, Rank.SEVEN]
+                and dealer_rank.rank_value <= 7
             ):
-                if dealer_up_card_value <= 6:
-                    return Action.STAND
-                else:
-                    return Action.HIT
-            else:  # player hand value is 17-20
-                return Action.STAND
+                return Action.SPLIT
+            elif player_rank == Rank.SIX and dealer_rank.rank_value <= 6:
+                return Action.SPLIT
+            elif player_rank in [Rank.FOUR] and dealer_rank.rank_value == 5:
+                return Action.SPLIT
+            elif player_rank in [Rank.NINE] and dealer_rank.rank_value not in [
+                7,
+                10,
+                11,
+            ]:
+                return Action.SPLIT
 
-        # Soft hands
-        else:
-            if player.current_hand.value() <= 17:  # including soft 17
+        if current_hand.can_double():
+            # Double
+            if (
+                current_hand.value() in [10, 11] and dealer_up_card.rank.rank_value < 10
+            ) or (
+                current_hand.is_soft()
+                and current_hand.value() in [13, 14, 15, 16, 17]
+                and dealer_up_card.rank.rank_value < 7
+            ):
+                return Action.DOUBLE
+
+        if current_hand.value() <= 11:
+            return Action.HIT
+        elif current_hand.value() == 12:
+            if dealer_up_card.rank.rank_value < 4 or dealer_up_card.rank.rank_value > 6:
                 return Action.HIT
-            elif player.current_hand.value() == 18:
-                if dealer_up_card_value >= 2 and dealer_up_card_value <= 8:
-                    return Action.STAND
-                else:
-                    return Action.HIT
-            else:  # player hand value is 19-21
+            else:
                 return Action.STAND
+        elif current_hand.value() in range(13, 17):
+            if dealer_up_card.rank.rank_value > 6:
+                return Action.HIT
+            else:
+                return Action.STAND
+        else:
+            return Action.STAND
 
 
 class CountingStrategy(Strategy):

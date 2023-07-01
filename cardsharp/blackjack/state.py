@@ -227,6 +227,13 @@ class PlayersTurnState(GameState):
             if player.is_busted():
                 await game.io_interface.output(f"{player.name} has busted.")
 
+        elif action == Action.SPLIT:
+            player.split()
+            for hand in player.hands:
+                card = game.deck.deal()
+                hand.add_card(card)
+            await game.io_interface.output(f"{player.name} splits.")
+
     def __str__(self):
         return "PlayersTurnState"
 
