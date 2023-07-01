@@ -1,5 +1,6 @@
 import pytest
 
+from cardsharp.blackjack.action import Action
 from cardsharp.blackjack.actor import Dealer, InsufficientFundsError, Player
 from cardsharp.blackjack.hand import BlackjackHand
 from cardsharp.common.card import Card, Rank, Suit
@@ -135,37 +136,37 @@ def test_decide_action(player):
     # Test when the player's hand value is less than 17
     player.add_card(Card(Suit.HEARTS, Rank.SIX))
     player.add_card(Card(Suit.DIAMONDS, Rank.FIVE))
-    assert player.decide_action() == "hit"
+    assert player.decide_action() == Action.HIT
 
     # Test when the player's hand value is 17 but not a soft 17
     player.add_card(Card(Suit.CLUBS, Rank.SIX))
-    assert player.decide_action() == "stand"
+    assert player.decide_action() == Action.STAND
 
     # Test when the player's hand value is a soft 17
     player.reset()
     player.add_card(Card(Suit.HEARTS, Rank.SIX))
     player.add_card(Card(Suit.SPADES, Rank.ACE))
-    assert player.decide_action() == "hit"
+    assert player.decide_action() == Action.HIT
 
     # Test when the player's hand value is over 21 (busted)
     player.add_card(Card(Suit.CLUBS, Rank.KING))
-    assert player.decide_action() == "stand"
+    assert player.decide_action() == Action.STAND
 
     # Test when the player's hand value is 20
     player.reset()
     player.add_card(Card(Suit.HEARTS, Rank.QUEEN))
     player.add_card(Card(Suit.DIAMONDS, Rank.KING))
-    assert player.decide_action() == "stand"
+    assert player.decide_action() == Action.STAND
 
     # Test when the player's hand value is less than 17 but has an Ace (soft hand)
     player.reset()
     player.add_card(Card(Suit.HEARTS, Rank.ACE))
     player.add_card(Card(Suit.DIAMONDS, Rank.FIVE))
-    assert player.decide_action() == "hit"
+    assert player.decide_action() == Action.HIT
 
     # Test when the player's hand value is 17 with an Ace (soft 17)
     player.add_card(Card(Suit.CLUBS, Rank.TEN))
-    assert player.decide_action() == "hit"
+    assert player.decide_action() == Action.HIT
 
 
 def test_decide_action_busted(player):
@@ -174,7 +175,7 @@ def test_decide_action_busted(player):
     player.add_card(Card(Suit.DIAMONDS, Rank.KING))
     player.add_card(Card(Suit.SPADES, Rank.THREE))
 
-    assert player.decide_action() == "stand"
+    assert player.decide_action() == Action.STAND
 
 
 def test_buy_insurance(player):

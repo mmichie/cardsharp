@@ -1,7 +1,8 @@
-from cardsharp.common.io_interface import IOInterface
-from cardsharp.common.actor import SimplePlayer
+from cardsharp.blackjack.action import Action
 from cardsharp.blackjack.hand import BlackjackHand
+from cardsharp.common.actor import SimplePlayer
 from cardsharp.common.card import Rank
+from cardsharp.common.io_interface import IOInterface
 
 
 class InsufficientFundsError(Exception):
@@ -38,15 +39,15 @@ class Player(SimplePlayer):
     def decide_action(self):
         # If the player has busted, they should stand
         if self.is_busted():
-            return "stand"
+            return Action.STAND
 
         # If the player's hand value is less than 17, or is a soft 17, they should hit
         if self.current_hand.value() < 17 or (
             self.current_hand.value() == 17 and self.current_hand.is_soft()
         ):
-            return "hit"
+            return Action.HIT
         else:
-            return "stand"
+            return Action.STAND
 
     def place_bet(self, amount: int):
         if amount > self.money:

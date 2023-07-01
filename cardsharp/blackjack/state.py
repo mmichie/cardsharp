@@ -1,6 +1,8 @@
 import asyncio
 from abc import ABC
 
+from cardsharp.blackjack.action import Action
+
 
 class GameState(ABC):
     def handle(self, game):
@@ -180,7 +182,7 @@ class PlayersTurnState(GameState):
                 await game.io_interface.output(f"{player.name}'s turn.")
                 action = player.decide_action()
 
-                if action == "hit":
+                if action == Action.HIT:
                     await self.player_action(game, player, action)
 
                     if player.is_busted():
@@ -195,7 +197,7 @@ class PlayersTurnState(GameState):
                         player.stand()
                         break
 
-                elif action == "stand":
+                elif action == Action.STAND:
                     await self.player_action(game, player, action)
                     break  # Exit the loop and move to the next player
 
@@ -205,12 +207,12 @@ class PlayersTurnState(GameState):
         """
         Handles a player action and notifies the interface.
         """
-        if action == "hit":
+        if action == Action.HIT:
             card = game.deck.deal()
             player.add_card(card)
             await game.io_interface.output(f"{player.name} hits and gets {card}.")
 
-        elif action == "stand":
+        elif action == Action.STAND:
             player.stand()
             await game.io_interface.output(f"{player.name} stands.")
 
