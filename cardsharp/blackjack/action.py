@@ -4,3 +4,7 @@ from enum import Enum
 class Action(Enum):
     HIT = "hit"
     STAND = "stand"
+    DOUBLE = "double"
+    SPLIT = "split"
+    SURRENDER = "surrender"
+    INSURANCE = "insurance"
