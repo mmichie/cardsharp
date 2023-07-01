@@ -26,25 +26,40 @@ class BasicStrategy(Strategy):
         if player.current_hand.is_blackjack():
             return Action.STAND
 
-        # For simplicity, we treat Ace as 1, not 11.
         dealer_up_card_value = (
             1 if dealer_up_card.rank == Rank.ACE else dealer_up_card.rank.rank_value
         )
 
-        if player.current_hand.value() < 12:
-            return Action.HIT
-        elif player.current_hand.value() == 12:
-            if dealer_up_card_value >= 4 and dealer_up_card_value <= 6:
-                return Action.STAND
-            else:
+        # Hard hands
+        if not player.current_hand.is_soft():
+            if player.current_hand.value() < 12:
                 return Action.HIT
-        elif player.current_hand.value() >= 13 and player.current_hand.value() <= 16:
-            if dealer_up_card_value <= 6:
+            elif player.current_hand.value() == 12:
+                if dealer_up_card_value >= 4 and dealer_up_card_value <= 6:
+                    return Action.STAND
+                else:
+                    return Action.HIT
+            elif (
+                player.current_hand.value() >= 13 and player.current_hand.value() <= 16
+            ):
+                if dealer_up_card_value <= 6:
+                    return Action.STAND
+                else:
+                    return Action.HIT
+            else:  # player hand value is 17-20
                 return Action.STAND
-            else:
+
+        # Soft hands
+        else:
+            if player.current_hand.value() <= 17:  # including soft 17
                 return Action.HIT
-        else:  # player hand value is 17-20
-            return Action.STAND
+            elif player.current_hand.value() == 18:
+                if dealer_up_card_value >= 2 and dealer_up_card_value <= 8:
+                    return Action.STAND
+                else:
+                    return Action.HIT
+            else:  # player hand value is 19-21
+                return Action.STAND
 
 
 class CountingStrategy(Strategy):
