@@ -1,14 +1,16 @@
 import pytest
-import asyncio
 from cardsharp.common.io_interface import (
     DummyIOInterface,
     TestIOInterface,
     ConsoleIOInterface,
 )
-from cardsharp.common.actor import SimplePlayer
 
 
 class MockPlayer:
+    def __init__(self, name):
+        self.name = name
+        self.available_actions = ["action1", "action2"]
+
     def decide_action(self):
         return "action1"
 
@@ -16,7 +18,7 @@ class MockPlayer:
 @pytest.mark.asyncio
 async def test_dummy_io_interface_methods():
     interface = DummyIOInterface()
-    player = MockPlayer()
+    player = MockPlayer(name="Test")
 
     assert await interface.output("Test") is None
     assert await interface.get_player_action(player) == "action1"
@@ -51,15 +53,20 @@ async def test_console_io_interface_methods(mocker):
     interface = ConsoleIOInterface()
 
     # Mock the builtin input function
-    mocker.patch("builtins.input", side_effect=["Test message", "action1", "5"])
+    mocker.patch("builtins.input", side_effect=["action1", "5"])
 
     # Test output method (since it uses print, we just ensure it doesn't throw an error)
     await interface.output("Test message")
 
     # Test get_player_action method
-    player = SimplePlayer(
-        name="Alice", io_interface=DummyIOInterface()
-    )  # Create a player object with a name
+    player = MockPlayer(
+        name="Alice"
+    )  # Create a player object with a name and available actions
     assert (
-        await interface.get_player_action(player) == "Test message"
-    )  # Pass the player object
+        await interface.get_player_action(player) == "action1"
+    )  # Pass the player object and assert that the method correctly gets the valid action
+
+    # Test check_numeric_response method
+    assert (
+        await interface.check_numeric_response("Enter a number between 5 and 10: ") == 5
+    )

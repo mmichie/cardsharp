@@ -138,9 +138,12 @@ class ConsoleIOInterface(IOInterface):
         print(message)
 
     async def get_player_action(self, player: "Actor"):  # type: ignore
-        action = input(f"{player.name}, it's your turn. What's your action? ")
-        await asyncio.sleep(0)  # Simulate asynchronous behavior
-        return action
+        while True:
+            action = input(f"{player.name}, it's your turn. What's your action? ")
+            await asyncio.sleep(0)  # Simulate asynchronous behavior
+            if action in player.available_actions:
+                return action
+            print("Invalid action. Please choose a valid action.")
 
     async def check_numeric_response(self, ctx):
         while True:
