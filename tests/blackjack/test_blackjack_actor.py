@@ -3,6 +3,7 @@ import pytest
 from cardsharp.blackjack.action import Action
 from cardsharp.blackjack.actor import Dealer, InsufficientFundsError, Player
 from cardsharp.blackjack.hand import BlackjackHand
+from cardsharp.blackjack.strategy import DealerStrategy
 from cardsharp.common.card import Card, Rank, Suit
 from cardsharp.common.io_interface import TestIOInterface
 
@@ -14,7 +15,8 @@ def io_interface():
 
 @pytest.fixture
 def player(io_interface):
-    return Player("Alice", io_interface)
+    dealer_strategy = DealerStrategy()
+    return Player("Alice", io_interface, dealer_strategy)
 
 
 @pytest.fixture

@@ -8,6 +8,7 @@ from cardsharp.blackjack.state import (
     WaitingForPlayersState,
 )
 from cardsharp.blackjack.stats import SimulationStats
+from cardsharp.blackjack.strategy import DealerStrategy
 from cardsharp.common.deck import Deck
 from cardsharp.common.io_interface import (
     ConsoleIOInterface,
@@ -119,9 +120,10 @@ async def main():
         "min_bet": 10,
         "max_players": 6,
     }
+    dealer_strategy = DealerStrategy()
 
     players = [
-        Player("Bob", io_interface),
+        Player("Bob", io_interface, dealer_strategy),
     ]
 
     # Create a game

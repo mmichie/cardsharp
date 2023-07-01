@@ -1,8 +1,10 @@
 import pytest
-from cardsharp.common.card import Card, Rank, Suit
+
 from cardsharp.blackjack.actor import Player
 from cardsharp.blackjack.blackjack import BlackjackGame
 from cardsharp.blackjack.state import DealingState
+from cardsharp.blackjack.strategy import DealerStrategy
+from cardsharp.common.card import Card, Rank, Suit
 from cardsharp.common.io_interface import TestIOInterface
 
 
@@ -21,7 +23,8 @@ async def test_check_blackjack():
         "max_players": 6,
     }
     game = BlackjackGame(rules, io_interface)
-    player = Player("Alice", game.io_interface)
+    strategy = DealerStrategy()
+    player = Player("Alice", game.io_interface, strategy)
     await game.add_player(player)
     await game.set_state(DealingState())
 
