@@ -45,8 +45,6 @@ class Player(SimplePlayer):
             self.current_hand.value() == 17 and self.current_hand.is_soft()
         ):
             return "hit"
-
-        # In all other cases, the player should stand
         else:
             return "stand"
 
@@ -61,7 +59,11 @@ class Player(SimplePlayer):
             self.done = False
 
     def buy_insurance(self, amount: int):
-        if amount <= self.money:
+        if amount > self.money:
+            raise InsufficientFundsError(
+                f"{self.name} does not have enough money to buy insurance of {amount}"
+            )
+        else:
             self.insurance = amount
             self.money -= amount
 
@@ -104,3 +106,7 @@ class Dealer(SimplePlayer):
         return self.current_hand.value() < 17 or (
             self.current_hand.value() == 17 and self.current_hand.is_soft()
         )
+
+    def reset(self):
+        self.hands = [BlackjackHand()]
+        self.winner = None
