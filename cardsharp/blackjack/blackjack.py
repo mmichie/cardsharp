@@ -83,6 +83,7 @@ class BlackjackGame:
         self.deck = Deck()
         for player in self.players:
             player.reset()
+        self.dealer.reset()
 
 
 async def main():
