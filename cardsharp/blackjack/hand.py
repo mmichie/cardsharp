@@ -33,3 +33,10 @@ class BlackjackHand(Hand):
             Rank.ACE in (card.rank for card in self.cards)
             and sum(values_without_ace) + 11 <= 21
         )
+
+    def is_blackjack(self) -> bool:
+        """
+        Returns True if the hand is a blackjack, which means it contains only two cards
+        and their combined value is 21.
+        """
+        return len(self.cards) == 2 and self.value() == 21

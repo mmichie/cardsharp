@@ -177,10 +177,11 @@ class PlayersTurnState(GameState):
         """
         Handles the players' actions and changes the game state to DealersTurnState.
         """
+        dealer_up_card = game.dealer.current_hand.cards[0]
         for player in game.players:
             while not player.is_done():
                 await game.io_interface.output(f"{player.name}'s turn.")
-                action = player.decide_action()
+                action = player.decide_action(dealer_up_card=dealer_up_card)
 
                 if action == Action.HIT:
                     await self.player_action(game, player, action)

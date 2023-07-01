@@ -44,8 +44,8 @@ class Player(SimplePlayer):
         """Check if player's hand value is over 21."""
         return self.current_hand.value() > 21
 
-    def decide_action(self):
-        return self.strategy.decide_action(self)
+    def decide_action(self, dealer_up_card) -> Action:
+        return self.strategy.decide_action(self, dealer_up_card=dealer_up_card)
 
     def place_bet(self, amount: int):
         if amount > self.money:
