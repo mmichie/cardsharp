@@ -1,6 +1,27 @@
+"""
+This module contains the Actor abstract base class and a SimplePlayer concrete
+class which extends from Actor.
+
+Actor serves as a blueprint for any individual participating in a card game,
+containing methods and attributes that allow the actor to perform actions and
+manage their own state within the game. The module also includes a SimplePlayer
+class that is a specific implementation of Actor, representing a simple player
+in the game.
+
+The classes and methods within this module can be utilized to create actors in
+any card game, with the ability to reset their state, update their money,
+display messages, and manage multiple hands
+
+The Actor class is meant to be extended by other concrete classes to create more
+complex players or dealer types. The SimplePlayer class can be used as is for
+simple card games, or can serve as a starting point for creating more complex
+player types.
+"""
+
+from abc import ABC, abstractmethod
+
 from cardsharp.common.hand import Hand
 from cardsharp.common.io_interface import IOInterface
-from abc import ABC, abstractmethod
 
 
 class Actor(ABC):
@@ -21,6 +42,9 @@ class Actor(ABC):
 
     @property
     def current_hand(self):
+        """
+        The actor's current hand.
+        """
         return self.hands[self.current_hand_index]
 
     @abstractmethod
@@ -30,7 +54,6 @@ class Actor(ABC):
 
         :return: None
         """
-        pass
 
     @abstractmethod
     def update_money(self, amount: int):
@@ -40,7 +63,6 @@ class Actor(ABC):
         :param amount: The amount to update the actor's money by
         :return: None
         """
-        pass
 
     @abstractmethod
     async def display_message(self, message: str):
@@ -50,16 +72,12 @@ class Actor(ABC):
         :param message: The message to display
         :return: None
         """
-        pass
 
 
 class SimplePlayer(Actor):
     """
     A simple player in a card game, extending from the Actor abstract base class.
     """
-
-    def __init__(self, name: str, io_interface: IOInterface, initial_money: int = 1000):
-        super().__init__(name, io_interface, initial_money)
 
     def reset(self):
         """
@@ -100,5 +118,10 @@ class SimplePlayer(Actor):
         )  # wraps around if it's the last hand
 
     def receive_card(self, card):
-        """Add a new card to the actor's current hand."""
+        """
+        Add a new card to the player's current hand.
+
+        :param card: The card to add to the player's current hand
+        :return: None
+        """
         self.current_hand.add_card(card)
