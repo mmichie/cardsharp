@@ -217,6 +217,16 @@ class PlayersTurnState(GameState):
             player.stand()
             await game.io_interface.output(f"{player.name} stands.")
 
+        elif action == Action.DOUBLE:
+            player.double_down()
+            card = game.deck.deal()
+            player.add_card(card)
+            await game.io_interface.output(
+                f"{player.name} doubles down and gets {card}."
+            )
+            if player.is_busted():
+                await game.io_interface.output(f"{player.name} has busted.")
+
     def __str__(self):
         return "PlayersTurnState"
 

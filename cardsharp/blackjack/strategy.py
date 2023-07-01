@@ -33,6 +33,13 @@ class BasicStrategy(Strategy):
         # Hard hands
         if not player.current_hand.is_soft():
             if player.current_hand.value() < 12:
+                # Check conditions for double down
+                if player.current_hand.value() in [
+                    9,
+                    10,
+                    11,
+                ] and dealer_up_card_value in range(2, 7):
+                    return Action.DOUBLE
                 return Action.HIT
             elif player.current_hand.value() == 12:
                 if dealer_up_card_value >= 4 and dealer_up_card_value <= 6:

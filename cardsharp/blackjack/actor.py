@@ -40,6 +40,15 @@ class Player(SimplePlayer):
         """Player chooses to stop taking more cards."""
         self.done = True
 
+    def double_down(self):
+        if self.bet > self.money:
+            raise InsufficientFundsError(
+                f"{self.name} does not have enough money to double down."
+            )
+        self.money -= self.bet
+        self.bet *= 2
+        self.done = True
+
     def is_busted(self) -> bool:
         """Check if player's hand value is over 21."""
         return self.current_hand.value() > 21
