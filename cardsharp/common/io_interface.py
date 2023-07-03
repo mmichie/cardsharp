@@ -136,7 +136,8 @@ class ConsoleIOInterface(IOInterface):
         print(message)
 
     async def get_player_action(self, player: "Actor", valid_actions: list[Action]) -> Action:  # type: ignore
-        while True:
+        attempts = 0
+        while attempts < 3:  # Setting a maximum number of attempts
             action_input = input(
                 f"{player.name}, it's your turn. What's your action? "
             ).lower()
@@ -147,15 +148,20 @@ class ConsoleIOInterface(IOInterface):
             print(
                 f"Invalid action, valid actions are: {', '.join([a.name for a in valid_actions])}"
             )
+            attempts += 1
+        raise Exception("Too many invalid attempts. Game aborted.")
 
     async def check_numeric_response(self, ctx):
-        while True:
+        attempts = 0
+        while attempts < 3:  # Setting a maximum number of attempts
             response = input(ctx)
             await asyncio.sleep(0)  # Simulate asynchronous behavior
             try:
                 return int(response)
             except ValueError:
                 print("Invalid response, please enter a number.")
+                attempts += 1
+        raise Exception("Too many invalid responses. Operation aborted.")
 
 
 class LoggingIOInterface(IOInterface):
