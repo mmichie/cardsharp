@@ -1,5 +1,6 @@
 import asyncio
 from abc import ABC, abstractmethod
+from cardsharp.blackjack.action import Action
 
 
 class IOInterface(ABC):
@@ -124,26 +125,28 @@ class ConsoleIOInterface(IOInterface):
     def output(self, message: str):
         Output a message to the console.
 
-    async def get_player_action(self, player: "Actor"):
-        Retrieve an action from a player.
+    async def get_player_action(self, player: "Actor", valid_actions: list[str]):
+        Retrieve an action from a player and check if it's valid.
 
     async def check_numeric_response(self, ctx):
         Check if a response is numeric.
-
-    async def prompt_user_action(self, player: "Actor", valid_actions: list[str]) -> str:
-        Prompt a player for an action.
     """
 
     async def output(self, message: str):
         print(message)
 
-    async def get_player_action(self, player: "Actor"):  # type: ignore
+    async def get_player_action(self, player: "Actor", valid_actions: list[Action]) -> Action:  # type: ignore
         while True:
-            action = input(f"{player.name}, it's your turn. What's your action? ")
+            action_input = input(
+                f"{player.name}, it's your turn. What's your action? "
+            ).lower()
             await asyncio.sleep(0)  # Simulate asynchronous behavior
-            if action in player.available_actions:
-                return action
-            print("Invalid action. Please choose a valid action.")
+            for action in Action:
+                if action_input == action.name.lower() and action in valid_actions:
+                    return action
+            print(
+                f"Invalid action, valid actions are: {', '.join([a.name for a in valid_actions])}"
+            )
 
     async def check_numeric_response(self, ctx):
         while True:
@@ -153,15 +156,6 @@ class ConsoleIOInterface(IOInterface):
                 return int(response)
             except ValueError:
                 print("Invalid response, please enter a number.")
-
-    async def prompt_user_action(
-        self, player: "Actor", valid_actions: list[str]  # type: ignore
-    ) -> str:
-        while True:
-            action = await self.get_player_action(player)
-            if action in valid_actions:
-                return action
-            print(f"Invalid action, valid actions are: {', '.join(valid_actions)}")
 
 
 class LoggingIOInterface(IOInterface):

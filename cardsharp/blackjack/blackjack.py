@@ -96,6 +96,12 @@ async def main():
         default=False,
     )
     parser.add_argument(
+        "--console",
+        action="store_true",
+        help="Run the game in interactive console mode. Overrides other modes if present.",
+        default=False,
+    )
+    parser.add_argument(
         "--num_games", type=int, default=1, help="Number of games to simulate"
     )
     parser.add_argument(
@@ -104,13 +110,16 @@ async def main():
         help="Log game output to the specified file. If not provided, output goes to the console.",
     )
     args = parser.parse_args()
-
-    if args.log_file:
+    if args.console:
+        io_interface = ConsoleIOInterface()
+        strategy = None
+    elif args.log_file:
         io_interface = LoggingIOInterface(args.log_file)
     elif args.simulate:
         io_interface = DummyIOInterface()
     else:
         io_interface = ConsoleIOInterface()
+        strategy = BasicStrategy()
 
     # Define your rules TODO: make this use rules class
     rules = {
@@ -120,10 +129,9 @@ async def main():
         "min_bet": 10,
         "max_players": 6,
     }
-    basic_strategy = BasicStrategy()
 
     players = [
-        Player("Bob", io_interface, basic_strategy),
+        Player("Bob", io_interface, strategy),
     ]
 
     # Create a game

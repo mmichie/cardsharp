@@ -33,6 +33,11 @@ class Player(SimplePlayer):
         self.blackjack = False
         self.winner = None
 
+    @property
+    def valid_actions(self) -> list[Action]:
+        # Simplified version, returning all possible actions.
+        return list(Action)
+
     def has_bet(self) -> bool:
         return self.bet > 0
 
@@ -71,7 +76,14 @@ class Player(SimplePlayer):
         """Check if player's hand value is over 21."""
         return self.current_hand.value() > 21
 
-    def decide_action(self, dealer_up_card) -> Action:
+    async def decide_action(self, dealer_up_card) -> Action:
+        if self.strategy is None:
+            # Ask player for action with IOInterface
+            action = await self.io_interface.get_player_action(self, self.valid_actions)
+            # If action received is valid, set the player as done
+            if action in self.valid_actions:
+                self.done = True
+            return action
         return self.strategy.decide_action(self, dealer_up_card=dealer_up_card)
 
     def place_bet(self, amount: int):
