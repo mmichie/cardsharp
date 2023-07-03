@@ -92,7 +92,7 @@ class Card:
         :return: A string representation of the card.
         """
         if self.rank == Rank.JOKER:
-            return f"Card(None, Rank.JOKER)"
+            return "Card(None, Rank.JOKER)"
         else:
             return f"Card(Suit.{self.suit.name if self.suit else 'None'}, Rank.{self.rank.name})"
 
