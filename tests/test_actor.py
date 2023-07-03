@@ -2,7 +2,6 @@ import asyncio
 from cardsharp.common.hand import Hand
 from cardsharp.common.actor import SimplePlayer
 from cardsharp.common.io_interface import TestIOInterface
-from cardsharp.common.actor import Actor
 
 
 def test_simple_player_initialization():

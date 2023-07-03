@@ -130,9 +130,9 @@ async def main():
         help="Log game output to the specified file. If not provided, output goes to the console.",
     )
     args = parser.parse_args()
+    strategy = None
     if args.console:
         io_interface = ConsoleIOInterface()
-        strategy = None
     elif args.log_file:
         io_interface = LoggingIOInterface(args.log_file)
     elif args.simulate:

@@ -36,27 +36,27 @@ def test_card_joker_str():
 
 def test_invalid_suit():
     with pytest.raises(ValueError):
-        card = Card("Z", Rank.EIGHT)
+        Card("Z", Rank.EIGHT)
 
 
 def test_invalid_rank():
     with pytest.raises(ValueError):
-        card = Card(Suit.HEARTS, "invalid")
+        Card(Suit.HEARTS, "invalid")
 
 
 def test_empty_suit():
     with pytest.raises(ValueError):
-        card = Card("", Rank.EIGHT)
+        Card("", Rank.EIGHT)
 
 
 def test_empty_rank():
     with pytest.raises(ValueError):
-        card = Card(Suit.HEARTS, "")
+        Card(Suit.HEARTS, "")
 
 
 def test_non_string_rank():
     with pytest.raises(ValueError):
-        card = Card(Suit.HEARTS, 123)
+        Card(Suit.HEARTS, 123)
 
 
 def test_all_suits():

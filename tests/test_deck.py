@@ -1,4 +1,3 @@
-import pytest
 from cardsharp.common.card import Card, Suit, Rank
 from cardsharp.common.deck import Deck
 

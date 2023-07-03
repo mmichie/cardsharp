@@ -12,7 +12,7 @@ from cardsharp.common.io_interface import TestIOInterface
 async def test_check_blackjack():
     # setup io_interface and dealing_state
     io_interface = TestIOInterface()
-    dealing_state = DealingState()
+    DealingState()
 
     # setup game and player
     rules = {
