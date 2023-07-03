@@ -301,6 +301,14 @@ pytest = ">=5.0"
 dev = ["pre-commit", "tox", "pytest-asyncio"]
 
 [[package]]
+name = "ruff"
+version = "0.0.275"
+description = "An extremely fast Python linter, written in Rust."
+category = "dev"
+optional = false
+python-versions = ">=3.7"
+
+[[package]]
 name = "toml"
 version = "0.10.2"
 description = "Python Library for Tom's Obvious, Minimal Language"
@@ -343,7 +351,7 @@ python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,>=2.7"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "78f781f43db3a1867c32cf8a43f060160073913bd491317b3bb75455d4e05aa6"
+content-hash = "b9321d5eb4fb89f1a53a915016e04d9a3d125e89e5c4796ebc8a896711e14f76"
 
 [metadata.files]
 astroid = []
@@ -371,6 +379,7 @@ pytest = []
 pytest-asyncio = []
 pytest-cov = []
 pytest-mock = []
+ruff = []
 toml = []
 tomli = []
 tomlkit = []
