@@ -1,3 +1,9 @@
+"""
+This module contains the SimulationStats class which is responsible for 
+tracking and updating the statistics of the blackjack game simulation.
+"""
+
+
 class SimulationStats:
     """
     A class that holds the statistics of the simulation.
