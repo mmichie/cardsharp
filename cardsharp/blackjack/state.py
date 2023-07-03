@@ -182,24 +182,9 @@ class PlayersTurnState(GameState):
             while not player.is_done():
                 await game.io_interface.output(f"{player.name}'s turn.")
                 action = await player.decide_action(dealer_up_card=dealer_up_card)
+                await self.player_action(game, player, action)
 
-                if action == Action.HIT:
-                    await self.player_action(game, player, action)
-
-                    if player.is_busted():
-                        await game.io_interface.output(f"{player.name} has busted.")
-                        player.stand()
-                        break
-
-                    if player.current_hand.value() == 21:
-                        await game.io_interface.output(
-                            f"{player.name} has a blackjack."
-                        )
-                        player.stand()
-                        break
-
-                elif action == Action.STAND:
-                    await self.player_action(game, player, action)
+                if player.is_done():
                     break  # Exit the loop and move to the next player
 
         await game.set_state(DealersTurnState())
@@ -210,8 +195,14 @@ class PlayersTurnState(GameState):
         """
         if action == Action.HIT:
             card = game.deck.deal()
-            player.add_card(card)
+            player.hit(card)
             await game.io_interface.output(f"{player.name} hits and gets {card}.")
+            if player.is_busted():
+                await game.io_interface.output(f"{player.name} has busted.")
+                player.stand()
+            elif player.current_hand.value() == 21:
+                await game.io_interface.output(f"{player.name} has a blackjack.")
+                player.stand()
 
         elif action == Action.STAND:
             player.stand()
@@ -226,6 +217,7 @@ class PlayersTurnState(GameState):
             )
             if player.is_busted():
                 await game.io_interface.output(f"{player.name} has busted.")
+                player.stand()
 
         elif action == Action.SPLIT:
             player.split()

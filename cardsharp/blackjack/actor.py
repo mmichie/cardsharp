@@ -59,6 +59,12 @@ class Player(SimplePlayer):
         new_hand.add_card(self.current_hand.cards.pop())
         self.hands.append(new_hand)
 
+    def hit(self, card):
+        """Player chooses to take another card."""
+        self.current_hand.add_card(card)
+        if self.is_busted():
+            self.done = True
+
     def stand(self):
         """Player chooses to stop taking more cards."""
         self.done = True
