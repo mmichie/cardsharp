@@ -5,31 +5,31 @@ from cardsharp.blackjack.action import Action
 
 
 class GameState(ABC):
-    def handle(self, game):
+    async def handle(self, game):
         pass
 
-    def add_player(self, game, player):
+    async def add_player(self, game, player):
         pass
 
     def remove_player(self, game, player):
         pass
 
-    def place_bet(self, game, player, amount):
+    async def place_bet(self, game, player, amount):
         pass
 
-    def deal(self, game):
+    async def deal(self, game):
         pass
 
-    def offer_insurance(self, game):
+    async def offer_insurance(self, game, player):
         pass
 
-    def player_action(self, game, player, action):
+    async def player_action(self, game, player, action):
         pass
 
-    def dealer_action(self, game):
+    async def dealer_action(self, game):
         pass
 
-    def calculate_winner(self, game):
+    async def calculate_winner(self, game):
         pass
 
     def end_round(self, game):
@@ -124,7 +124,7 @@ class DealingState(GameState):
 
         # Check for dealer's blackjack
         if game.dealer.current_hand.value() == 21:
-            await game.io_interface.output(f"Dealer got a blackjack!")
+            await game.io_interface.output("Dealer got a blackjack!")
             dealer_win = True
             for player in game.players:
                 if player.blackjack:  # If the player also has a blackjack, it's a draw
@@ -181,7 +181,7 @@ class PlayersTurnState(GameState):
         for player in game.players:
             while not player.is_done():
                 await game.io_interface.output(f"{player.name}'s turn.")
-                action = player.decide_action(dealer_up_card=dealer_up_card)
+                action = await player.decide_action(dealer_up_card=dealer_up_card)
 
                 if action == Action.HIT:
                     await self.player_action(game, player, action)
