@@ -1,5 +1,5 @@
 """
-This module contains the SimulationStats class which is responsible for 
+This module contains the SimulationStats class which is responsible for
 tracking and updating the statistics of the blackjack game simulation.
 """
 

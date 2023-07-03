@@ -1,3 +1,16 @@
+"""
+This module is used to execute a game of Blackjack.
+
+It can be used to play a game in different modes:
+- Interactive console mode, where the user interacts with the game via the console.
+- Simulation mode, where the game runs automatically.
+- Logging mode, where game output is logged to a specified file.
+
+To run the game in different modes, specific command line arguments are used.
+For example, `--console` runs the game in interactive console mode,
+`--simulate` runs the game in simulation mode and `--log_file` followed by a filename runs the game in logging mode.
+"""
+
 import argparse
 import asyncio
 
@@ -88,11 +101,18 @@ class BlackjackGame:
 
 
 async def main():
+    """
+    Main function to start the game.
+
+    It handles command-line arguments to determine the mode of operation of the game,
+    creates the game, adds players, and then plays a specified number of games.
+    Finally, it prints out the statistics of the games played.
+    """
     parser = argparse.ArgumentParser(description="Run a Blackjack game.")
     parser.add_argument(
         "--simulate",
         action="store_true",
-        help="Run the game in simulation mode with no console output. If --log_file is provided, output will be logged.",
+        help="Run the game in simulation mode. If --log_file is provided, output will be logged.",
         default=False,
     )
     parser.add_argument(
