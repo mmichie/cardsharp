@@ -27,7 +27,7 @@ class IOInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_player_action(self, player: "Actor"):  # type: ignore
+    async def get_player_action(self, player: "Actor", valid_actions: list[Action]) -> Action:  # type: ignore
         pass
 
     @abstractmethod
@@ -54,9 +54,9 @@ class DummyIOInterface(IOInterface):
     async def output(self, message):
         await asyncio.sleep(0)
 
-    async def get_player_action(self, player):  # type: ignore
+    async def get_player_action(self, player: "Actor", valid_actions: list[Action]) -> Action:  # type: ignore
         await asyncio.sleep(0)
-        return player.decide_action()
+        return player.decide_action(valid_actions)
 
     async def check_numeric_response(self, response, min_val, max_val):
         await asyncio.sleep(0)
@@ -95,10 +95,10 @@ class TestIOInterface(IOInterface):
         await asyncio.sleep(0)  # Simulate asynchronous behavior
         self.sent_messages.append(message)
 
-    def add_player_action(self, action: str):
+    def add_player_action(self, action: Action):
         self.player_actions.append(action)
 
-    async def get_player_action(self, player: "Actor") -> str:  # type: ignore
+    async def get_player_action(self, player: "Actor", valid_actions: list[Action]) -> Action:  # type: ignore
         await asyncio.sleep(0)  # Simulate asynchronous behavior
         if self.player_actions:
             return self.player_actions.pop(0)
@@ -110,10 +110,10 @@ class TestIOInterface(IOInterface):
         pass
 
     async def prompt_user_action(
-        self, player: "Actor", valid_actions: list[str]  # type: ignore
-    ) -> str:
+        self, player: "Actor", valid_actions: list[Action]  # type: ignore
+    ) -> Action:
         await asyncio.sleep(0)  # Simulate asynchronous behavior
-        return await self.get_player_action(player)
+        return await self.get_player_action(player, valid_actions)
 
 
 class ConsoleIOInterface(IOInterface):
@@ -188,9 +188,9 @@ class LoggingIOInterface(IOInterface):
             log_file.write(message + "\n")
         await asyncio.sleep(0)  # Simulate asynchronous behavior
 
-    async def get_player_action(self, player: "Actor"):  # type: ignore
-        await asyncio.sleep(0)  # Simulate asynchronous behavior
-        return player.decide_action()
+    async def get_player_action(self, player: "Actor", valid_actions: list[Action]) -> Action:  # type: ignore
+        await asyncio.sleep(0)
+        return player.decide_action(valid_actions)
 
     async def check_numeric_response(self, ctx):
         await asyncio.sleep(0)  # Simulate asynchronous behavior
