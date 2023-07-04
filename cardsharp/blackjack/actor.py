@@ -1,3 +1,5 @@
+from typing import Optional
+
 from cardsharp.blackjack.action import Action
 from cardsharp.blackjack.hand import BlackjackHand
 from cardsharp.blackjack.strategy import Strategy
@@ -21,7 +23,7 @@ class Player(SimplePlayer):
         self,
         name: str,
         io_interface: IOInterface,
-        strategy: Strategy,
+        strategy: Optional[Strategy] = None,
         initial_money: int = 1000,
     ):
         super().__init__(name, io_interface, initial_money)
@@ -85,12 +87,19 @@ class Player(SimplePlayer):
     async def decide_action(self, dealer_up_card) -> Action:
         if self.strategy is None:
             # Ask player for action with IOInterface
-            action = await self.io_interface.get_player_action(self, self.valid_actions)
+            action = await self.io_interface.get_player_action(self.valid_actions)
             # If action received is valid, set the player as done
             if action in self.valid_actions:
                 self.done = True
+
+            if action is None:
+                raise InvalidActionError(f"{self.name} did not choose a valid action.")
             return action
-        return self.strategy.decide_action(self, dealer_up_card=dealer_up_card)
+        else:
+            action = self.strategy.decide_action(self, dealer_up_card)
+            if action in self.valid_actions:
+                self.done = True
+            return action
 
     def place_bet(self, amount: int):
         if amount > self.money:
