@@ -56,7 +56,7 @@ class DummyIOInterface(IOInterface):
 
     async def get_player_action(self, player: "Actor", valid_actions: list[Action]) -> Action:  # type: ignore
         await asyncio.sleep(0)
-        return player.decide_action(valid_actions)
+        return await player.decide_action(valid_actions)
 
     async def check_numeric_response(self, response, min_val, max_val):
         await asyncio.sleep(0)

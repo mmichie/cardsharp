@@ -85,7 +85,8 @@ class Player(SimplePlayer):
         return self.current_hand.value() > 21
 
     async def decide_action(self, dealer_up_card) -> Action:
-        if self.strategy is None:
+        # If strategy is none and io_interface is instance of ConsoleIOInterface, use console input
+        if self.strategy is None and isinstance(self.io_interface, IOInterface):
             # Ask player for action with IOInterface
             action = await self.io_interface.get_player_action(self, self.valid_actions)
 
@@ -96,11 +97,15 @@ class Player(SimplePlayer):
             if action is None:
                 raise InvalidActionError(f"{self.name} did not choose a valid action.")
             return action
-        else:
+        elif self.strategy is not None:
             action = self.strategy.decide_action(self, dealer_up_card)
             if action in self.valid_actions:
                 self.done = True
             return action
+        else:
+            raise InvalidActionError(
+                f"{self.name} does not have a valid strategy or IOInterface."
+            )
 
     def place_bet(self, amount: int):
         if amount > self.money:

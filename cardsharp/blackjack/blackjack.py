@@ -137,6 +137,7 @@ async def main():
         io_interface = LoggingIOInterface(args.log_file)
     elif args.simulate:
         io_interface = DummyIOInterface()
+        strategy = BasicStrategy()
     else:
         io_interface = ConsoleIOInterface()
         strategy = BasicStrategy()

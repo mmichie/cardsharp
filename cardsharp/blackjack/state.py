@@ -181,11 +181,12 @@ class PlayersTurnState(GameState):
         for player in game.players:
             while not player.is_done():
                 await game.io_interface.output(f"{player.name}'s turn.")
-                action = await player.decide_action(dealer_up_card=dealer_up_card)
-                await self.player_action(game, player, action)
+                while True:
+                    action = await player.decide_action(dealer_up_card=dealer_up_card)
+                    await self.player_action(game, player, action)
 
-                if player.is_done():
-                    break  # Exit the loop and move to the next player
+                    if player.is_done() or player.is_busted():
+                        break  # Exit the loop if player is done or busted
 
         await game.set_state(DealersTurnState())
 
