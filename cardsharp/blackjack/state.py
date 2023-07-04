@@ -179,15 +179,15 @@ class PlayersTurnState(GameState):
         """
         dealer_up_card = game.dealer.current_hand.cards[0]
         for player in game.players:
+            player.done = (
+                False  # reset the done status at the start of each player's turn
+            )
+            await game.io_interface.output(f"{player.name}'s turn.")
             while not player.is_done():
-                await game.io_interface.output(f"{player.name}'s turn.")
-                while True:
-                    action = await player.decide_action(dealer_up_card=dealer_up_card)
-                    await self.player_action(game, player, action)
-
-                    if player.is_done() or player.is_busted():
-                        break  # Exit the loop if player is done or busted
-
+                action = await player.decide_action(dealer_up_card=dealer_up_card)
+                await self.player_action(game, player, action)
+                if player.is_busted() or player.done:
+                    break  # Exit the loop if player is busted or done
         await game.set_state(DealersTurnState())
 
     async def player_action(self, game, player, action):
@@ -201,12 +201,15 @@ class PlayersTurnState(GameState):
             if player.is_busted():
                 await game.io_interface.output(f"{player.name} has busted.")
                 player.stand()
+                player.done = True
             elif player.current_hand.value() == 21:
                 await game.io_interface.output(f"{player.name} has a blackjack.")
                 player.stand()
+                player.done = True
 
         elif action == Action.STAND:
             player.stand()
+            player.done = True
             await game.io_interface.output(f"{player.name} stands.")
 
         elif action == Action.DOUBLE:
@@ -219,6 +222,7 @@ class PlayersTurnState(GameState):
             if player.is_busted():
                 await game.io_interface.output(f"{player.name} has busted.")
                 player.stand()
+                player.done = True
 
         elif action == Action.SPLIT:
             player.split()
@@ -226,6 +230,7 @@ class PlayersTurnState(GameState):
                 card = game.deck.deal()
                 hand.add_card(card)
             await game.io_interface.output(f"{player.name} splits.")
+            player.done = True
 
     def __str__(self):
         return "PlayersTurnState"
