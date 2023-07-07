@@ -19,6 +19,9 @@ flake8 = "^6.0.0"
 pylint = "^2.17.4"
 ruff = "^0.0.275"
 
+[tool.poetry.group.dev.dependencies]
+py-spy = "^0.3.14"
+
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
