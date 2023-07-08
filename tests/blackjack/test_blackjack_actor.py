@@ -138,50 +138,51 @@ def test_is_busted(player):
     assert not player.is_busted()
 
 
-def test_decide_action(player):
+@pytest.mark.asyncio
+async def test_decide_action(player):
     # Test when the player's hand value is less than 17
     player.add_card(Card(Suit.HEARTS, Rank.SIX))
     player.add_card(Card(Suit.DIAMONDS, Rank.FIVE))
-    assert player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.HIT
+    assert await player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.HIT
 
     # Test when the player's hand value is 17 but not a soft 17
     player.add_card(Card(Suit.CLUBS, Rank.SIX))
-    assert player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.STAND
+    assert await player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.STAND
 
     # Test when the player's hand value is a soft 17
     player.reset()
     player.add_card(Card(Suit.HEARTS, Rank.SIX))
     player.add_card(Card(Suit.SPADES, Rank.ACE))
-    assert player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.HIT
+    assert await player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.HIT
 
     # Test when the player's hand value is over 21 (busted)
     player.add_card(Card(Suit.CLUBS, Rank.KING))
-    assert player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.STAND
+    assert await player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.STAND
 
     # Test when the player's hand value is 20
     player.reset()
     player.add_card(Card(Suit.HEARTS, Rank.QUEEN))
     player.add_card(Card(Suit.DIAMONDS, Rank.KING))
-    assert player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.STAND
+    assert await player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.STAND
 
     # Test when the player's hand value is less than 17 but has an Ace (soft hand)
     player.reset()
     player.add_card(Card(Suit.HEARTS, Rank.ACE))
     player.add_card(Card(Suit.DIAMONDS, Rank.FIVE))
-    assert player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.HIT
+    assert await player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.HIT
 
     # Test when the player's hand value is 17 with an Ace (soft 17)
     player.add_card(Card(Suit.CLUBS, Rank.TEN))
-    assert player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.HIT
+    assert await player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.HIT
 
 
-def test_decide_action_busted(player):
+async def test_decide_action_busted(player):
     # Add cards that results in a bust
     player.add_card(Card(Suit.HEARTS, Rank.QUEEN))
     player.add_card(Card(Suit.DIAMONDS, Rank.KING))
     player.add_card(Card(Suit.SPADES, Rank.THREE))
 
-    assert player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.STAND
+    assert await player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.STAND
 
 
 def test_buy_insurance(player):
