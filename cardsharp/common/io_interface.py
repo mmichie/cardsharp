@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import asyncio
 from abc import ABC, abstractmethod
+
 from cardsharp.blackjack.action import Action
 
 
@@ -27,7 +30,9 @@ class IOInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_player_action(self, player: "Actor", valid_actions: list[Action]) -> Action:  # type: ignore
+    async def get_player_action(
+        self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
+    ) -> Action:
         pass
 
     @abstractmethod
@@ -54,7 +59,9 @@ class DummyIOInterface(IOInterface):
     async def output(self, message):
         await asyncio.sleep(0)
 
-    async def get_player_action(self, player: "Actor", valid_actions: list[Action]) -> Action:  # type: ignore
+    async def get_player_action(
+        self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
+    ) -> Action:
         await asyncio.sleep(0)
         return player.decide_action(valid_actions)
 
@@ -98,7 +105,9 @@ class TestIOInterface(IOInterface):
     def add_player_action(self, action: Action):
         self.player_actions.append(action)
 
-    async def get_player_action(self, player: "Actor", valid_actions: list[Action]) -> Action:  # type: ignore
+    async def get_player_action(
+        self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
+    ) -> Action:
         await asyncio.sleep(0)  # Simulate asynchronous behavior
         if self.player_actions:
             return self.player_actions.pop(0)
@@ -110,7 +119,7 @@ class TestIOInterface(IOInterface):
         pass
 
     async def prompt_user_action(
-        self, player: "Actor", valid_actions: list[Action]  # type: ignore
+        self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
     ) -> Action:
         await asyncio.sleep(0)  # Simulate asynchronous behavior
         return await self.get_player_action(player, valid_actions)
@@ -135,7 +144,9 @@ class ConsoleIOInterface(IOInterface):
     async def output(self, message: str):
         print(message)
 
-    async def get_player_action(self, player: "Actor", valid_actions: list[Action]) -> Action:  # type: ignore
+    async def get_player_action(
+        self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
+    ) -> Action:
         attempts = 0
         while attempts < 3:  # Setting a maximum number of attempts
             action_input = input(
@@ -188,7 +199,9 @@ class LoggingIOInterface(IOInterface):
             log_file.write(message + "\n")
         await asyncio.sleep(0)  # Simulate asynchronous behavior
 
-    async def get_player_action(self, player: "Actor", valid_actions: list[Action]) -> Action:  # type: ignore
+    async def get_player_action(
+        self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
+    ) -> Action:
         await asyncio.sleep(0)
         return player.decide_action(valid_actions)
 

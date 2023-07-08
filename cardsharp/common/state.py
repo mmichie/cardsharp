@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+
 class GameState(ABC):
     """
     An abstract base class representing the state of a game.
