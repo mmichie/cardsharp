@@ -177,13 +177,18 @@ async def main():
     dealer_wins = stats["dealer_wins"]
     draws = stats["draws"]
 
-    win_loss_ratio = player_wins / games_played
+    games_played_excluding_pushes = games_played - draws
 
-    print(f"Games played: {games_played}")
+    player_wins_ratio = player_wins / games_played_excluding_pushes
+    dealer_wins_ratio = dealer_wins / games_played_excluding_pushes
+
+    house_edge = dealer_wins_ratio - player_wins_ratio
+
+    print(f"Games played (excluding pushes): {games_played_excluding_pushes}")
     print(f"Player wins: {player_wins}")
     print(f"Dealer wins: {dealer_wins}")
     print(f"Draws: {draws}")
-    print(f"Win/Loss ratio: {win_loss_ratio:.2f}")
+    print(f"House Edge: {house_edge:.2f}")
 
 
 if __name__ == "__main__":
