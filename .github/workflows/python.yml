@@ -35,5 +35,4 @@ jobs:
     - name: Test with pytest
       run: |
         echo "$HOME/.local/bin" >> $GITHUB_PATH
-        cd poetry run python -m pytest
-
+        poetry run python -m pytest
