@@ -176,6 +176,7 @@ async def test_decide_action(player):
     assert await player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.HIT
 
 
+@pytest.mark.asyncio
 async def test_decide_action_busted(player):
     # Add cards that results in a bust
     player.add_card(Card(Suit.HEARTS, Rank.QUEEN))
