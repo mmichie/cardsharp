@@ -1,39 +1,20 @@
 import asyncio
 from abc import ABC
-
+from abc import abstractmethod
 from cardsharp.blackjack.action import Action
 
 
 class GameState(ABC):
-    async def handle(self, game):
+    """
+    Abstract base class for game states.
+    """
+    @abstractmethod
+    async def handle(self, game) -> None:
         pass
 
-    async def add_player(self, game, player):
-        pass
+    def __str__(self) -> str:
+        return self.__class__.__name__
 
-    def remove_player(self, game, player):
-        pass
-
-    async def place_bet(self, game, player, amount):
-        pass
-
-    async def deal(self, game):
-        pass
-
-    async def offer_insurance(self, game, player):
-        pass
-
-    async def player_action(self, game, player, action):
-        pass
-
-    async def dealer_action(self, game):
-        pass
-
-    async def calculate_winner(self, game):
-        pass
-
-    def end_round(self, game):
-        pass
 
 
 class WaitingForPlayersState(GameState):
