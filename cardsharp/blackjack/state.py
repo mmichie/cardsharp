@@ -8,13 +8,13 @@ class GameState(ABC):
     """
     Abstract base class for game states.
     """
+
     @abstractmethod
     async def handle(self, game) -> None:
         pass
 
     def __str__(self) -> str:
         return self.__class__.__name__
-
 
 
 class WaitingForPlayersState(GameState):
