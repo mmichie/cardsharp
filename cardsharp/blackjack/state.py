@@ -1,3 +1,25 @@
+"""
+This module provides an asynchronous game state management system for a
+Blackjack game. It uses the state design pattern to manage the various game
+states and transitions between them. The game progresses through various states:
+WaitingForPlayersState, PlacingBetsState, DealingState, OfferInsuranceState,
+PlayersTurnState, DealersTurnState, and EndRoundState.
+
+Classes:
+
+GameState: An abstract base class for game states.
+WaitingForPlayersState: The game state while the game is waiting for players to join.
+PlacingBetsState: The game state where players are placing their bets.
+DealingState: The game state where the dealer is dealing the cards.
+OfferInsuranceState: The game state where insurance is offered if the dealer has an Ace.
+PlayersTurnState: The game state where it's the players' turn to play.
+DealersTurnState: The game state where it's the dealer's turn to play.
+EndRoundState: The game state where the round is ending.
+The handle method in each game state class is responsible for performing the
+actions required in that state, notifying the interface, and transitioning to
+the next state. Each game state class also overrides the str method to return
+the state name.  """
+
 import asyncio
 from abc import ABC
 from abc import abstractmethod
@@ -11,7 +33,7 @@ class GameState(ABC):
 
     @abstractmethod
     async def handle(self, game) -> None:
-        pass
+        """The method that handles the game state."""
 
     def __str__(self) -> str:
         return self.__class__.__name__
