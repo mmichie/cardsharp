@@ -100,6 +100,22 @@ class BlackjackGame:
         self.dealer.reset()
 
 
+def create_io_interface(args):
+    """Create the IO interface based on the command line arguments."""
+    strategy = None
+    if args.console:
+        io_interface = ConsoleIOInterface()
+    elif args.log_file:
+        io_interface = LoggingIOInterface(args.log_file)
+    elif args.simulate:
+        io_interface = DummyIOInterface()
+        strategy = BasicStrategy()
+    else:
+        io_interface = ConsoleIOInterface()
+        strategy = BasicStrategy()
+    return io_interface, strategy
+
+
 async def main():
     """
     Main function to start the game.
@@ -130,17 +146,8 @@ async def main():
         help="Log game output to the specified file. If not provided, output goes to the console.",
     )
     args = parser.parse_args()
-    strategy = None
-    if args.console:
-        io_interface = ConsoleIOInterface()
-    elif args.log_file:
-        io_interface = LoggingIOInterface(args.log_file)
-    elif args.simulate:
-        io_interface = DummyIOInterface()
-        strategy = BasicStrategy()
-    else:
-        io_interface = ConsoleIOInterface()
-        strategy = BasicStrategy()
+
+    io_interface, strategy = create_io_interface(args)
 
     # Define your rules TODO: make this use rules class
     rules = {
@@ -179,8 +186,12 @@ async def main():
 
     games_played_excluding_pushes = games_played - draws
 
-    player_wins_ratio = player_wins / games_played_excluding_pushes
-    dealer_wins_ratio = dealer_wins / games_played_excluding_pushes
+    if games_played_excluding_pushes != 0:
+        player_wins_ratio = player_wins / games_played_excluding_pushes
+        dealer_wins_ratio = dealer_wins / games_played_excluding_pushes
+    else:
+        player_wins_ratio = 0
+        dealer_wins_ratio = 0
 
     house_edge = dealer_wins_ratio - player_wins_ratio
 
