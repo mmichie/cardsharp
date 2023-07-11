@@ -60,9 +60,6 @@ class WaitingForPlayersState(GameState):
         game.players.append(player)
         await game.io_interface.output(f"{player.name} has joined the game.")
 
-    def __str__(self):
-        return "WaitingForPlayersState"
-
 
 class PlacingBetsState(GameState):
     """
@@ -83,9 +80,6 @@ class PlacingBetsState(GameState):
         """
         player.place_bet(amount)
         await game.io_interface.output(f"{player.name} has placed a bet of {amount}.")
-
-    def __str__(self):
-        return "PlacingBetsState"
 
 
 class DealingState(GameState):
@@ -138,9 +132,6 @@ class DealingState(GameState):
             if dealer_win:
                 game.dealer.winner = "dealer"
 
-    def __str__(self):
-        return "DealingState"
-
 
 class OfferInsuranceState(GameState):
     """
@@ -166,9 +157,6 @@ class OfferInsuranceState(GameState):
             await game.io_interface.output("Dealer has an Ace!")
             player.buy_insurance(10)
             await game.io_interface.output(f"{player.name} has bought insurance.")
-
-    def __str__(self):
-        return "OfferInsuranceState"
 
 
 class PlayersTurnState(GameState):
@@ -235,9 +223,6 @@ class PlayersTurnState(GameState):
             await game.io_interface.output(f"{player.name} splits.")
             player.done = True
 
-    def __str__(self):
-        return "PlayersTurnState"
-
 
 class DealersTurnState(GameState):
     """
@@ -263,9 +248,6 @@ class DealersTurnState(GameState):
         card = game.deck.deal()
         game.dealer.add_card(card)
         await game.io_interface.output(f"Dealer hits and gets {card}.")
-
-    def __str__(self):
-        return "DealersTurnState"
 
 
 class EndRoundState(GameState):
@@ -319,6 +301,3 @@ class EndRoundState(GameState):
                 player.winner = "draw"
 
         await game.set_state(PlacingBetsState())
-
-    def __str__(self):
-        return "EndRoundState"
