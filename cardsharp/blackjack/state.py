@@ -260,11 +260,30 @@ class EndRoundState(GameState):
         Handles the calculation of the winner, updates the statistics, and changes the game state to PlacingBetsState.
         """
         await self.calculate_winner(game)
+        await self.output_results(game)
+        await self.handle_payouts(game)
         await game.stats.update(game)
+        await game.set_state(PlacingBetsState())
 
     async def calculate_winner(self, game):
         """
-        Calculates the winner of the round and handles the payouts.
+        Calculates the winner of the round.
+        """
+        dealer_hand_value = game.dealer.current_hand.value()
+        for player in game.players:
+            player_hand_value = player.current_hand.value()
+            if player_hand_value > 21:
+                player.winner = "dealer"
+            elif dealer_hand_value > 21 or player_hand_value > dealer_hand_value:
+                player.winner = "player"
+            elif player_hand_value < dealer_hand_value:
+                player.winner = "dealer"
+            else:
+                player.winner = "draw"
+
+    async def output_results(self, game):
+        """
+        Outputs the results of the round.
         """
         dealer_hand_value = game.dealer.current_hand.value()
         dealer_cards = ", ".join(str(card) for card in game.dealer.current_hand.cards)
@@ -282,22 +301,21 @@ class EndRoundState(GameState):
             await game.io_interface.output(
                 f"{player.name}'s final hand value: {player_hand_value}"
             )
-
-            if player_hand_value > 21:
+            if player.winner == "dealer":
                 await game.io_interface.output(f"{player.name} busts. Dealer wins!")
-                player.winner = "dealer"
-            elif dealer_hand_value > 21 or player_hand_value > dealer_hand_value:
+            elif player.winner == "player":
                 await game.io_interface.output(f"{player.name} wins the round!")
-                player.payout(player.bet * 2)
-                player.winner = "player"
-            elif player_hand_value < dealer_hand_value:
-                await game.io_interface.output(f"Dealer wins against {player.name}!")
-                player.winner = "dealer"
-            else:
+            elif player.winner == "draw":
                 await game.io_interface.output(
                     f"{player.name} and Dealer tie! It's a push."
                 )
-                player.payout(player.bet)
-                player.winner = "draw"
 
-        await game.set_state(PlacingBetsState())
+    async def handle_payouts(self, game):
+        """
+        Handles the payouts for the round.
+        """
+        for player in game.players:
+            if player.winner == "player":
+                player.payout(player.bet * 2)
+            elif player.winner == "draw":
+                player.payout(player.bet)
