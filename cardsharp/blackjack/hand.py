@@ -20,35 +20,27 @@ class BlackjackHand(Hand):
         Calculates and returns the value of the hand following Blackjack rules,
         i.e., considering the value of Ace as 1 or 11 as necessary.
         """
-        total_value = sum(
+        num_aces = sum(card.rank == Rank.ACE for card in self.cards)
+        non_ace_value = sum(
             card.rank.rank_value for card in self.cards if card.rank != Rank.ACE
         )
-        num_aces = sum(card.rank == Rank.ACE for card in self.cards)
-
-        for _ in range(num_aces):
-            if total_value + Rank.ACE.rank_value <= 21:
-                total_value += Rank.ACE.rank_value
-            else:
-                total_value += Rank.ACE.rank_value - 10
-
-        return total_value
+        # Count one Ace as 11 if it doesn't bust the hand
+        if num_aces > 0 and non_ace_value + 10 < 21:
+            return non_ace_value + 10 + num_aces
+        else:
+            return non_ace_value + num_aces
 
     def is_soft(self) -> bool:
         """
         Returns True if the hand is soft, which means it contains an Ace
         that can be counted as 11 without causing the hand's total value to exceed 21.
         """
-        values_without_ace = [
-            10
-            if card.rank in [Rank.JACK, Rank.QUEEN, Rank.KING]
-            else card.rank.rank_value
-            for card in self.cards
-            if card.rank != Rank.ACE
-        ]
-        return (
-            Rank.ACE in (card.rank for card in self.cards)
-            and sum(values_without_ace) + 11 <= 21
+        non_ace_value = sum(
+            card.rank.rank_value for card in self.cards if card.rank != Rank.ACE
         )
+        num_aces = sum(card.rank == Rank.ACE for card in self.cards)
+        # Count one Ace as 11 if it doesn't bust the hand
+        return num_aces > 0 and non_ace_value + 10 < 21
 
     def is_blackjack(self) -> bool:
         """
