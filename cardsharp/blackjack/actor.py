@@ -1,3 +1,22 @@
+"""
+This module provides the `Player` and `Dealer` classes for a game of Blackjack.
+
+The `Player` class represents a player in the game. It maintains the state of the player's current hand,
+the amount of money the player has, the player's current bet, and whether the player's turn is done. The
+`Player` class also provides methods for the player to perform various actions, like hitting, standing,
+splitting, and doubling down.
+
+The `Dealer` class represents the dealer in the game. It is a subclass of `Player`, but with its own
+logic for deciding whether to hit or stand.
+
+Exceptions:
+    - `InsufficientFundsError`: Raised when a player does not have enough money to perform an action.
+    - `InvalidActionError`: Raised when a player attempts to perform an action that is not currently valid.
+
+This module is part of the `cardsharp` package, a framework for creating and playing card games.
+"""
+
+
 from typing import Optional
 
 from cardsharp.blackjack.action import Action
@@ -9,14 +28,20 @@ from cardsharp.common.io_interface import IOInterface
 
 
 class InsufficientFundsError(Exception):
-    pass
+    """Raised when a player does not have enough money to perform an action."""
 
 
 class InvalidActionError(Exception):
-    pass
+    """Raised when a player attempts to perform an action that is not currently valid."""
 
 
 class Player(SimplePlayer):
+    """A player in a game of Blackjack.
+
+    Attributes:
+        current_hand: The current hand of the player.
+    """
+
     current_hand: BlackjackHand
 
     def __init__(
@@ -26,6 +51,7 @@ class Player(SimplePlayer):
         strategy: Optional[Strategy] = None,
         initial_money: int = 1000,
     ):
+        """Creates a new player with the given parameters."""
         super().__init__(name, io_interface, initial_money)
         self.strategy = strategy
         self.bet = 0
@@ -37,6 +63,8 @@ class Player(SimplePlayer):
 
     @property
     def valid_actions(self) -> list[Action]:
+        """Returns a list of all possible actions a player can perform."""
+
         # Simplified version, returning all possible actions.
         return list(Action)
 
@@ -45,6 +73,7 @@ class Player(SimplePlayer):
         return self.money >= amount
 
     def has_bet(self) -> bool:
+        """Check if player has placed a bet."""
         return self.bet > 0
 
     def is_done(self) -> bool:
@@ -52,6 +81,8 @@ class Player(SimplePlayer):
         return self.done
 
     def split(self):
+        """Attempts to split the player's hand into two hands."""
+
         if not self.current_hand.can_split():
             raise InvalidActionError(f"{self.name} cannot split at this time.")
 
@@ -76,6 +107,8 @@ class Player(SimplePlayer):
         self.done = True
 
     def double_down(self):
+        """Attempts to double the player's current bet."""
+
         if self.bet > self.money:
             raise InsufficientFundsError(
                 f"{self.name} does not have enough money to double down."
@@ -89,6 +122,7 @@ class Player(SimplePlayer):
         return self.current_hand.value() > 21
 
     async def decide_action(self, dealer_up_card) -> Action:
+        """Decides which action to take based on the player's strategy or IOInterface."""
         if self.strategy is None and isinstance(self.io_interface, IOInterface):
             action = await self.io_interface.get_player_action(self, self.valid_actions)
 
@@ -104,6 +138,7 @@ class Player(SimplePlayer):
             )
 
     def place_bet(self, amount: int):
+        """Attempts to place a bet of the given amount."""
         if amount > self.money:
             raise InsufficientFundsError(
                 f"{self.name} does not have enough money to place a bet of {amount}"
@@ -114,6 +149,7 @@ class Player(SimplePlayer):
             self.done = False
 
     def buy_insurance(self, amount: int):
+        """Attempts to buy insurance for the given amount."""
         if amount > self.money:
             raise InsufficientFundsError(
                 f"{self.name} does not have enough money to buy insurance of {amount}"
@@ -123,6 +159,7 @@ class Player(SimplePlayer):
             self.money -= amount
 
     def payout(self, amount: int):
+        """Gives the player a payout of the given amount."""
         self.money += amount + self.bet
         self.bet = 0
         self.insurance = 0
@@ -130,9 +167,11 @@ class Player(SimplePlayer):
         self.blackjack = False
 
     def add_card(self, card):
+        """Adds a card to the player's current hand."""
         self.current_hand.add_card(card)
 
     def reset(self):
+        """Resets the player's state to the initial state."""
         self.hands = [BlackjackHand()]
         self.done = False
         self.blackjack = False
@@ -142,26 +181,36 @@ class Player(SimplePlayer):
 
 
 class Dealer(SimplePlayer):
+    """A dealer in a game of Blackjack."""
+
     def __init__(self, name: str, io_interface: IOInterface):
+        """Creates a new dealer with the given parameters."""
+
         super().__init__(name, io_interface, initial_money=0)
         self.hands = [BlackjackHand()]
         self.winner = None
 
     @property
     def current_hand(self):
+        """Returns the dealer's current hand."""
         return self.hands[0]
 
     def has_ace(self):
+        """Returns True if the dealer's face-up card is an Ace, False otherwise."""
         return self.current_hand.cards[0].rank == Rank.ACE
 
     def add_card(self, card):
+        """Adds a card to the dealer's hand."""
         self.current_hand.add_card(card)
 
     def should_hit(self):
+        """Returns True if the dealer should hit based on their current hand, False otherwise."""
+
         return self.current_hand.value() < 17 or (
             self.current_hand.value() == 17 and self.current_hand.is_soft()
         )
 
     def reset(self):
+        """Resets the dealer's state to the initial state."""
         self.hands = [BlackjackHand()]
         self.winner = None
