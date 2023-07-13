@@ -40,6 +40,10 @@ class Player(SimplePlayer):
         # Simplified version, returning all possible actions.
         return list(Action)
 
+    def can_afford(self, amount: int) -> bool:
+        """Check if player has enough money to afford a certain amount."""
+        return self.money >= amount
+
     def has_bet(self) -> bool:
         return self.bet > 0
 
