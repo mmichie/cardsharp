@@ -63,10 +63,28 @@ class Player(SimplePlayer):
 
     @property
     def valid_actions(self) -> list[Action]:
-        """Returns a list of all possible actions a player can perform."""
-
-        # Simplified version, returning all possible actions.
-        return list(Action)
+        """Returns a list of valid actions for the player."""
+        if not self.done:
+            return [
+                Action.HIT,
+                Action.STAND,
+                Action.DOUBLE,
+                Action.SPLIT,
+                Action.SURRENDER,
+                Action.INSURANCE,
+            ]
+        elif self.done:  # No actions are valid after the player stands
+            return []
+        elif (
+            len(self.current_hand.cards) < 2
+        ):  # Player can only hit or stand with less than 2 cards
+            return [Action.HIT, Action.STAND]
+        elif (
+            self.current_hand.can_split()
+        ):  # Player can split if they have two cards of the same rank
+            return list(Action)
+        else:
+            return [Action.HIT, Action.STAND, Action.DOUBLE]
 
     def can_afford(self, amount: int) -> bool:
         """Check if player has enough money to afford a certain amount."""
@@ -86,7 +104,7 @@ class Player(SimplePlayer):
         if not self.current_hand.can_split():
             raise InvalidActionError(f"{self.name} cannot split at this time.")
 
-        if self.bet > self.money:
+        if self.bet >= self.money:
             raise InsufficientFundsError(
                 f"{self.name} does not have enough money to split."
             )
