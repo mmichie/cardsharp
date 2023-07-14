@@ -1,3 +1,20 @@
+"""
+This module defines the `Suit`, `Rank`, and `Card` classes, which are used to represent playing cards.
+
+- `Suit`: An enum representing the four suits of a standard deck of playing
+cards: Hearts, Diamonds, Clubs, and Spades.
+
+- `Rank`: An enum representing the thirteen ranks of a standard deck of playing
+cards: Two through Ten, Jack, Queen, King, and Ace. It also includes a Joker
+rank.
+
+- `Card`: A class representing a playing card. A card has a suit and a
+rank. The `Card` class also provides methods for comparing cards and for
+converting cards to strings for display.
+
+This module is part of the `cardsharp` package, a framework for creating and playing card games.
+"""
+
 from enum import Enum, unique
 
 
@@ -38,18 +55,19 @@ class Rank(Enum):
 
     @property
     def rank_value(self):
+        """The value of the rank, used for scoring."""
         return self.value
 
     @property
     def rank_str(self):
+        """A string representation of the rank."""
         if self == self.JOKER:
             return "Joker"
-        elif self.value == 10:
+        if self.value == 10:
             return "10" if self == self.TEN else self.name[0]
-        elif self == self.ACE:
+        if self == self.ACE:
             return "A"
-        else:
-            return str(self.value)
+        return str(self.value)
 
     def __str__(self) -> str:
         return self.rank_str
@@ -93,8 +111,8 @@ class Card:
         """
         if self.rank == Rank.JOKER:
             return "Card(None, Rank.JOKER)"
-        else:
-            return f"Card(Suit.{self.suit.name if self.suit else 'None'}, Rank.{self.rank.name})"
+
+        return f"Card(Suit.{self.suit.name if self.suit else 'None'}, Rank.{self.rank.name})"
 
     def __str__(self) -> str:
         """
@@ -104,8 +122,8 @@ class Card:
         """
         if self.rank == Rank.JOKER:
             return f"{self.rank.rank_str}"
-        else:
-            return f"{self.rank.rank_str} of {str(self.suit)}"
+
+        return f"{self.rank.rank_str} of {str(self.suit)}"
 
     def __eq__(self, other):
         """
