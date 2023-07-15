@@ -48,14 +48,12 @@ class AbstractHand(ABC):
         """
         Returns a string representation of the object for debugging.
         """
-        pass
 
     @abstractmethod
     def __str__(self):
         """
         Returns a string representation of the object for display.
         """
-        pass
 
 
 class Hand(AbstractHand):
@@ -64,9 +62,6 @@ class Hand(AbstractHand):
 
     This class provides a string representation of a hand of cards for both debugging and display purposes.
     """
-
-    def __init__(self):
-        super().__init__()
 
     def __repr__(self) -> str:
         """
