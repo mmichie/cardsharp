@@ -9,8 +9,9 @@ Classes:
 AbstractHand: An abstract base class for a hand of cards.
 Hand: A concrete implementation of a hand of cards.
 """
+from abc import ABC
+from typing import List
 
-from abc import ABC, abstractmethod
 from cardsharp.common.card import Card
 
 
@@ -23,37 +24,36 @@ class AbstractHand(ABC):
     """
 
     def __init__(self):
-        self.cards = []
+        self._cards = []
 
-    def add_card(self, card: Card):
+    @property
+    def cards(self) -> List[Card]:
+        """Returns the cards in the hand."""
+        return self._cards
+
+    def add_card(self, card: Card) -> None:
         """
         Adds a card to the hand.
 
         Args:
             card: The card to add.
         """
-        self.cards.append(card)
+        self._cards.append(card)
 
-    def remove_card(self, card: Card):
+    def remove_card(self, card: Card) -> None:
         """
         Removes a card from the hand.
 
         Args:
             card: The card to remove.
-        """
-        self.cards.remove(card)
 
-    @abstractmethod
-    def __repr__(self):
+        Raises:
+            ValueError: If the card is not found in the hand.
         """
-        Returns a string representation of the object for debugging.
-        """
-
-    @abstractmethod
-    def __str__(self):
-        """
-        Returns a string representation of the object for display.
-        """
+        try:
+            self._cards.remove(card)
+        except ValueError as exc:
+            raise ValueError(f"Card {card} not found in hand.") from exc
 
 
 class Hand(AbstractHand):
