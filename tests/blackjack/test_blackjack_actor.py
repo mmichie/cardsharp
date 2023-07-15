@@ -374,29 +374,23 @@ async def test_player_dealer_interaction(player, dealer):
 
 
 def test_valid_actions(player):
-    # Initially, all actions should be valid
-    valid_actions = player.valid_actions
-    assert set(valid_actions) == set(Action)
+    # Reset the player's state
+    player.reset()
 
-    # When the player has placed a bet, the actions should still be the same
-    player.place_bet(10)
-    valid_actions = player.valid_actions
-    assert set(valid_actions) == set(Action)
+    # Initially, no actions should be valid since player doesn't have any cards
+    assert player.valid_actions == []
 
-    # When the player has a single card, the actions should still be the same
+    # When the player has a single card, only hit and stand actions should be valid
     player.add_card(Card(Suit.HEARTS, Rank.TWO))
-    valid_actions = player.valid_actions
-    assert set(valid_actions) == set(Action)
+    assert set(player.valid_actions) == set([Action.HIT, Action.STAND])
 
-    # When the player has two cards of the same rank, splitting should be a valid action
+    # When the player has two cards of the same rank, all actions including split should be valid
     player.add_card(Card(Suit.HEARTS, Rank.TWO))
-    valid_actions = player.valid_actions
-    assert set(valid_actions) == set(Action)
+    assert set(player.valid_actions) == set(Action)
 
     # After the player stands, no more actions should be valid
     player.stand()
-    valid_actions = player.valid_actions
-    assert valid_actions == []
+    assert player.valid_actions == []
 
 
 def test_can_afford(player):
@@ -454,6 +448,7 @@ def test_split_insufficient_funds(player):
 
     # Player's hand should still contain two cards
     assert len(player.current_hand.cards) == 2
+
 
 def test_double_down_insufficient_funds(player):
     # Place a bet that is half of the player's initial money

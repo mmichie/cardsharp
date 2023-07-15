@@ -53,6 +53,10 @@ class Player(SimplePlayer):
     ):
         """Creates a new player with the given parameters."""
         super().__init__(name, io_interface, initial_money)
+        if strategy is None and not isinstance(io_interface, IOInterface):
+            raise InvalidActionError(
+                f"{self.name} must have a valid strategy or IOInterface."
+            )
         self.strategy = strategy
         self.bet = 0
         self.insurance = 0
@@ -64,7 +68,19 @@ class Player(SimplePlayer):
     @property
     def valid_actions(self) -> list[Action]:
         """Returns a list of valid actions for the player."""
-        if not self.done:
+        if self.done:  # No actions are valid after the player stands
+            return []
+        elif not self.current_hand.cards:  # Player can't hit or stand without cards
+            return []
+        elif (
+            len(self.current_hand.cards) == 1
+        ):  # Player can only hit or stand with one card
+            return [Action.HIT, Action.STAND]
+        elif (
+            self.current_hand.can_split()
+        ):  # Player can split if they have two cards of the same rank
+            return list(Action)
+        else:
             return [
                 Action.HIT,
                 Action.STAND,
@@ -73,18 +89,6 @@ class Player(SimplePlayer):
                 Action.SURRENDER,
                 Action.INSURANCE,
             ]
-        elif self.done:  # No actions are valid after the player stands
-            return []
-        elif (
-            len(self.current_hand.cards) < 2
-        ):  # Player can only hit or stand with less than 2 cards
-            return [Action.HIT, Action.STAND]
-        elif (
-            self.current_hand.can_split()
-        ):  # Player can split if they have two cards of the same rank
-            return list(Action)
-        else:
-            return [Action.HIT, Action.STAND, Action.DOUBLE]
 
     def can_afford(self, amount: int) -> bool:
         """Check if player has enough money to afford a certain amount."""
@@ -141,19 +145,13 @@ class Player(SimplePlayer):
 
     async def decide_action(self, dealer_up_card) -> Action:
         """Decides which action to take based on the player's strategy or IOInterface."""
-        if self.strategy is None and isinstance(self.io_interface, IOInterface):
+        if self.strategy is not None:
+            return self.strategy.decide_action(self, dealer_up_card)
+        else:  # if strategy is None, then io_interface must be a valid IOInterface
             action = await self.io_interface.get_player_action(self, self.valid_actions)
-
             if action is None:
                 raise InvalidActionError(f"{self.name} did not choose a valid action.")
             return action
-        elif self.strategy is not None:
-            action = self.strategy.decide_action(self, dealer_up_card)
-            return action
-        else:
-            raise InvalidActionError(
-                f"{self.name} does not have a valid strategy or IOInterface."
-            )
 
     def place_bet(self, amount: int):
         """Attempts to place a bet of the given amount."""
