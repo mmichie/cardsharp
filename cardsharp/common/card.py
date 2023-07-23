@@ -63,11 +63,10 @@ class Rank(Enum):
         """A string representation of the rank."""
         if self == self.JOKER:
             return "Joker"
-        if self.value == 10:
-            return "10" if self == self.TEN else self.name[0]
-        if self == self.ACE:
-            return "A"
-        return str(self.value)
+        elif self in (self.JACK, self.QUEEN, self.KING):
+            return self.name[0]
+        else:
+            return str(self.value)
 
     def __str__(self) -> str:
         return self.rank_str
@@ -92,16 +91,31 @@ class Card:
         :param suit: Suit of the card (one of the Suit enums, or None for Jokers)
         :param rank: Rank of the card (one of the Rank enums)
         """
-        if rank == Rank.JOKER:
-            self.suit = None
-            self.rank = Rank.JOKER
-        else:
-            if not isinstance(suit, Suit):
-                raise ValueError(f"Invalid suit: {suit}")
-            if not isinstance(rank, Rank):
-                raise ValueError(f"Invalid rank: {rank}")
-            self.suit = suit
-            self.rank = rank
+        match rank:
+            case Rank.JOKER:
+                self.suit = None
+                self.rank = rank
+            case _:
+                if not isinstance(suit, Suit):
+                    raise TypeError(f"Invalid suit: {suit}")
+                if not isinstance(rank, Rank):
+                    raise TypeError(f"Invalid rank: {rank}")
+                self.suit = suit
+                self.rank = rank
+
+    def __eq__(self, other):
+        """
+        Checks if this card is equal to another card.
+
+        :param other: The other card to compare to.
+        :return: True if the cards have the same rank and suit, False otherwise.
+        """
+        if isinstance(other, Card):
+            return self.rank == other.rank and self.suit == other.suit
+        return NotImplemented
+
+    def __hash__(self):
+        return hash((self.suit, self.rank))
 
     def __repr__(self) -> str:
         """
@@ -125,16 +139,27 @@ class Card:
 
         return f"{self.rank.rank_str} of {str(self.suit)}"
 
-    def __eq__(self, other):
-        """
-        Checks if this card is equal to another card.
 
-        :param other: The other card to compare to.
-        :return: True if the cards have the same rank and suit, False otherwise.
-        """
-        if isinstance(other, Card):
-            return self.rank == other.rank and self.suit == other.suit
-        return NotImplemented
+def test_card_hash():
+    card1 = Card(Suit.HEARTS, Rank.EIGHT)
+    card2 = Card(Suit.HEARTS, Rank.EIGHT)
+    card3 = Card(Suit.CLUBS, Rank.NINE)
 
-    def __hash__(self):
-        return hash((self.suit, self.rank))
+    card_set = set()
+    card_set.add(card1)
+    card_set.add(card2)
+    card_set.add(card3)
+
+    assert len(card_set) == 2
+    assert card1 in card_set
+    assert card2 in card_set
+    assert card3 in card_set
+
+    card_dict = {}
+    card_dict[card1] = "card1"
+    card_dict[card2] = "card2"
+    card_dict[card3] = "card3"
+
+    assert len(card_dict) == 2
+    assert card_dict[card1] == "card2"
+    assert card_dict[card3] == "card3"
