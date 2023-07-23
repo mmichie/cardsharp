@@ -90,3 +90,28 @@ def test_card_equality():
     assert (
         card1 != card4
     )  # Two cards with same suit but different ranks should not be equal
+
+
+def test_card_hash():
+    card1 = Card(Suit.HEARTS, Rank.EIGHT)
+    card2 = Card(Suit.HEARTS, Rank.EIGHT)
+    card3 = Card(Suit.CLUBS, Rank.NINE)
+
+    card_set = set()
+    card_set.add(card1)
+    card_set.add(card2)
+    card_set.add(card3)
+
+    assert len(card_set) == 2
+    assert card1 in card_set
+    assert card2 in card_set
+    assert card3 in card_set
+
+    card_dict = {}
+    card_dict[card1] = "card1"
+    card_dict[card2] = "card2"
+    card_dict[card3] = "card3"
+
+    assert len(card_dict) == 2
+    assert card_dict[card1] == "card2"
+    assert card_dict[card3] == "card3"
