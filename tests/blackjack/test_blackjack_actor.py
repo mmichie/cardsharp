@@ -463,3 +463,41 @@ def test_double_down_insufficient_funds(player):
 
     # Player's bet should still be the same
     assert player.bet == 600
+
+
+def test_double_down_valid_bet(player):
+    # Place a bet that is less than half of the player's initial money
+    player.place_bet(400)
+
+    # Player should be able to double down
+    player.double_down()
+
+    # Player's money should be reduced by the bet amount
+    assert player.money == 200
+
+    # Player's bet should be doubled
+    assert player.bet == 800
+
+
+def test_double_down_no_initial_bet(player):
+    # Player has not placed any bet yet
+    assert player.bet == 0
+
+    # Player should not be able to double down without an initial bet
+    with pytest.raises(InvalidActionError):
+        player.double_down()
+
+
+def test_double_down_after_bust(player):
+    # Place a bet
+    player.place_bet(400)
+
+    # Add cards to make player bust
+    player.add_card(Card(Suit.SPADES, Rank.TEN))
+    player.add_card(Card(Suit.HEARTS, Rank.TEN))
+    player.add_card(Card(Suit.DIAMONDS, Rank.FIVE))
+    assert player.is_busted()
+
+    # Player should not be able to double down after busting
+    with pytest.raises(InvalidActionError):
+        player.double_down()

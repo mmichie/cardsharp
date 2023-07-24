@@ -131,10 +131,19 @@ class Player(SimplePlayer):
     def double_down(self):
         """Attempts to double the player's current bet."""
 
+        if not self.has_bet():
+            raise InvalidActionError(
+                f"{self.name} must place a bet before they can double down."
+            )
+
+        if self.is_busted():
+            raise InvalidActionError(f"{self.name} cannot double down after busting.")
+
         if self.bet > self.money:
             raise InsufficientFundsError(
                 f"{self.name} does not have enough money to double down."
             )
+
         self.money -= self.bet
         self.bet *= 2
         self.done = True
