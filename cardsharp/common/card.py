@@ -138,5 +138,3 @@ class Card:
             return f"{self.rank.rank_str}"
 
         return f"{self.rank.rank_str} of {str(self.suit)}"
-
-

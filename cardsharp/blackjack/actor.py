@@ -77,7 +77,7 @@ class Player(SimplePlayer):
         ):  # Player can only hit or stand with one card
             return [Action.HIT, Action.STAND]
         elif (
-            self.current_hand.can_split()
+            self.current_hand.can_split
         ):  # Player can split if they have two cards of the same rank
             return list(Action)
         else:
@@ -105,7 +105,7 @@ class Player(SimplePlayer):
     def split(self):
         """Attempts to split the player's hand into two hands."""
 
-        if not self.current_hand.can_split():
+        if not self.current_hand.can_split:
             raise InvalidActionError(f"{self.name} cannot split at this time.")
 
         if self.bet >= self.money:
@@ -223,7 +223,7 @@ class Dealer(SimplePlayer):
         """Returns True if the dealer should hit based on their current hand, False otherwise."""
 
         return self.current_hand.value() < 17 or (
-            self.current_hand.value() == 17 and self.current_hand.is_soft()
+            self.current_hand.value() == 17 and self.current_hand.is_soft
         )
 
     def reset(self):

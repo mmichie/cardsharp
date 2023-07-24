@@ -16,7 +16,7 @@ class DealerStrategy(Strategy):
         if player.is_busted():
             return Action.STAND
         if player.current_hand.value() < 17 or (
-            player.current_hand.value() == 17 and player.current_hand.is_soft()
+            player.current_hand.value() == 17 and player.current_hand.is_soft
         ):
             return Action.HIT
         else:
@@ -40,7 +40,7 @@ class BasicStrategy(Strategy):
             Action: The action to take.
         """
         current_hand = player.current_hand
-        if current_hand.is_blackjack():
+        if current_hand.is_blackjack:
             return Action.STAND
 
         action = self._decide_on_split(current_hand, dealer_up_card)
@@ -64,7 +64,7 @@ class BasicStrategy(Strategy):
         Returns:
             Action: Action.SPLIT if the player decides to split, None otherwise.
         """
-        if current_hand.can_split():
+        if current_hand.can_split:
             player_rank = current_hand.cards[0].rank
             dealer_rank = dealer_up_card.rank
             if player_rank in [Rank.ACE, Rank.EIGHT]:
@@ -97,11 +97,11 @@ class BasicStrategy(Strategy):
         Returns:
             Action: Action.DOUBLE if the player decides to double, None otherwise.
         """
-        if current_hand.can_double():
+        if current_hand.can_double:
             if (
                 current_hand.value() in [10, 11] and dealer_up_card.rank.rank_value < 10
             ) or (
-                current_hand.is_soft()
+                current_hand.is_soft
                 and current_hand.value() in [13, 14, 15, 16, 17]
                 and dealer_up_card.rank.rank_value < 7
             ):
