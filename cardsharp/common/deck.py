@@ -1,6 +1,7 @@
 import random
 from typing import List, Union
-from cardsharp.common.card import Card, Suit, Rank
+
+from cardsharp.common.card import Card, Rank, Suit
 
 
 class Deck:
@@ -57,21 +58,21 @@ class Deck:
         True
         """
         random.shuffle(self.cards)
+        return self
 
-    def deal(self) -> Card:
+    def deal(self, num_cards=1) -> Union[Card, List[Card]]:
         """
-        Pop a card from the deck.
+        Pop n cards from the deck.
 
-        :return: A card instance.
+        :return: A card instance or a list of card instances.
         >>> deck = Deck()
-        >>> card = deck.deal()
-        >>> isinstance(card, Card)
-        True
+        >>> cards = deck.deal(5)
+        >>> len(cards)
+        5
         """
-        return self.cards.pop()
-
-    def draw(self) -> Card:
-        return self.deal()
+        if num_cards == 1:
+            return self.cards.pop()
+        return [self.cards.pop() for _ in range(num_cards)]
 
     @property
     def size(self) -> int:

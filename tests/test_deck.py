@@ -51,18 +51,10 @@ def test_deck_str():
     assert str(deck) == f"Deck of {len(deck.cards)} cards"
 
 
-def test_deck_draw():
-    deck = Deck()
-    size = deck.size
-    card = deck.draw()
-    assert isinstance(card, Card)
-    assert len(deck.cards) == size - 1
-
-
-def test_deck_draw_until_empty():
+def test_deck_deal_until_empty():
     deck = Deck()
     for _ in range(deck.size):
-        card = deck.draw()
+        card = deck.deal()
         assert isinstance(card, Card)
     assert deck.is_empty()
 
@@ -71,10 +63,10 @@ def test_deck_draw_empty_deck():
     deck = Deck()
     # Draw all cards from the deck
     for _ in range(deck.size):
-        deck.draw()
+        deck.deal()
     # Check that trying to draw from an empty deck raises an exception
     try:
-        deck.draw()
+        deck.deal()
     except IndexError:
         assert True
     else:
@@ -95,7 +87,7 @@ def test_deck_reset():
 def test_deck_reset_after_draw():
     deck = Deck()
     size = deck.size
-    deck.draw()
+    deck.deal()
     assert len(deck.cards) == size - 1
     deck.reset()
     assert len(deck.cards) == size
@@ -108,7 +100,7 @@ def test_deck_reset_empty_deck():
     deck = Deck()
     # Draw all cards from the deck
     for _ in range(deck.size):
-        deck.draw()
+        deck.deal()
     assert deck.is_empty()
     deck.reset()
     assert len(deck.cards) == deck.size

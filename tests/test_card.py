@@ -1,3 +1,4 @@
+# pylint: disable=missing-docstring
 import pytest
 from cardsharp.common.card import Card, Suit, Rank
 
