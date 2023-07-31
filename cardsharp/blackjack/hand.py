@@ -30,8 +30,8 @@ Dependencies:
 """
 
 
-from cardsharp.common.hand import Hand
 from cardsharp.common.card import Rank
+from cardsharp.common.hand import Hand
 
 
 class BlackjackHand(Hand):
@@ -41,42 +41,39 @@ class BlackjackHand(Hand):
     specific to the rules of Blackjack.
     """
 
-    def _get_num_aces(self) -> int:
-        """Calculates and returns the number of aces in the hand."""
+    @property
+    def _num_aces(self) -> int:
+        """Number of aces in the hand."""
         return sum(card.rank == Rank.ACE for card in self.cards)
+
+    @property
+    def _non_ace_value(self) -> int:
+        """Sum of values of non-ace cards in the hand."""
+        return sum(card.rank.rank_value for card in self.cards if card.rank != Rank.ACE)
 
     def value(self) -> int:
         """
-        Calculates and returns the value of the hand following Blackjack rules,
+        Calculate the value of the hand following Blackjack rules,
         i.e., considering the value of Ace as 1 or 11 as necessary.
         """
-        num_aces = self._get_num_aces()
-        non_ace_value = sum(
-            card.rank.rank_value for card in self.cards if card.rank != Rank.ACE
-        )
         # Count one Ace as 11 if it doesn't bust the hand
-        if num_aces > 0 and non_ace_value + 10 < 21:
-            return non_ace_value + 10 + num_aces
+        if self._num_aces > 0 and self._non_ace_value + 10 < 21:
+            return self._non_ace_value + 10 + self._num_aces
         else:
-            return non_ace_value + num_aces
+            return self._non_ace_value + self._num_aces
 
     @property
     def is_soft(self) -> bool:
         """
-        Returns True if the hand is soft, which means it contains an Ace
+        Check if the hand is soft, meaning it contains an Ace
         that can be counted as 11 without causing the hand's total value to exceed 21.
         """
-        non_ace_value = sum(
-            card.rank.rank_value for card in self.cards if card.rank != Rank.ACE
-        )
-        num_aces = self._get_num_aces()
-        # Count one Ace as 11 if it doesn't bust the hand
-        return num_aces > 0 and non_ace_value + 10 < 21
+        return self._num_aces > 0 and self._non_ace_value + 10 < 21
 
     @property
     def is_blackjack(self) -> bool:
         """
-        Returns True if the hand is a blackjack, which means it contains only two cards
+        Check if the hand is a blackjack, meaning it contains only two cards
         and their combined value is exactly 21.
         """
         return len(self.cards) == 2 and self.value() == 21
@@ -84,7 +81,7 @@ class BlackjackHand(Hand):
     @property
     def can_double(self) -> bool:
         """
-        Returns True if the hand can be doubled down, which means it contains exactly two cards.
+        Check if the hand can be doubled down, meaning it contains exactly two cards.
         Note that this method does not consider whether the player has enough money to double down.
         """
         return len(self.cards) == 2
@@ -92,7 +89,7 @@ class BlackjackHand(Hand):
     @property
     def can_split(self) -> bool:
         """
-        Returns True if the hand can be split, which means it contains exactly two cards of the same rank.
+        Check if the hand can be split, meaning it contains exactly two cards of the same rank.
         Note that this method does not consider whether the player has enough money to split.
         """
         return len(self.cards) == 2 and self.cards[0].rank == self.cards[1].rank
