@@ -26,7 +26,7 @@ pytest-mock = "^3.7.1"
 pytest-asyncio = "^0.21.1"
 flake8 = "^6.1.0"
 pylint = "^2.17.5"
-ruff = "^0.0.284"
+ruff = "^0.0.285"
 
 [tool.poetry.group.dev.dependencies]
 py-spy = "^0.3.14"
