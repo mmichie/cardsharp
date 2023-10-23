@@ -25,7 +25,7 @@ pytest-cov = "^4.1.0"
 pytest-mock = "^3.7.1"
 pytest-asyncio = "^0.21.1"
 flake8 = "^6.1.0"
-pylint = "^3.0.1"
+pylint = "^3.0.2"
 ruff = "^0.0.292"
 
 [tool.poetry.group.dev.dependencies]
