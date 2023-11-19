@@ -15,8 +15,8 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.10"
-asyncio = "^3.4.3"
+python = "^3.12"
+asyncio = "*"
 
 [tool.poetry.dev-dependencies]
 black = "^23.11.0"
