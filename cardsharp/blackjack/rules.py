@@ -26,23 +26,53 @@ class Rules:
         Initialize the game rules.
 
         Args:
-            blackjack_payout (float, optional): Payout multiplier for a blackjack. Defaults to 1.5.
-            dealer_hit_soft_17 (bool, optional): Flag indicating if the dealer hits on soft 17. Defaults to True.
-            allow_split (bool, optional): Flag indicating if splitting pairs is allowed. Defaults to True.
-            allow_double_down (bool, optional): Flag indicating if doubling down is allowed. Defaults to True.
-            allow_insurance (bool, optional): Flag indicating if insurance is allowed. Defaults to True.
-            allow_surrender (bool, optional): Flag indicating if surrender is allowed. Defaults to True.
+            blackjack_payout (float, optional): Payout multiplier for
+            a blackjack. Defaults to 1.5.
+
+            dealer_hit_soft_17 (bool, optional): Flag indicating if the dealer
+            hits on soft 17. Defaults to True.
+
+            allow_split (bool, optional): Flag indicating if splitting pairs is
+            allowed. Defaults to True.
+
+            allow_double_down (bool, optional): Flag indicating if doubling down
+            is allowed. Defaults to True.
+
+            allow_insurance (bool, optional): Flag indicating if insurance is
+            allowed. Defaults to True.
+
+            allow_surrender (bool, optional): Flag indicating if surrender is
+            allowed. Defaults to True.
+
             num_decks (int, optional): Number of decks used in the game. Defaults to 1.
+
             min_bet (float, optional): Minimum bet allowed in the game. Defaults to 1.0.
+
             max_bet (float, optional): Maximum bet allowed in the game. Defaults to 100.0.
-            allow_late_surrender (bool, optional): Flag indicating if late surrender is allowed. Defaults to False.
-            allow_double_after_split (bool, optional): Flag indicating if doubling down after splitting is allowed. Defaults to False.
-            allow_resplitting (bool, optional): Flag indicating if resplitting is allowed. Defaults to False.
-            dealer_peek (bool, optional): Flag indicating if the dealer checks for blackjack. Defaults to False.
-            use_csm (bool, optional): Flag indicating if a Continuous Shuffling Machine (CSM) is used. Defaults to False.
-            allow_early_surrender (bool, optional): Flag indicating if early surrender is allowed. Defaults to False.
-            bonus_payouts (dict, optional): Dictionary defining bonus payouts for specific card combinations. Defaults to an empty dictionary.
-            time_limit (int, optional): Time limit in seconds for player decisions. Defaults to 0 (no time limit).
+
+            allow_late_surrender (bool, optional): Flag indicating if late
+            surrender is allowed. Defaults to False.
+
+            allow_double_after_split (bool, optional): Flag indicating if
+            doubling down after splitting is allowed. Defaults to False.
+
+            allow_resplitting (bool, optional): Flag indicating if resplitting
+            is allowed. Defaults to False.
+
+            dealer_peek (bool, optional): Flag indicating if the dealer checks
+            for blackjack. Defaults to False.
+
+            use_csm (bool, optional): Flag indicating if a Continuous Shuffling
+            Machine (CSM) is used. Defaults to False.
+
+            allow_early_surrender (bool, optional): Flag indicating if early
+            surrender is allowed. Defaults to False.
+
+            bonus_payouts (dict, optional): Dictionary defining bonus payouts
+            for specific card combinations. Defaults to an empty dictionary.
+
+            time_limit (int, optional): Time limit in seconds for player
+            decisions. Defaults to 0 (no time limit).
         """
         self.blackjack_payout = blackjack_payout
         self.dealer_hit_soft_17 = dealer_hit_soft_17
