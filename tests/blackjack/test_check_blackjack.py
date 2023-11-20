@@ -8,8 +8,7 @@ from cardsharp.common.card import Card, Rank, Suit
 from cardsharp.common.io_interface import TestIOInterface
 
 
-@pytest.mark.asyncio
-async def test_check_blackjack():
+def test_check_blackjack():
     # setup io_interface and dealing_state
     io_interface = TestIOInterface()
     DealingState()
@@ -25,8 +24,8 @@ async def test_check_blackjack():
     game = BlackjackGame(rules, io_interface)
     strategy = DealerStrategy()
     player = Player("Alice", game.io_interface, strategy)
-    await game.add_player(player)
-    await game.set_state(DealingState())
+    game.add_player(player)
+    game.set_state(DealingState())
 
     # setup player cards and place bet
     player.add_card(Card(Suit.HEARTS, Rank.ACE))
@@ -36,7 +35,7 @@ async def test_check_blackjack():
     # Call the method under test
     assert game.players[0].hands[0].cards[0] == Card(Suit.HEARTS, Rank.ACE)
     assert game.players[0].hands[0].cards[1] == Card(Suit.HEARTS, Rank.KING)
-    await game.current_state.check_blackjack(  # type: ignore
+    game.current_state.check_blackjack(  # type: ignore
         game
     )  # Assuming check_blackjack() is a coroutine
     assert game.players[0].is_done()  # Player should be done after getting a blackjack

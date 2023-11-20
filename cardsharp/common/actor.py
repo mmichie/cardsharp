@@ -98,14 +98,14 @@ class SimplePlayer(Actor):
         """
         self.money += amount
 
-    async def display_message(self, message: str):
+    def display_message(self, message: str):
         """
         Sends a message from the player to the IO interface.
 
         :param message: The message to send
         :return: None
         """
-        await self.io_interface.output(f"{self.name}: {message}")
+        self.io_interface.output(f"{self.name}: {message}")
 
     def next_hand(self):
         """

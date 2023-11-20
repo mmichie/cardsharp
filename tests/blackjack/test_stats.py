@@ -1,5 +1,4 @@
-import pytest
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 from cardsharp.blackjack.stats import SimulationStats
 
@@ -15,17 +14,16 @@ def test_simulation_stats_init():
 
 
 # Test updating SimulationStats
-@pytest.mark.asyncio
-async def test_simulation_stats_update():
+def test_simulation_stats_update():
     stats = SimulationStats()
 
     # Mock a game object
-    mock_game = AsyncMock()
+    mock_game = Mock()
     mock_game.players = [Mock(winner=None), Mock(winner=None)]
-    mock_game.io_interface = AsyncMock()
+    mock_game.io_interface = Mock()
 
     # Run update once and check values
-    await stats.update(mock_game)
+    stats.update(mock_game)
     assert stats.games_played == 1
     assert stats.player_wins == 0
     assert stats.dealer_wins == 0
@@ -33,7 +31,7 @@ async def test_simulation_stats_update():
 
     # Set player 1 to win, run update, and check values
     mock_game.players[0].winner = "player"
-    await stats.update(mock_game)
+    stats.update(mock_game)
     assert stats.games_played == 2
     assert stats.player_wins == 1
     assert stats.dealer_wins == 0
@@ -41,7 +39,7 @@ async def test_simulation_stats_update():
 
     # Set dealer to win, run update, and check values
     mock_game.players[0].winner = "dealer"
-    await stats.update(mock_game)
+    stats.update(mock_game)
     assert stats.games_played == 3
     assert stats.player_wins == 1
     assert stats.dealer_wins == 1
@@ -49,7 +47,7 @@ async def test_simulation_stats_update():
 
     # Set draw, run update, and check values
     mock_game.players[0].winner = "draw"
-    await stats.update(mock_game)
+    stats.update(mock_game)
     assert stats.games_played == 4
     assert stats.player_wins == 1
     assert stats.dealer_wins == 1

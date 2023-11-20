@@ -103,32 +103,29 @@ class TestIOInterface(IOInterface):
         self.sent_messages = []
         self.player_actions = []
 
-    async def output(self, message):
-        await asyncio.sleep(0)  # Simulate asynchronous behavior
+    def output(self, message):
         self.sent_messages.append(message)
 
     def add_player_action(self, action: Action):
         """Add a player action to the queue."""
         self.player_actions.append(action)
 
-    async def get_player_action(
+    def get_player_action(
         self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
     ) -> Action:
-        await asyncio.sleep(0)  # Simulate asynchronous behavior
         if self.player_actions:
             return self.player_actions.pop(0)
         else:
             raise ValueError("No more actions left in TestIOInterface queue.")
 
-    async def check_numeric_response(self, ctx):
-        await asyncio.sleep(0)  # Simulate asynchronous behavior
+    def check_numeric_response(self, ctx):
+        pass
 
-    async def prompt_user_action(
+    def prompt_user_action(
         self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
     ) -> Action:
         """Prompt a player for an action."""
-        await asyncio.sleep(0)  # Simulate asynchronous behavior
-        return await self.get_player_action(player, valid_actions)
+        return self.get_player_action(player, valid_actions)
 
 
 class ConsoleIOInterface(IOInterface):
@@ -140,17 +137,17 @@ class ConsoleIOInterface(IOInterface):
     def output(self, message: str):
         Output a message to the console.
 
-    async def get_player_action(self, player: "Actor", valid_actions: list[str]):
+    def get_player_action(self, player: "Actor", valid_actions: list[str]):
         Retrieve an action from a player and check if it's valid.
 
-    async def check_numeric_response(self, ctx):
+    def check_numeric_response(self, ctx):
         Check if a response is numeric.
     """
 
-    async def output(self, message: str):
+    def output(self, message: str):
         print(message)
 
-    async def get_player_action(
+    def get_player_action(
         self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
     ) -> Action:
         attempts = 0
@@ -158,7 +155,6 @@ class ConsoleIOInterface(IOInterface):
             action_input = input(
                 f"{player.name}, it's your turn. What's your action? "
             ).lower()
-            await asyncio.sleep(0)  # Simulate asynchronous behavior
             for action in Action:
                 if action_input == action.name.lower() and action in valid_actions:
                     return action
@@ -168,11 +164,10 @@ class ConsoleIOInterface(IOInterface):
             attempts += 1
         raise Exception("Too many invalid attempts. Game aborted.")
 
-    async def check_numeric_response(self, ctx):
+    def check_numeric_response(self, ctx):
         attempts = 0
         while attempts < 3:  # Setting a maximum number of attempts
             response = input(ctx)
-            await asyncio.sleep(0)  # Simulate asynchronous behavior
             try:
                 return int(response)
             except ValueError:

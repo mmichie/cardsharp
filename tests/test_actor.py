@@ -1,4 +1,3 @@
-import asyncio
 from cardsharp.common.hand import Hand
 from cardsharp.common.actor import SimplePlayer
 from cardsharp.common.io_interface import TestIOInterface
@@ -39,7 +38,7 @@ def test_simple_player_update_money():
 def test_simple_player_display_message():
     io_interface = TestIOInterface()
     player = SimplePlayer("John Doe", io_interface)
-    asyncio.run(player.display_message("Hello World!"))  # run async function
+    player.display_message("Hello World!")
 
     assert io_interface.sent_messages == ["John Doe: Hello World!"]
 
