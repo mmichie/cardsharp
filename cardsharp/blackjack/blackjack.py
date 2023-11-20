@@ -117,7 +117,7 @@ def create_io_interface(args):
     return io_interface, strategy
 
 
-def play_game(rules, io_interface, player_names, game_id):
+def play_game(rules, io_interface, player_names):
     """
     Function to play a single game of Blackjack, to be executed in a separate process.
     """
@@ -171,8 +171,6 @@ def main():
     args = parser.parse_args()
 
     if args.simulate:
-        io_interface, strategy = create_io_interface(args)
-
         # Define your rules
         rules = {
             "blackjack_payout": 1.5,
@@ -186,7 +184,7 @@ def main():
 
         # Run simulations in parallel
         with multiprocessing.Pool() as pool:
-            game_args = [(rules, DummyIOInterface(), player_names, i) for i in range(args.num_games)]
+            game_args = [(rules, DummyIOInterface(), player_names) for _ in range(args.num_games)]
             results = pool.starmap(play_game, game_args)
 
         # Initialize counters for aggregated statistics
