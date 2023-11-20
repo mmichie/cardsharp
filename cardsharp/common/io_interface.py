@@ -4,9 +4,10 @@ This module contains the IOInterface abstract base class and its implementations
 from __future__ import annotations
 
 import asyncio
+from abc import ABC, abstractmethod
+
 import aiofiles
 
-from abc import ABC, abstractmethod
 
 from cardsharp.blackjack.action import Action
 
@@ -61,17 +62,16 @@ class DummyIOInterface(IOInterface):
         Simulates numeric response check.
     """
 
-    async def output(self, message):
-        await asyncio.sleep(0)
+    def output(self, message):
+        """Simulates output operation."""
+        pass
 
-    async def get_player_action(
+    def get_player_action(
         self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
     ) -> Action:
-        await asyncio.sleep(0)
         return player.decide_action(valid_actions)
 
-    async def check_numeric_response(self, response, min_val, max_val):
-        await asyncio.sleep(0)
+    def check_numeric_response(self, response, min_val, max_val):
         return True
 
 

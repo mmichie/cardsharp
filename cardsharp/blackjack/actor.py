@@ -152,12 +152,12 @@ class Player(SimplePlayer):
         """Check if player's hand value is over 21."""
         return self.current_hand.value() > 21
 
-    async def decide_action(self, dealer_up_card) -> Action:
+    def decide_action(self, dealer_up_card) -> Action:
         """Decides which action to take based on the player's strategy or IOInterface."""
         if self.strategy is not None:
             return self.strategy.decide_action(self, dealer_up_card)
         else:  # if strategy is None, then io_interface must be a valid IOInterface
-            action = await self.io_interface.get_player_action(self, self.valid_actions)
+            action = self.io_interface.get_player_action(self, self.valid_actions)
             if action is None:
                 raise InvalidActionError(f"{self.name} did not choose a valid action.")
             return action

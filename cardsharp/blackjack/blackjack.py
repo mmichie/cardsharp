@@ -12,7 +12,6 @@ For example, `--console` runs the game in interactive console mode,
 """
 
 import argparse
-import asyncio
 
 from cardsharp.blackjack.actor import Dealer, Player
 from cardsharp.blackjack.state import (
@@ -61,36 +60,36 @@ class BlackjackGame:
         self.current_state = WaitingForPlayersState()
         self.stats = SimulationStats()
 
-    async def set_state(self, state):
+    def set_state(self, state):
         """Change the current state of the game."""
-        await self.io_interface.output(f"Changing state to {state}.")
+        self.io_interface.output(f"Changing state to {state}.")
         self.current_state = state
 
-    async def add_player(self, player):
+    def add_player(self, player):
         """Add a player to the game."""
         if player is None:
-            await self.io_interface.output("Invalid player.")
+            self.io_interface.output("Invalid player.")
             return
 
         if len(self.players) >= self.rules["max_players"]:
-            await self.io_interface.output("Game is full.")
+            self.io_interface.output("Game is full.")
             return
 
         if not isinstance(self.current_state, WaitingForPlayersState):
-            await self.io_interface.output("Game has already started.")
+            self.io_interface.output("Game has already started.")
             return
 
         if self.current_state is not None:
-            await self.current_state.add_player(self, player)
+            self.current_state.add_player(self, player)
 
-    async def play_round(self):
+    def play_round(self):
         """Play a round of the game until it reaches the end state."""
         while not isinstance(self.current_state, EndRoundState):
-            await self.io_interface.output("Current state: " + str(self.current_state))
-            await self.current_state.handle(self)
+            self.io_interface.output("Current state: " + str(self.current_state))
+            self.current_state.handle(self)
 
-        await self.io_interface.output("Calculating winner...")
-        await self.current_state.handle(self)
+        self.io_interface.output("Calculating winner...")
+        self.current_state.handle(self)
 
     def reset(self):
         """Reset the game by creating a new deck and resetting all players."""
@@ -116,7 +115,7 @@ def create_io_interface(args):
     return io_interface, strategy
 
 
-async def main():
+def main():
     """
     Main function to start the game.
 
@@ -167,14 +166,14 @@ async def main():
 
     # Add players
     for player in players:
-        await game.add_player(player)
+        game.add_player(player)
 
     # Change state to PlacingBetsState after all players have been added
-    await game.set_state(PlacingBetsState())
+    game.set_state(PlacingBetsState())
 
     # Play games
     for _ in range(args.num_games):
-        await game.play_round()
+        game.play_round()
         game.reset()
 
     # Get and print the statistics after all games have been played
@@ -203,4 +202,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
