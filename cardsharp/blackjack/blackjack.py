@@ -218,14 +218,14 @@ def main():
         house_edge = dealer_wins_ratio - player_wins_ratio
 
         print("Simulation completed.")
-        print(f"Games played (excluding pushes): {games_played_excluding_pushes}")
-        print(f"Player wins: {total_player_wins}")
-        print(f"Dealer wins: {total_dealer_wins}")
-        print(f"Draws: {total_draws}")
+        print(f"Games played (excluding pushes): {games_played_excluding_pushes:,}")
+        print(f"Player wins: {total_player_wins:,}")
+        print(f"Dealer wins: {total_dealer_wins:,}")
+        print(f"Draws: {total_draws:,}")
         print(f"House Edge: {house_edge:.2f}")
 
         print(f"\nDuration of simulation: {duration:.2f} seconds")
-        print(f"Games simulated per second: {games_per_second:.2f}")
+        print(f"Games simulated per second: {games_per_second:,.2f}")
 
 
 if __name__ == "__main__":
