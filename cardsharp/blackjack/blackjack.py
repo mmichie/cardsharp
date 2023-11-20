@@ -13,7 +13,7 @@ For example, `--console` runs the game in interactive console mode,
 
 import argparse
 import multiprocessing
-
+import time
 
 from cardsharp.blackjack.actor import Dealer, Player
 from cardsharp.blackjack.state import (
@@ -182,10 +182,16 @@ def main():
 
         player_names = ["Bob"]  # Add more player names if needed
 
+        start_time = time.time()  # Record the start time
+
         # Run simulations in parallel
         with multiprocessing.Pool() as pool:
             game_args = [(rules, DummyIOInterface(), player_names) for _ in range(args.num_games)]
             results = pool.starmap(play_game, game_args)
+
+        end_time = time.time()  # Record the end time
+        duration = end_time - start_time  # Calculate the duration
+        games_per_second = args.num_games / duration if duration > 0 else 0
 
         # Initialize counters for aggregated statistics
         total_games_played = 0
@@ -217,6 +223,9 @@ def main():
         print(f"Dealer wins: {total_dealer_wins}")
         print(f"Draws: {total_draws}")
         print(f"House Edge: {house_edge:.2f}")
+
+        print(f"\nDuration of simulation: {duration:.2f} seconds")
+        print(f"Games simulated per second: {games_per_second:.2f}")
 
 
 if __name__ == "__main__":
