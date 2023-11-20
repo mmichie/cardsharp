@@ -1,6 +1,11 @@
+"""
+This module contains the IOInterface abstract base class and its implementations.
+"""
 from __future__ import annotations
 
 import asyncio
+import aiofiles
+
 from abc import ABC, abstractmethod
 
 from cardsharp.blackjack.action import Action
@@ -27,17 +32,17 @@ class IOInterface(ABC):
 
     @abstractmethod
     async def output(self, message: str):
-        pass
+        """Output a message to the interface."""
 
     @abstractmethod
     async def get_player_action(
         self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
     ) -> Action:
-        pass
+        """Retrieve an action from a player."""
 
     @abstractmethod
     async def check_numeric_response(self, ctx):
-        pass
+        """Check if a response is numeric."""
 
 
 class DummyIOInterface(IOInterface):
@@ -103,6 +108,7 @@ class TestIOInterface(IOInterface):
         self.sent_messages.append(message)
 
     def add_player_action(self, action: Action):
+        """Add a player action to the queue."""
         self.player_actions.append(action)
 
     async def get_player_action(
@@ -116,11 +122,11 @@ class TestIOInterface(IOInterface):
 
     async def check_numeric_response(self, ctx):
         await asyncio.sleep(0)  # Simulate asynchronous behavior
-        pass
 
     async def prompt_user_action(
         self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
     ) -> Action:
+        """Prompt a player for an action."""
         await asyncio.sleep(0)  # Simulate asynchronous behavior
         return await self.get_player_action(player, valid_actions)
 
@@ -195,9 +201,9 @@ class LoggingIOInterface(IOInterface):
         self.log_file_path = log_file_path
 
     async def output(self, message):
-        with open(self.log_file_path, "a") as log_file:
-            log_file.write(message + "\n")
-        await asyncio.sleep(0)  # Simulate asynchronous behavior
+        async with aiofiles.open(self.log_file_path, mode="a", encoding="utf-8") as log_file:
+            await log_file.write(message + "\n")
+        await asyncio.sleep(0)  # Yield control to the event loop
 
     async def get_player_action(
         self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
@@ -207,4 +213,3 @@ class LoggingIOInterface(IOInterface):
 
     async def check_numeric_response(self, ctx):
         await asyncio.sleep(0)  # Simulate asynchronous behavior
-        pass

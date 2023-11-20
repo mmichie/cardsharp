@@ -1,3 +1,15 @@
+"""
+This module contains the Deck class, which represents a deck of cards.
+
+>>> deck = Deck()
+>>> deck.size
+52
+>>> deck.deal()
+Card(Suit.HEARTS, Rank.TWO)
+>>> deck.size
+51
+"""
+
 import random
 from typing import List, Union
 
@@ -5,6 +17,9 @@ from cardsharp.common.card import Card, Rank, Suit
 
 
 class Deck:
+    """
+    A class representing a deck of cards.
+    """
     def __init__(self, cards: Union[List[Card], None] = None):
         """
         Initialize a Deck instance.

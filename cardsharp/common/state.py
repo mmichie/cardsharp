@@ -1,3 +1,7 @@
+"""
+This module contains the GameState class, which is an abstract base class
+representing the state of a game.
+"""
 from abc import ABC, abstractmethod
 
 
@@ -11,18 +15,15 @@ class GameState(ABC):
         """
         Return a dictionary representing the current state of the game.
         """
-        pass
 
     @abstractmethod
     def update_state(self, new_state):
         """
         Update the game state with new information.
         """
-        pass
 
     @abstractmethod
     def display_stats(self):
         """
         Print out the game statistics.
         """
-        pass

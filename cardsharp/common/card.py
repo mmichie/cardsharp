@@ -63,10 +63,9 @@ class Rank(Enum):
         """A string representation of the rank."""
         if self == self.JOKER:
             return "Joker"
-        elif self in (self.JACK, self.QUEEN, self.KING):
+        if self in (self.JACK, self.QUEEN, self.KING):
             return self.name[0]
-        else:
-            return str(self.value)
+        return str(self.value)
 
     def __str__(self) -> str:
         return self.rank_str
