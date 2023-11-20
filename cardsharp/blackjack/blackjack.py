@@ -12,6 +12,8 @@ For example, `--console` runs the game in interactive console mode,
 """
 
 import argparse
+import multiprocessing
+
 
 from cardsharp.blackjack.actor import Dealer, Player
 from cardsharp.blackjack.state import (
@@ -115,6 +117,28 @@ def create_io_interface(args):
     return io_interface, strategy
 
 
+def play_game(rules, io_interface, player_names, game_id):
+    """
+    Function to play a single game of Blackjack, to be executed in a separate process.
+    """
+    players = [Player(name, io_interface, BasicStrategy()) for name in player_names]
+
+    # Create a game
+    game = BlackjackGame(rules, io_interface)
+
+    # Add players
+    for player in players:
+        game.add_player(player)
+
+    # Change state to PlacingBetsState and play a round
+    game.set_state(PlacingBetsState())
+    game.play_round()
+    game.reset()
+
+    # Return any relevant statistics or results
+    return game.stats.report()
+
+
 def main():
     """
     Main function to start the game.
@@ -146,59 +170,55 @@ def main():
     )
     args = parser.parse_args()
 
-    io_interface, strategy = create_io_interface(args)
+    if args.simulate:
+        io_interface, strategy = create_io_interface(args)
 
-    # Define your rules TODO: make this use rules class
-    rules = {
-        "blackjack_payout": 1.5,
-        "allow_insurance": True,
-        "min_players": 1,
-        "min_bet": 10,
-        "max_players": 6,
-    }
+        # Define your rules
+        rules = {
+            "blackjack_payout": 1.5,
+            "allow_insurance": True,
+            "min_players": 1,
+            "min_bet": 10,
+            "max_players": 6,
+        }
 
-    players = [
-        Player("Bob", io_interface, strategy),
-    ]
+        player_names = ["Bob"]  # Add more player names if needed
 
-    # Create a game
-    game = BlackjackGame(rules, io_interface)
+        # Run simulations in parallel
+        with multiprocessing.Pool() as pool:
+            game_args = [(rules, DummyIOInterface(), player_names, i) for i in range(args.num_games)]
+            results = pool.starmap(play_game, game_args)
 
-    # Add players
-    for player in players:
-        game.add_player(player)
+        # Initialize counters for aggregated statistics
+        total_games_played = 0
+        total_player_wins = 0
+        total_dealer_wins = 0
+        total_draws = 0
 
-    # Change state to PlacingBetsState after all players have been added
-    game.set_state(PlacingBetsState())
+        # Aggregate results
+        for result in results:
+            total_games_played += result["games_played"]
+            total_player_wins += result["player_wins"]
+            total_dealer_wins += result["dealer_wins"]
+            total_draws += result["draws"]
 
-    # Play games
-    for _ in range(args.num_games):
-        game.play_round()
-        game.reset()
+        games_played_excluding_pushes = total_games_played - total_draws
 
-    # Get and print the statistics after all games have been played
-    stats = game.stats.report()
-    games_played = stats["games_played"]
-    player_wins = stats["player_wins"]
-    dealer_wins = stats["dealer_wins"]
-    draws = stats["draws"]
+        if games_played_excluding_pushes != 0:
+            player_wins_ratio = total_player_wins / games_played_excluding_pushes
+            dealer_wins_ratio = total_dealer_wins / games_played_excluding_pushes
+        else:
+            player_wins_ratio = 0
+            dealer_wins_ratio = 0
 
-    games_played_excluding_pushes = games_played - draws
+        house_edge = dealer_wins_ratio - player_wins_ratio
 
-    if games_played_excluding_pushes != 0:
-        player_wins_ratio = player_wins / games_played_excluding_pushes
-        dealer_wins_ratio = dealer_wins / games_played_excluding_pushes
-    else:
-        player_wins_ratio = 0
-        dealer_wins_ratio = 0
-
-    house_edge = dealer_wins_ratio - player_wins_ratio
-
-    print(f"Games played (excluding pushes): {games_played_excluding_pushes}")
-    print(f"Player wins: {player_wins}")
-    print(f"Dealer wins: {dealer_wins}")
-    print(f"Draws: {draws}")
-    print(f"House Edge: {house_edge:.2f}")
+        print("Simulation completed.")
+        print(f"Games played (excluding pushes): {games_played_excluding_pushes}")
+        print(f"Player wins: {total_player_wins}")
+        print(f"Dealer wins: {total_dealer_wins}")
+        print(f"Draws: {total_draws}")
+        print(f"House Edge: {house_edge:.2f}")
 
 
 if __name__ == "__main__":
