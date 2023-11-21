@@ -168,6 +168,12 @@ def main():
         type=str,
         help="Log game output to the specified file. If not provided, output goes to the console.",
     )
+
+    parser.add_argument(
+        "--single_cpu",
+        action="store_true",
+        help="If provided, run the simulations on a single CPU thread instead of multiple.",
+    )
     args = parser.parse_args()
 
     if args.simulate:
@@ -184,10 +190,20 @@ def main():
 
         start_time = time.time()  # Record the start time
 
-        # Run simulations in parallel
-        with multiprocessing.Pool() as pool:
-            game_args = [(rules, DummyIOInterface(), player_names) for _ in range(args.num_games)]
-            results = pool.starmap(play_game, game_args)
+        if args.single_cpu:
+            # Run simulations sequentially
+            results = []
+            for _ in range(args.num_games):
+                result = play_game(rules, DummyIOInterface(), player_names)
+                results.append(result)
+        else:
+            # Run simulations in parallel
+            with multiprocessing.Pool() as pool:
+                game_args = [
+                    (rules, DummyIOInterface(), player_names)
+                    for _ in range(args.num_games)
+                ]
+                results = pool.starmap(play_game, game_args)
 
         end_time = time.time()  # Record the end time
         duration = end_time - start_time  # Calculate the duration
