@@ -1,3 +1,6 @@
+import csv
+import os
+
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -19,6 +22,61 @@ class DealerStrategy(Strategy):
             player.current_hand.value() == 17 and player.current_hand.is_soft
         ):
             return Action.HIT
+        else:
+            return Action.STAND
+
+
+class BasicStrategyLoader(Strategy):
+    def __init__(self, strategy_file=None):
+        if strategy_file is None:
+            strategy_file = os.path.join(
+                os.path.dirname(__file__), "files/basic_strategy.csv"
+            )
+
+        self.strategy = self._load_strategy(strategy_file)
+        self.dealer_indexes = {
+            "TWO": 0,
+            "THREE": 1,
+            "FOUR": 2,
+            "FIVE": 3,
+            "SIX": 4,
+            "SEVEN": 5,
+            "EIGHT": 6,
+            "NINE": 7,
+            "TEN": 8,
+            "JACK": 9,
+            "QUEEN": 10,
+            "KING": 11,
+            "ACE": 12,
+        }
+
+    def _load_strategy(self, strategy_file):
+        strategy = []
+        with open(strategy_file) as f:
+            reader = csv.reader(f)
+            next(reader)
+            for row in reader:
+                strategy.append(row)
+        return strategy
+
+    def decide_action(self, player, dealer_up_card):
+        dealer_index = self.dealer_indexes[dealer_up_card.rank.name]
+        player_hand_value = player.current_hand.value()
+
+        try:
+            action = self.strategy[player_hand_value][dealer_index]
+        except IndexError:
+            # Invalid hand/upcard combo
+            return Action.STAND
+
+        if action == "S":
+            return Action.STAND
+        elif action == "H":
+            return Action.HIT
+        elif action == "D":
+            return Action.DOUBLE
+        elif action == "P":
+            return Action.SPLIT
         else:
             return Action.STAND
 
