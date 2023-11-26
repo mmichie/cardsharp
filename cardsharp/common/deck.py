@@ -20,6 +20,28 @@ class Deck:
     """
     A class representing a deck of cards.
     """
+
+    # Precompute the default deck
+    _default_deck = [
+        Card(suit, rank)
+        for suit in [Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS, Suit.SPADES]
+        for rank in [
+            Rank.TWO,
+            Rank.THREE,
+            Rank.FOUR,
+            Rank.FIVE,
+            Rank.SIX,
+            Rank.SEVEN,
+            Rank.EIGHT,
+            Rank.NINE,
+            Rank.TEN,
+            Rank.JACK,
+            Rank.QUEEN,
+            Rank.KING,
+            Rank.ACE,
+        ]
+    ]
+
     def __init__(self, cards: Union[List[Card], None] = None):
         """
         Initialize a Deck instance.
@@ -44,24 +66,7 @@ class Deck:
         >>> len(deck.cards)
         52
         """
-        suits = [Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS, Suit.SPADES]
-        ranks = [
-            Rank.TWO,
-            Rank.THREE,
-            Rank.FOUR,
-            Rank.FIVE,
-            Rank.SIX,
-            Rank.SEVEN,
-            Rank.EIGHT,
-            Rank.NINE,
-            Rank.TEN,
-            Rank.JACK,
-            Rank.QUEEN,
-            Rank.KING,
-            Rank.ACE,
-        ]
-
-        return [Card(suit, rank) for suit in suits for rank in ranks]
+        return self._default_deck.copy()
 
     def shuffle(self):
         """
