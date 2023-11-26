@@ -14,6 +14,10 @@ For example, `--console` runs the game in interactive console mode,
 import argparse
 import multiprocessing
 import time
+import cProfile
+import pstats
+import io
+
 
 from cardsharp.blackjack.actor import Dealer, Player
 from cardsharp.blackjack.state import (
@@ -139,6 +143,16 @@ def play_game(rules, io_interface, player_names):
     return game.stats.report()
 
 
+def play_game_batch(rules, io_interface, player_names, num_games):
+    results = []
+    for _ in range(num_games):
+        result = play_game(
+            rules, io_interface, player_names
+        )  # play_single_game is your existing game logic
+        results.append(result)
+    return results
+
+
 def main():
     """
     Main function to start the game.
@@ -174,7 +188,17 @@ def main():
         action="store_true",
         help="If provided, run the simulations on a single CPU thread instead of multiple.",
     )
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="Run the game with profiling to analyze performance.",
+        default=False,
+    )
     args = parser.parse_args()
+
+    if args.profile:
+        profiler = cProfile.Profile()
+        profiler.enable()
 
     if args.simulate:
         # Define your rules
@@ -198,12 +222,21 @@ def main():
                 results.append(result)
         else:
             # Run simulations in parallel
+            cpu_count = multiprocessing.cpu_count()
+            games_per_cpu, remainder = divmod(args.num_games, cpu_count)
+            game_batches = [
+                games_per_cpu + (1 if i < remainder else 0) for i in range(cpu_count)
+            ]
+
             with multiprocessing.Pool() as pool:
-                game_args = [
-                    (rules, DummyIOInterface(), player_names)
-                    for _ in range(args.num_games)
+                batch_args = [
+                    (rules, DummyIOInterface(), player_names, game_count)
+                    for game_count in game_batches
                 ]
-                results = pool.starmap(play_game, game_args)
+                batch_results = pool.starmap(play_game_batch, batch_args)
+                results = [
+                    result for batch in batch_results for result in batch
+                ]  # Flatten the results
 
         end_time = time.time()  # Record the end time
         duration = end_time - start_time  # Calculate the duration
@@ -242,6 +275,14 @@ def main():
 
         print(f"\nDuration of simulation: {duration:.2f} seconds")
         print(f"Games simulated per second: {games_per_second:,.2f}")
+
+        if args.profile:
+            profiler.disable()
+            s = io.StringIO()
+            sortby = "cumulative"
+            ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
+            ps.print_stats()
+            print(s.getvalue())
 
 
 if __name__ == "__main__":
