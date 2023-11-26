@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cardsharp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Async Playing Card Library"
 authors = ["Matt Michie <mmichie@gmail.com>"]
 license = "MIT"
