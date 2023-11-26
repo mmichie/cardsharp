@@ -196,9 +196,24 @@ def main():
     )
     args = parser.parse_args()
 
+    io_interface, strategy = create_io_interface(args)
+
     if args.profile:
         profiler = cProfile.Profile()
         profiler.enable()
+
+    if args.console:
+        rules = {
+            "blackjack_payout": 1.5,
+            "allow_insurance": True,
+            "min_players": 1,
+            "min_bet": 10,
+            "max_players": 6,
+        }
+
+        player_names = ["Player1"]
+        for _ in range(args.num_games):
+            play_game(rules, io_interface, player_names)
 
     if args.simulate:
         # Define your rules
@@ -276,13 +291,13 @@ def main():
         print(f"\nDuration of simulation: {duration:.2f} seconds")
         print(f"Games simulated per second: {games_per_second:,.2f}")
 
-        if args.profile:
-            profiler.disable()
-            s = io.StringIO()
-            sortby = "cumulative"
-            ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
-            ps.print_stats()
-            print(s.getvalue())
+    if args.profile:
+        profiler.disable()
+        s = io.StringIO()
+        sortby = "cumulative"
+        ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
+        ps.print_stats()
+        print(s.getvalue())
 
 
 if __name__ == "__main__":
