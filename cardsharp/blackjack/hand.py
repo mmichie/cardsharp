@@ -41,6 +41,24 @@ class BlackjackHand(Hand):
     specific to the rules of Blackjack.
     """
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._cached_value = None  # Cache for hand value
+
+    def _invalidate_cache(self):
+        """Invalidate the cache when the hand changes."""
+        self._cached_value = None
+
+    def add_card(self, card):
+        """Override to invalidate cache when a new card is added."""
+        super().add_card(card)
+        self._invalidate_cache()
+
+    def remove_card(self, card):
+        """Override to invalidate cache when a card is removed."""
+        super().remove_card(card)
+        self._invalidate_cache()
+
     @property
     def _num_aces(self) -> int:
         """Number of aces in the hand."""
@@ -56,11 +74,21 @@ class BlackjackHand(Hand):
         Calculate the value of the hand following Blackjack rules,
         i.e., considering the value of Ace as 1 or 11 as necessary.
         """
-        # Count one Ace as 11 if it doesn't bust the hand
-        if self._num_aces > 0 and self._non_ace_value + 10 < 21:
-            return self._non_ace_value + 10 + self._num_aces
-        else:
-            return self._non_ace_value + self._num_aces
+        if self._cached_value is not None:
+            return self._cached_value
+
+        non_ace_value = sum(
+            card.rank.rank_value for card in self.cards if card.rank != Rank.ACE
+        )
+        num_aces = sum(card.rank == Rank.ACE for card in self.cards)
+
+        # Calculate value considering the flexible value of Aces
+        value = non_ace_value + num_aces  # Count all aces as 1 initially
+        if num_aces > 0 and non_ace_value + 10 <= 21:
+            value += 10  # Count one ace as 11 if it doesn't bust the hand
+
+        self._cached_value = value
+        return value
 
     @property
     def is_soft(self) -> bool:
