@@ -294,7 +294,7 @@ def main():
     if args.profile:
         profiler.disable()
         s = io.StringIO()
-        sortby = "cumulative"
+        sortby = "tottime"
         ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
         ps.print_stats()
         print(s.getvalue())
