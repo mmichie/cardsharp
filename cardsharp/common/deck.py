@@ -119,7 +119,6 @@ class Deck:
         Reset the deck by recreating and shuffling the cards.
         """
         self.cards = self.initialize_default_deck()
-        self.shuffle()
 
     def __repr__(self) -> str:
         """
