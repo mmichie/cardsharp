@@ -144,6 +144,7 @@ def play_game(rules, io_interface, player_names):
 
 
 def play_game_batch(rules, io_interface, player_names, num_games):
+    """Function to play a batch of games of Blackjack, to be executed in a separate process."""
     results = []
     for _ in range(num_games):
         result = play_game(
@@ -196,8 +197,9 @@ def main():
     )
     args = parser.parse_args()
 
-    io_interface, strategy = create_io_interface(args)
+    io_interface, _ = create_io_interface(args)
 
+    profiler = None
     if args.profile:
         profiler = cProfile.Profile()
         profiler.enable()
@@ -291,7 +293,7 @@ def main():
         print(f"\nDuration of simulation: {duration:.2f} seconds")
         print(f"Games simulated per second: {games_per_second:,.2f}")
 
-    if args.profile:
+    if args.profile and profiler is not None:
         profiler.disable()
         s = io.StringIO()
         sortby = "tottime"
