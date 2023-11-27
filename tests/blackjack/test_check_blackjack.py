@@ -1,5 +1,3 @@
-import pytest
-
 from cardsharp.blackjack.actor import Player
 from cardsharp.blackjack.blackjack import BlackjackGame
 from cardsharp.blackjack.state import DealingState
