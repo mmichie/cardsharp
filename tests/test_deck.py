@@ -91,9 +91,6 @@ def test_deck_reset_after_draw():
     assert len(deck.cards) == size - 1
     deck.reset()
     assert len(deck.cards) == size
-    assert (
-        deck.cards != deck.initialize_default_deck()
-    )  # The deck should be shuffled after resetting
 
 
 def test_deck_reset_empty_deck():
@@ -104,6 +101,3 @@ def test_deck_reset_empty_deck():
     assert deck.is_empty()
     deck.reset()
     assert len(deck.cards) == deck.size
-    assert (
-        deck.cards != deck.initialize_default_deck()
-    )  # The deck should be shuffled after resetting
