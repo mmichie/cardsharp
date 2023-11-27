@@ -94,6 +94,7 @@ class Card:
             case Rank.JOKER:
                 self.suit = None
                 self.rank = rank
+                self.str_rep = f"{self.rank.rank_str}"
             case _:
                 if not isinstance(suit, Suit):
                     raise TypeError(f"Invalid suit: {suit}")
@@ -101,6 +102,7 @@ class Card:
                     raise TypeError(f"Invalid rank: {rank}")
                 self.suit = suit
                 self.rank = rank
+                self.str_rep = f"{self.rank.rank_str} of {str(self.suit)}"
 
     def __eq__(self, other):
         """
@@ -133,7 +135,4 @@ class Card:
 
         :return: A string representation of the card.
         """
-        if self.rank == Rank.JOKER:
-            return f"{self.rank.rank_str}"
-
-        return f"{self.rank.rank_str} of {str(self.suit)}"
+        return self.str_rep
