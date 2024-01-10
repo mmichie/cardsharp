@@ -23,6 +23,7 @@ You can run blackjack simulation mode with:
 
 ```
 $ poetry shell
+$ poetry install
 $ python cardsharp/blackjack/blackjack.py --simulate --num_games 1000
 ```
 
