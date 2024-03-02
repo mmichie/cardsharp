@@ -1,13 +1,14 @@
 """
 This module contains the IOInterface abstract base class and its implementations.
 """
+
 from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
 
 import aiofiles
-
 
 from cardsharp.blackjack.action import Action
 
@@ -196,7 +197,9 @@ class LoggingIOInterface(IOInterface):
         self.log_file_path = log_file_path
 
     async def output(self, message):
-        async with aiofiles.open(self.log_file_path, mode="a", encoding="utf-8") as log_file:
+        async with aiofiles.open(
+            self.log_file_path, mode="a", encoding="utf-8"
+        ) as log_file:
             await log_file.write(message + "\n")
         await asyncio.sleep(0)  # Yield control to the event loop
 
@@ -208,3 +211,35 @@ class LoggingIOInterface(IOInterface):
 
     async def check_numeric_response(self, ctx):
         await asyncio.sleep(0)  # Simulate asynchronous behavior
+
+
+class AsyncIOInterfaceWrapper:
+    """
+    A wrapper class to facilitate asynchronous execution of synchronous IO operations
+    defined in an IOInterface implementation. This class uses a ThreadPoolExecutor to
+    run synchronous methods in separate threads, allowing them to be awaited in an
+    asynchronous context. This enables seamless integration of synchronous IO operations
+    into asynchronous codebases, such as asynchronous web frameworks or chatbots.
+    """
+
+    def __init__(self, io_interface):
+        self.io_interface = io_interface
+        self.executor = ThreadPoolExecutor()
+
+    async def output(self, message: str):
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(self.executor, self.io_interface.output, message)
+
+    async def get_player_action(self, player, valid_actions):
+        loop = asyncio.get_running_loop()
+        action = await loop.run_in_executor(
+            self.executor, self.io_interface.get_player_action, player, valid_actions
+        )
+        return action
+
+    async def check_numeric_response(self, ctx):
+        loop = asyncio.get_running_loop()
+        numeric_response = await loop.run_in_executor(
+            self.executor, self.io_interface.check_numeric_response, ctx
+        )
+        return numeric_response
