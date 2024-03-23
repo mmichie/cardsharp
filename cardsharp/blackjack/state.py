@@ -117,7 +117,7 @@ class DealingState(GameState):
         for player in game.players:
             if player.current_hand.value() == 21:
                 game.io_interface.output(f"{player.name} got a blackjack!")
-                player.payout(player.bet * 1.5)  # Blackjacks typically pay 3:2
+                player.payout(player.bet * game.rules['blackjack_payout'])
                 player.blackjack = True
                 player.winner = "player"
 
