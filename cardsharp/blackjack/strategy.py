@@ -128,25 +128,19 @@ class BasicStrategy(Strategy):
         player_rank = current_hand.cards[0].rank
         dealer_rank = dealer_up_card.rank
 
-        if player_rank in [Rank.ACE, Rank.EIGHT]:
-            return Action.SPLIT
-        if player_rank == Rank.TWO and dealer_rank.rank_value <= 7:
-            return Action.SPLIT
-        if player_rank == Rank.THREE and dealer_rank.rank_value <= 8:
-            return Action.SPLIT
-        if player_rank == Rank.SIX and dealer_rank.rank_value <= 7:
-            return Action.SPLIT
-        if player_rank == Rank.SEVEN and dealer_rank.rank_value <= 8:
-            return Action.SPLIT
-        if player_rank == Rank.NINE:
-            if dealer_rank.rank_value not in [7, 10, 11]:
-                return Action.SPLIT
-            elif dealer_rank.rank_value == 7 and current_hand.is_soft:
-                return Action.SPLIT
-        if player_rank == Rank.FOUR and dealer_rank.rank_value in [5, 6]:
-            return Action.SPLIT
+        split_conditions = {
+            Rank.ACE: True,
+            Rank.EIGHT: True,
+            Rank.TWO: dealer_rank.rank_value <= 7,
+            Rank.THREE: dealer_rank.rank_value <= 7,
+            Rank.SIX: dealer_rank.rank_value <= 6,
+            Rank.SEVEN: dealer_rank.rank_value <= 7,
+            Rank.NINE: dealer_rank.rank_value not in [7, 10, 11]
+            or current_hand.is_soft,
+            Rank.FOUR: dealer_rank.rank_value in [5, 6],
+        }
 
-        return None
+        return Action.SPLIT if split_conditions.get(player_rank, False) else None
 
     def _decide_on_double(self, current_hand, dealer_up_card: Card) -> Optional[Action]:
         """
@@ -159,44 +153,27 @@ class BasicStrategy(Strategy):
         Returns:
             Action: Action.DOUBLE if the player decides to double, None otherwise.
         """
-        if current_hand.can_double:
-            if current_hand.value() == 11:
-                return Action.DOUBLE
-            if current_hand.value() == 10 and dealer_up_card.rank.rank_value < 10:
-                return Action.DOUBLE
-            if current_hand.value() == 9 and dealer_up_card.rank.rank_value in [
-                3,
-                4,
-                5,
-                6,
-            ]:
-                return Action.DOUBLE
-            if current_hand.is_soft:
-                if current_hand.value() in [
-                    13,
-                    14,
-                ] and dealer_up_card.rank.rank_value in [5, 6]:
-                    return Action.DOUBLE
-                if current_hand.value() in [
-                    15,
-                    16,
-                ] and dealer_up_card.rank.rank_value in [4, 5, 6]:
-                    return Action.DOUBLE
-                if current_hand.value() == 17 and dealer_up_card.rank.rank_value in [
-                    3,
-                    4,
-                    5,
-                    6,
-                ]:
-                    return Action.DOUBLE
-                if current_hand.value() == 18 and dealer_up_card.rank.rank_value in [
-                    3,
-                    4,
-                    5,
-                    6,
-                ]:
-                    return Action.DOUBLE
-        return None
+        if not current_hand.can_double:
+            return None
+
+        hand_value = current_hand.value()
+        dealer_rank = dealer_up_card.rank.rank_value
+
+        # Enhanced double down conditions based on common blackjack strategies
+        double_conditions = [
+            hand_value == 11,
+            hand_value == 10 and dealer_rank < 10,
+            hand_value == 9 and dealer_rank in [3, 4, 5, 6],
+            current_hand.is_soft
+            and (
+                (hand_value in [13, 14] and dealer_rank in [5, 6])
+                or (hand_value in [15, 16] and dealer_rank in [4, 5, 6])
+                or (hand_value == 17 and dealer_rank in [3, 4, 5, 6])
+                or (hand_value == 18 and dealer_rank in [3, 4, 5, 6])
+            ),
+        ]
+
+        return Action.DOUBLE if any(double_conditions) else None
 
     def _decide_on_stand_or_hit(self, current_hand, dealer_up_card: Card) -> Action:
         """
@@ -209,30 +186,23 @@ class BasicStrategy(Strategy):
         Returns:
             Action: Action.STAND or Action.HIT based on the player's hand and dealer's up card.
         """
+        hand_value = current_hand.value()
+        dealer_rank = dealer_up_card.rank.rank_value
+
         if current_hand.is_soft:
-            if current_hand.value() <= 17:
+            if hand_value <= 17:
                 return Action.HIT
-            elif current_hand.value() == 18 and dealer_up_card.rank.rank_value in [
-                9,
-                10,
-                11,
-            ]:
+            elif hand_value == 18 and dealer_rank >= 9:
                 return Action.HIT
             else:
                 return Action.STAND
         else:
-            if current_hand.value() <= 11:
+            if hand_value <= 11:
                 return Action.HIT
-            elif current_hand.value() == 12:
-                if dealer_up_card.rank.rank_value in [4, 5, 6]:
-                    return Action.STAND
-                else:
-                    return Action.HIT
-            elif current_hand.value() in range(13, 17):
-                if dealer_up_card.rank.rank_value <= 6:
-                    return Action.STAND
-                else:
-                    return Action.HIT
+            elif hand_value == 12 and dealer_rank not in [4, 5, 6]:
+                return Action.HIT
+            elif 13 <= hand_value <= 16 and dealer_rank > 6:
+                return Action.HIT
             else:
                 return Action.STAND
 
