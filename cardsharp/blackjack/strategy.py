@@ -207,7 +207,40 @@ class BasicStrategy(Strategy):
                 return Action.STAND
 
 
-class CountingStrategy(Strategy):
-    def decide_action(self, player, dealer_up_card):
-        # Fill in with Counting Strategy logic
-        pass
+class CountingStrategy(BasicStrategy):
+    def __init__(self):
+        super().__init__()
+        self.count = 0
+
+    def update_count(self, card: Card):
+        if card.rank in [Rank.TWO, Rank.THREE, Rank.FOUR, Rank.FIVE, Rank.SIX]:
+            self.count += 1
+        elif card.rank in [Rank.TEN, Rank.JACK, Rank.QUEEN, Rank.KING, Rank.ACE]:
+            self.count -= 1
+
+    def decide_action(self, player, dealer_up_card: Card) -> Action:
+        # Update count based on the visible cards (player's cards and dealer's up card)
+        for card in player.current_hand.cards + [dealer_up_card]:
+            self.update_count(card)
+
+        if self.count > 2:  # Adjust this threshold as needed
+            return self.aggressive_strategy(player, dealer_up_card)
+        else:
+            return super().decide_action(player, dealer_up_card)
+
+    def aggressive_strategy(self, player, dealer_up_card: Card) -> Action:
+        # More aggressive play decisions when the count is high
+        if (
+            self.count >= 4
+        ):  # Strongly positive count indicates more high cards are present
+            if player.current_hand.can_double and player.current_hand.value() in [
+                9,
+                10,
+                11,
+            ]:
+                return Action.DOUBLE
+            elif player.current_hand.value() <= 16:
+                return Action.HIT
+        return super().decide_action(
+            player, dealer_up_card
+        )  # Default to basic strategy otherwise
