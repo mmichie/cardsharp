@@ -29,7 +29,6 @@ Dependencies:
     cardsharp.common.card: Card and Rank classes
 """
 
-
 from cardsharp.common.card import Rank
 from cardsharp.common.hand import Hand
 
@@ -77,9 +76,12 @@ class BlackjackHand(Hand):
         if self._cached_value is not None:
             return self._cached_value
 
+        num_aces = self._num_aces
+        non_ace_value = self._non_ace_value
+
         # Calculate value considering the flexible value of Aces
-        value = self._non_ace_value + self._num_aces  # Count all aces as 1 initially
-        if self._num_aces > 0 and self._non_ace_value + 10 <= 21:
+        value = non_ace_value + num_aces  # Count all aces as 1 initially
+        if num_aces > 0 and non_ace_value + 10 <= 21:
             value += 10  # Count one ace as 11 if it doesn't bust the hand
 
         self._cached_value = value
