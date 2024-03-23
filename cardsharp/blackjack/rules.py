@@ -74,41 +74,23 @@ class Rules:
             time_limit (int, optional): Time limit in seconds for player
             decisions. Defaults to 0 (no time limit).
         """
-        self.blackjack_payout = blackjack_payout
-        self.dealer_hit_soft_17 = dealer_hit_soft_17
-        self.allow_split = allow_split
-        self.allow_double_down = allow_double_down
-        self.allow_insurance = allow_insurance
-        self.allow_surrender = allow_surrender
-        self.num_decks = num_decks
-        self.min_bet = min_bet
-        self.max_bet = max_bet
-        self.allow_late_surrender = allow_late_surrender
         self.allow_double_after_split = allow_double_after_split
-        self.allow_resplitting = allow_resplitting
-        self.dealer_peek = dealer_peek
-        self.use_csm = use_csm
-        self.allow_early_surrender = allow_early_surrender
-        self.bonus_payouts = bonus_payouts
-        self.time_limit = time_limit
-
-        self.blackjack_payout = blackjack_payout
-        self.dealer_hit_soft_17 = dealer_hit_soft_17
-        self.allow_split = allow_split
         self.allow_double_down = allow_double_down
-        self.allow_insurance = allow_insurance
-        self.allow_surrender = allow_surrender
-        self.num_decks = num_decks
-        self.min_bet = min_bet
-        self.max_bet = max_bet
-        self.allow_late_surrender = allow_late_surrender
-        self.allow_double_after_split = allow_double_after_split
-        self.allow_resplitting = allow_resplitting
-        self.dealer_peek = dealer_peek
-        self.use_csm = use_csm
         self.allow_early_surrender = allow_early_surrender
+        self.allow_insurance = allow_insurance
+        self.allow_late_surrender = allow_late_surrender
+        self.allow_resplitting = allow_resplitting
+        self.allow_split = allow_split
+        self.allow_surrender = allow_surrender
+        self.blackjack_payout = blackjack_payout
         self.bonus_payouts = bonus_payouts or {}
+        self.dealer_hit_soft_17 = dealer_hit_soft_17
+        self.dealer_peek = dealer_peek
+        self.max_bet = max_bet
+        self.min_bet = min_bet
+        self.num_decks = num_decks
         self.time_limit = time_limit
+        self.use_csm = use_csm
 
     def is_blackjack(self, hand: Hand) -> bool:
         """
