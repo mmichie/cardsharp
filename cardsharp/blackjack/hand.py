@@ -77,14 +77,9 @@ class BlackjackHand(Hand):
         if self._cached_value is not None:
             return self._cached_value
 
-        non_ace_value = sum(
-            card.rank.rank_value for card in self.cards if card.rank != Rank.ACE
-        )
-        num_aces = sum(card.rank == Rank.ACE for card in self.cards)
-
         # Calculate value considering the flexible value of Aces
-        value = non_ace_value + num_aces  # Count all aces as 1 initially
-        if num_aces > 0 and non_ace_value + 10 <= 21:
+        value = self._non_ace_value + self._num_aces  # Count all aces as 1 initially
+        if self._num_aces > 0 and self._non_ace_value + 10 <= 21:
             value += 10  # Count one ace as 11 if it doesn't bust the hand
 
         self._cached_value = value
