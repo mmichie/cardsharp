@@ -102,7 +102,6 @@ class DealingState(GameState):
         """
         Handles the card dealing and notifies the interface.
         """
-        game.deck.shuffle()
         for _ in range(2):
             for player in game.players + [game.dealer]:
                 card = game.deck.deal()
@@ -117,7 +116,7 @@ class DealingState(GameState):
         for player in game.players:
             if player.current_hand.value() == 21:
                 game.io_interface.output(f"{player.name} got a blackjack!")
-                player.payout(player.bet * game.rules['blackjack_payout'])
+                player.payout(player.bet * game.rules["blackjack_payout"])
                 player.blackjack = True
                 player.winner = "player"
 
@@ -209,9 +208,7 @@ class PlayersTurnState(GameState):
             player.double_down()
             card = game.deck.deal()
             player.add_card(card)
-            game.io_interface.output(
-                f"{player.name} doubles down and gets {card}."
-            )
+            game.io_interface.output(f"{player.name} doubles down and gets {card}.")
             if player.is_busted():
                 game.io_interface.output(f"{player.name} has busted.")
                 player.stand()
@@ -290,16 +287,12 @@ class EndRoundState(GameState):
         dealer_hand_value = game.dealer.current_hand.value()
         dealer_cards = ", ".join(str(card) for card in game.dealer.current_hand.cards)
         game.io_interface.output(f"Dealer's final cards: {dealer_cards}")
-        game.io_interface.output(
-            f"Dealer's final hand value: {dealer_hand_value}"
-        )
+        game.io_interface.output(f"Dealer's final hand value: {dealer_hand_value}")
 
         for player in game.players:
             player_hand_value = player.current_hand.value()
             player_cards = ", ".join(str(card) for card in player.current_hand.cards)
-            game.io_interface.output(
-                f"{player.name}'s final cards: {player_cards}"
-            )
+            game.io_interface.output(f"{player.name}'s final cards: {player_cards}")
             game.io_interface.output(
                 f"{player.name}'s final hand value: {player_hand_value}"
             )
@@ -308,9 +301,7 @@ class EndRoundState(GameState):
             elif player.winner == "player":
                 game.io_interface.output(f"{player.name} wins the round!")
             elif player.winner == "draw":
-                game.io_interface.output(
-                    f"{player.name} and Dealer tie! It's a push."
-                )
+                game.io_interface.output(f"{player.name} and Dealer tie! It's a push.")
 
     def handle_payouts(self, game):
         """

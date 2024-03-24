@@ -91,8 +91,13 @@ class Deck:
         5
         """
         if num_cards == 1:
-            return self.cards.pop()
-        return [self.cards.pop() for _ in range(num_cards)]
+            card_index = random.randrange(len(self.cards))
+            return self.cards.pop(card_index)
+        else:
+            return [
+                self.cards.pop(random.randrange(len(self.cards)))
+                for _ in range(num_cards)
+            ]
 
     @property
     def size(self) -> int:
