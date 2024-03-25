@@ -85,6 +85,7 @@ class Deck:
         Pop n cards from the deck. Raises an exception if the deck is empty.
 
         :return: A card instance or a list of card instances.
+
         >>> deck = Deck()
         >>> cards = deck.deal(5)
         >>> len(cards)
@@ -93,18 +94,15 @@ class Deck:
         if self.is_empty():
             raise ValueError("Cannot deal from an empty deck.")
 
+        num_cards = min(num_cards, len(self.cards))
+
         if num_cards == 1:
-            card_index = random.randrange(len(self.cards))
-            return self.cards.pop(card_index)
-        else:
-            if num_cards > len(self.cards):
-                raise ValueError(
-                    "Not enough cards in the deck to deal the requested number of cards."
-                )
-            return [
-                self.cards.pop(random.randrange(len(self.cards)))
-                for _ in range(num_cards)
-            ]
+            return self.cards.pop(random.randrange(len(self.cards)))
+
+        indices = sorted(random.sample(range(len(self.cards)), num_cards), reverse=True)
+        dealt_cards = [self.cards.pop(index) for index in indices]
+
+        return dealt_cards if num_cards > 1 else dealt_cards[0]
 
     @property
     def size(self) -> int:
