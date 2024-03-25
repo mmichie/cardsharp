@@ -26,6 +26,7 @@ import time
 from abc import ABC
 from abc import abstractmethod
 from cardsharp.blackjack.action import Action
+from cardsharp.common.io_interface import DummyIOInterface
 
 
 class GameState(ABC):
@@ -284,6 +285,10 @@ class EndRoundState(GameState):
         """
         Outputs the results of the round.
         """
+
+        if isinstance(game.io_interface, DummyIOInterface):
+            return  # Short-circuit if the interface is a dummy
+
         dealer_hand_value = game.dealer.current_hand.value()
         dealer_cards = ", ".join(str(card) for card in game.dealer.current_hand.cards)
         game.io_interface.output(f"Dealer's final cards: {dealer_cards}")
