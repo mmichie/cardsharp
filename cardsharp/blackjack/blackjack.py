@@ -90,9 +90,19 @@ class BlackjackGame:
 
     def play_round(self):
         """Play a round of the game until it reaches the end state."""
-        while not isinstance(self.current_state, EndRoundState):
-            self.io_interface.output("Current state: " + str(self.current_state))
+        if isinstance(self.io_interface, DummyIOInterface):
+            while not isinstance(self.current_state, EndRoundState):
+                self.current_state.handle(self)
             self.current_state.handle(self)
+            return
+
+        is_end_round = isinstance(self.current_state, EndRoundState)
+
+        while not is_end_round:
+            current_state = self.current_state
+            self.io_interface.output(f"Current state: {current_state}")
+            current_state.handle(self)
+            is_end_round = isinstance(self.current_state, EndRoundState)
 
         self.io_interface.output("Calculating winner...")
         self.current_state.handle(self)
