@@ -67,7 +67,7 @@ def test_deck_draw_empty_deck():
     # Check that trying to draw from an empty deck raises an exception
     try:
         deck.deal()
-    except IndexError:
+    except ValueError:
         assert True
     else:
         assert False, "Should not be able to draw from an empty deck"

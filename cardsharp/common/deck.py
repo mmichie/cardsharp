@@ -82,7 +82,7 @@ class Deck:
 
     def deal(self, num_cards=1) -> Union[Card, List[Card]]:
         """
-        Pop n cards from the deck.
+        Pop n cards from the deck. Raises an exception if the deck is empty.
 
         :return: A card instance or a list of card instances.
         >>> deck = Deck()
@@ -90,10 +90,17 @@ class Deck:
         >>> len(cards)
         5
         """
+        if self.is_empty():
+            raise ValueError("Cannot deal from an empty deck.")
+
         if num_cards == 1:
             card_index = random.randrange(len(self.cards))
             return self.cards.pop(card_index)
         else:
+            if num_cards > len(self.cards):
+                raise ValueError(
+                    "Not enough cards in the deck to deal the requested number of cards."
+                )
             return [
                 self.cards.pop(random.randrange(len(self.cards)))
                 for _ in range(num_cards)
