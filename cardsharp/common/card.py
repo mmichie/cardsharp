@@ -83,6 +83,8 @@ class Card:
     Joker
     """
 
+    __slots__ = ("suit", "rank", "str_rep")
+
     def __init__(self, suit: Suit, rank: Rank):
         """
         Initialize a Card instance.

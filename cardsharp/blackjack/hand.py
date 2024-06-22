@@ -40,6 +40,8 @@ class BlackjackHand(Hand):
     specific to the rules of Blackjack.
     """
 
+    __slots__ = ("_cards", "_cached_value")
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._cached_value = None  # Cache for hand value
