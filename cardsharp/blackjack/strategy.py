@@ -59,26 +59,34 @@ class BasicStrategyLoader(Strategy):
                 strategy.append(row)
         return strategy
 
-    def decide_action(self, player, dealer_up_card):
-        dealer_index = self.dealer_indexes[dealer_up_card.rank.name]
-        player_hand_value = player.current_hand.value()
+    def decide_action(self, player, dealer_up_card: Card) -> Action:
+        """
+        Decides the action to take based on the player's hand and the dealer's up card.
 
-        try:
-            action = self.strategy[player_hand_value][dealer_index]
-        except IndexError:
-            # Invalid hand/upcard combo
+        Args:
+            player: The player instance.
+            dealer_up_card (Card): The dealer's up card.
+
+        Returns:
+            Action: The action to take.
+        """
+        current_hand = player.current_hand
+        if current_hand.is_blackjack:
             return Action.STAND
 
-        if action == "S":
-            return Action.STAND
-        elif action == "H":
-            return Action.HIT
-        elif action == "D":
-            return Action.DOUBLE
-        elif action == "P":
-            return Action.SPLIT
-        else:
-            return Action.STAND
+        action = self._decide_on_surrender(current_hand, dealer_up_card)
+        if action is not None:
+            return action
+
+        action = self._decide_on_split(current_hand, dealer_up_card)
+        if action is not None:
+            return action
+
+        action = self._decide_on_double(current_hand, dealer_up_card)
+        if action is not None:
+            return action
+
+        return self._decide_on_stand_or_hit(current_hand, dealer_up_card)
 
 
 class BasicStrategy(Strategy):
@@ -205,6 +213,32 @@ class BasicStrategy(Strategy):
                 return Action.HIT
             else:
                 return Action.STAND
+
+    def _decide_on_surrender(
+        self, current_hand, dealer_up_card: Card
+    ) -> Optional[Action]:
+        """
+        Decides whether to surrender based on the hand and the dealer's up card.
+
+        Args:
+            current_hand: The current hand of the player.
+            dealer_up_card (Card): The dealer's up card.
+
+        Returns:
+            Action: Action.SURRENDER if the player decides to surrender, None otherwise.
+        """
+        if len(current_hand.cards) != 2:
+            return None
+
+        hand_value = current_hand.value()
+        dealer_rank = dealer_up_card.rank.rank_value
+
+        surrender_conditions = [
+            hand_value == 16 and dealer_rank in [9, 10, 11],
+            hand_value == 15 and dealer_rank == 10,
+        ]
+
+        return Action.SURRENDER if any(surrender_conditions) else None
 
 
 class CountingStrategy(BasicStrategy):

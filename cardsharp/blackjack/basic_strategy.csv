@@ -1,38 +1,38 @@
-Hand,2,3,4,5,6,7,8,9,10,A
-Hard4,H,H,H,H,H,H,H,H,H,H
-Hard5,H,H,H,H,H,H,H,H,H,H
-Hard6,H,H,H,H,H,H,H,H,H,H
-Hard7,H,H,H,H,H,H,H,H,H,H
-Hard8,H,H,H,H,H,H,H,H,H,H
-Hard9,H,D,D,D,D,H,H,H,H,H
-Hard10,D,D,D,D,D,D,D,D,H,H
-Hard11,D,D,D,D,D,D,D,D,D,H
-Hard12,H,H,S,S,S,H,H,H,H,H
-Hard13,S,S,S,S,S,H,H,H,H,H
-Hard14,S,S,S,S,S,H,H,H,H,H
-Hard15,S,S,S,S,S,H,H,H,R,R
-Hard16,S,S,S,S,S,H,H,R,R,R
-Hard17,S,S,S,S,S,S,S,S,S,S
-Hard18,S,S,S,S,S,S,S,S,S,S
-Hard19,S,S,S,S,S,S,S,S,S,S
-Hard20,S,S,S,S,S,S,S,S,S,S
-Hard21,S,S,S,S,S,S,S,S,S,S
-Soft13,H,H,H,D,D,H,H,H,H,H
-Soft14,H,H,H,D,D,H,H,H,H,H
-Soft15,H,H,D,D,D,H,H,H,H,H
-Soft16,H,H,D,D,D,H,H,H,H,H
-Soft17,H,D,D,D,D,H,H,H,H,H
-Soft18,S,DS,DS,DS,DS,S,S,H,H,H
-Soft19,S,S,S,S,DS,S,S,S,S,S
-Soft20,S,S,S,S,S,S,S,S,S,S
-Soft21,S,S,S,S,S,S,S,S,S,S
-Pair2,H,H,P,P,P,P,H,H,H,H
-Pair3,H,H,P,P,P,P,H,H,H,H
-Pair4,H,H,H,H,H,H,H,H,H,H
-Pair5,D,D,D,D,D,D,D,D,H,H
-Pair6,H,P,P,P,P,H,H,H,H,H
-Pair7,P,P,P,P,P,P,H,H,H,H
-Pair8,P,P,P,P,P,P,P,P,P,P
-Pair9,P,P,P,P,P,S,P,P,S,S
-Pair10,S,S,S,S,S,S,S,S,S,S
-PairA,P,P,P,P,P,P,P,P,P,P
+Hand, 2, 3, 4, 5, 6, 7, 8, 9, 10, A
+Hard4, H, H, H, H, H, H, H, H, H, H
+Hard5, H, H, H, H, H, H, H, H, H, H
+Hard6, H, H, H, H, H, H, H, H, H, H
+Hard7, H, H, H, H, H, H, H, H, H, H
+Hard8, H, H, H, H, H, H, H, H, H, H
+Hard9, H, D, D, D, D, H, H, H, H, H
+Hard10, D, D, D, D, D, D, D, D, H, H
+Hard11, D, D, D, D, D, D, D, D, D, H
+Hard12, H, H, S, S, S, H, H, H, H, H
+Hard13, S, S, S, S, S, H, H, H, H, H
+Hard14, S, S, S, S, S, H, H, H, H, H
+Hard15, S, S, S, S, S, H, H, H, R, R
+Hard16, S, S, S, S, S, H, H, R, R, R
+Hard17, S, S, S, S, S, S, S, S, S, S
+Hard18, S, S, S, S, S, S, S, S, S, S
+Hard19, S, S, S, S, S, S, S, S, S, S
+Hard20, S, S, S, S, S, S, S, S, S, S
+Hard21, S, S, S, S, S, S, S, S, S, S
+Soft13, H, H, H, D, D, H, H, H, H, H
+Soft14, H, H, H, D, D, H, H, H, H, H
+Soft15, H, H, D, D, D, H, H, H, H, H
+Soft16, H, H, D, D, D, H, H, H, H, H
+Soft17, H, D, D, D, D, H, H, H, H, H
+Soft18, S, DS, DS, DS, DS, S, S, H, H, H
+Soft19, S, S, S, S, DS, S, S, S, S, S
+Soft20, S, S, S, S, S, S, S, S, S, S
+Soft21, S, S, S, S, S, S, S, S, S, S
+Pair2, H, H, P, P, P, P, H, H, H, H
+Pair3, H, H, P, P, P, P, H, H, H, H
+Pair4, H, H, H, H, H, H, H, H, H, H
+Pair5, D, D, D, D, D, D, D, D, H, H
+Pair6, H, P, P, P, P, H, H, H, H, H
+Pair7, P, P, P, P, P, P, H, H, H, H
+Pair8, P, P, P, P, P, P, P, P, P, P
+Pair9, P, P, P, P, P, S, P, P, S, S
+Pair10, S, S, S, S, S, S, S, S, S, S
+PairA, P, P, P, P, P, P, P, P, P, P

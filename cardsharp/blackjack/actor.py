@@ -118,6 +118,14 @@ class Player(SimplePlayer):
         new_hand.add_card(self.current_hand.cards.pop())
         self.hands.append(new_hand)
 
+    def surrender(self):
+        """Player chooses to surrender, forfeiting half their bet."""
+        if len(self.current_hand.cards) != 2:
+            raise InvalidActionError(f"{self.name} can only surrender with two cards.")
+        self.money += self.bet // 2
+        self.bet = 0
+        self.done = True
+
     def hit(self, card):
         """Player chooses to take another card."""
         self.current_hand.add_card(card)

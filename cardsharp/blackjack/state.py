@@ -223,6 +223,11 @@ class PlayersTurnState(GameState):
             game.io_interface.output(f"{player.name} splits.")
             player.done = True
 
+        elif action == Action.SURRENDER:
+            player.surrender()
+            game.io_interface.output(f"{player.name} surrenders.")
+            player.done = True
+
 
 class DealersTurnState(GameState):
     """
