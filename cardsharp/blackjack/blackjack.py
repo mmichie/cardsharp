@@ -27,6 +27,7 @@ from cardsharp.blackjack.state import (
 )
 from cardsharp.blackjack.stats import SimulationStats
 from cardsharp.blackjack.strategy import BasicStrategy
+from cardsharp.blackjack.strategy import CountingStrategy
 from cardsharp.common.deck import Deck
 from cardsharp.common.io_interface import (
     ConsoleIOInterface,
@@ -124,18 +125,25 @@ def create_io_interface(args):
         io_interface = LoggingIOInterface(args.log_file)
     elif args.simulate:
         io_interface = DummyIOInterface()
-        strategy = BasicStrategy()
+        if args.strat:
+            if args.strat == "count":
+                strategy = CountingStrategy()
+            else:
+                strategy = BasicStrategy()
+        else:
+            strategy = BasicStrategy()
     else:
         io_interface = ConsoleIOInterface()
         strategy = BasicStrategy()
     return io_interface, strategy
 
 
-def play_game(rules, io_interface, player_names):
+def play_game(rules, io_interface, player_names, strategy):
     """
     Function to play a single game of Blackjack, to be executed in a separate process.
     """
-    players = [Player(name, io_interface, BasicStrategy()) for name in player_names]
+    players = [Player(name, io_interface, strategy) for name in player_names]
+
 
     # Create a game
     game = BlackjackGame(rules, io_interface)
@@ -153,13 +161,11 @@ def play_game(rules, io_interface, player_names):
     return game.stats.report()
 
 
-def play_game_batch(rules, io_interface, player_names, num_games):
+def play_game_batch(rules, io_interface, player_names, num_games, strategy):
     """Function to play a batch of games of Blackjack, to be executed in a separate process."""
     results = []
     for _ in range(num_games):
-        result = play_game(
-            rules, io_interface, player_names
-        )  # play_single_game is your existing game logic
+        result = play_game(rules, io_interface, player_names, strategy)
         results.append(result)
     return results
 
@@ -205,9 +211,14 @@ def main():
         help="Run the game with profiling to analyze performance.",
         default=False,
     )
+    parser.add_argument(
+        "--strat",
+        type=str,
+        help="Pick your strategy. Defaults to basic. 'count' for counting cards"
+    )
     args = parser.parse_args()
 
-    io_interface, _ = create_io_interface(args)
+    io_interface, strategy = create_io_interface(args)
 
     profiler = None
     if args.profile:
@@ -240,12 +251,13 @@ def main():
         player_names = ["Bob"]  # Add more player names if needed
 
         start_time = time.time()  # Record the start time
+        io_interface, strategy = create_io_interface(args)
 
         if args.single_cpu:
             # Run simulations sequentially
             results = []
             for _ in range(args.num_games):
-                result = play_game(rules, DummyIOInterface(), player_names)
+                result = play_game(rules, DummyIOInterface(), player_names, strategy)
                 results.append(result)
         else:
             # Run simulations in parallel
@@ -257,7 +269,7 @@ def main():
 
             with multiprocessing.Pool() as pool:
                 batch_args = [
-                    (rules, DummyIOInterface(), player_names, game_count)
+                    (rules, DummyIOInterface(), player_names, game_count, strategy)
                     for game_count in game_batches
                 ]
                 batch_results = pool.starmap(play_game_batch, batch_args)
