@@ -375,6 +375,7 @@ def main():
         print(f"Player wins: {total_player_wins:,}")
         print(f"Dealer wins: {total_dealer_wins:,}")
         print(f"Draws: {total_draws:,}")
+        print(f"Net Earnings: ${net_earnings:,.2f}") 
         print(f"House Edge: {house_edge:.2f}")
 
         print(f"\nDuration of simulation: {duration:.2f} seconds")
