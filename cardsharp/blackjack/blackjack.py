@@ -28,6 +28,7 @@ from cardsharp.blackjack.state import (
 from cardsharp.blackjack.stats import SimulationStats
 from cardsharp.blackjack.strategy import BasicStrategy
 from cardsharp.blackjack.strategy import CountingStrategy
+from cardsharp.blackjack.strategy import AggressiveStrategy
 from cardsharp.common.deck import Deck
 from cardsharp.common.io_interface import (
     ConsoleIOInterface,
@@ -128,6 +129,8 @@ def create_io_interface(args):
         if args.strat:
             if args.strat == "count":
                 strategy = CountingStrategy()
+            elif args.strat == "aggro":
+                strategy = AggressiveStrategy()
             else:
                 strategy = BasicStrategy()
         else:
@@ -214,7 +217,9 @@ def main():
     parser.add_argument(
         "--strat",
         type=str,
-        help="Pick your strategy. Defaults to basic. 'count' for counting cards"
+        choices=["basic", "count", "aggro"],
+        default="basic",
+        help="Pick your strategy. 'basic' for basic strategy, 'count' for counting cards, 'aggro' for aggressive strategy"
     )
     args = parser.parse_args()
 
@@ -236,7 +241,7 @@ def main():
 
         player_names = ["Player1"]
         for _ in range(args.num_games):
-            play_game(rules, io_interface, player_names)
+            play_game(rules, io_interface, player_names, strategy)
 
     if args.simulate:
         # Define your rules
