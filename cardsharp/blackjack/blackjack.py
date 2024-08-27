@@ -5,10 +5,12 @@ It can be used to play a game in different modes:
 - Interactive console mode, where the user interacts with the game via the console.
 - Simulation mode, where the game runs automatically.
 - Logging mode, where game output is logged to a specified file.
+- Visualization mode, where a real-time graph of earnings is displayed.
 
 To run the game in different modes, specific command line arguments are used.
 For example, `--console` runs the game in interactive console mode,
 `--simulate` runs the game in simulation mode and `--log_file` followed by a filename runs the game in logging mode.
+`--vis` enables real-time visualization of the simulation results.
 """
 
 import argparse
@@ -17,6 +19,8 @@ import time
 import cProfile
 import pstats
 import io
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 
 from cardsharp.blackjack.actor import Dealer, Player
@@ -36,6 +40,38 @@ from cardsharp.common.io_interface import (
     LoggingIOInterface,
 )
 
+class BlackjackGraph:
+    def __init__(self, max_games):
+        self.max_games = max_games
+        self.games = []
+        self.net_earnings = []
+        
+        plt.ion()  # Turn on interactive mode
+        self.fig, self.ax = plt.subplots()
+        self.line, = self.ax.plot([], [], 'b-')
+        
+        self.ax.set_xlim(0, max_games)
+        self.ax.set_ylim(-100, 100)  # Adjust as needed
+        self.ax.set_title('Blackjack Performance')
+        self.ax.set_xlabel('Games')
+        self.ax.set_ylabel('Net Earnings')
+        self.ax.grid(True)
+
+    def update(self, game_number, earnings):
+        self.games.append(game_number)
+        self.net_earnings.append(earnings)
+        
+        self.line.set_data(self.games, self.net_earnings)
+        
+        if game_number > self.ax.get_xlim()[1]:
+            self.ax.set_xlim(0, game_number + 10)
+        
+        y_min = min(self.net_earnings) - 10
+        y_max = max(self.net_earnings) + 10
+        self.ax.set_ylim(y_min, y_max)
+        
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
 
 class BlackjackGame:
     """
@@ -147,7 +183,6 @@ def play_game(rules, io_interface, player_names, strategy):
     """
     players = [Player(name, io_interface, strategy) for name in player_names]
 
-
     # Create a game
     game = BlackjackGame(rules, io_interface)
 
@@ -158,19 +193,25 @@ def play_game(rules, io_interface, player_names, strategy):
     # Change state to PlacingBetsState and play a round
     game.set_state(PlacingBetsState())
     game.play_round()
+    
+    # Calculate earnings
+    earnings = sum(player.money - 1000 for player in game.players)  # Assuming initial money is 1000
+    
     game.reset()
 
-    # Return any relevant statistics or results
-    return game.stats.report()
+    # Return earnings and relevant statistics or results
+    return earnings, game.stats.report()
 
 
 def play_game_batch(rules, io_interface, player_names, num_games, strategy):
     """Function to play a batch of games of Blackjack, to be executed in a separate process."""
     results = []
+    earnings = []
     for _ in range(num_games):
-        result = play_game(rules, io_interface, player_names, strategy)
+        game_earnings, result = play_game(rules, io_interface, player_names, strategy)
         results.append(result)
-    return results
+        earnings.append(game_earnings)
+    return results, earnings
 
 
 def main():
@@ -202,7 +243,6 @@ def main():
         type=str,
         help="Log game output to the specified file. If not provided, output goes to the console.",
     )
-
     parser.add_argument(
         "--single_cpu",
         action="store_true",
@@ -220,6 +260,12 @@ def main():
         choices=["basic", "count", "aggro"],
         default="basic",
         help="Pick your strategy. 'basic' for basic strategy, 'count' for counting cards, 'aggro' for aggressive strategy"
+    )
+    parser.add_argument(
+        "--vis",
+        action="store_true",
+        help="Visualize the simulation results in real-time graph.",
+        default=False,
     )
     args = parser.parse_args()
 
@@ -258,11 +304,20 @@ def main():
         start_time = time.time()  # Record the start time
         io_interface, strategy = create_io_interface(args)
 
+        graph = None
+        if args.vis:
+            graph = BlackjackGraph(args.num_games)
+
+        net_earnings = 0
+        results = []
+
         if args.single_cpu:
             # Run simulations sequentially
-            results = []
-            for _ in range(args.num_games):
-                result = play_game(rules, DummyIOInterface(), player_names, strategy)
+            for i in range(args.num_games):
+                earnings, result = play_game(rules, DummyIOInterface(), player_names, strategy)
+                net_earnings += earnings
+                if graph:
+                    graph.update(i+1, net_earnings)
                 results.append(result)
         else:
             # Run simulations in parallel
@@ -278,9 +333,14 @@ def main():
                     for game_count in game_batches
                 ]
                 batch_results = pool.starmap(play_game_batch, batch_args)
-                results = [
-                    result for batch in batch_results for result in batch
-                ]  # Flatten the results
+                game_number = 0
+                for batch_result, batch_earnings in batch_results:
+                    for result, earnings in zip(batch_result, batch_earnings):
+                        game_number += 1
+                        net_earnings += earnings
+                        if graph:
+                            graph.update(game_number, net_earnings)
+                        results.append(result)
 
         end_time = time.time()  # Record the end time
         duration = end_time - start_time  # Calculate the duration
@@ -319,6 +379,10 @@ def main():
 
         print(f"\nDuration of simulation: {duration:.2f} seconds")
         print(f"Games simulated per second: {games_per_second:,.2f}")
+
+        if graph:
+            plt.ioff()
+            plt.show()  # Keep the graph window open after simulation ends
 
     if args.profile and profiler is not None:
         profiler.disable()
