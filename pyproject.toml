@@ -18,6 +18,7 @@ classifiers = [
 python = "^3.12"
 asyncio = "*"
 aiofiles = "*"
+matplotlib = "^3.9.2"
 
 [tool.poetry.dev-dependencies]
 black = "^24.8.0"

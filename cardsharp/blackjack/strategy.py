@@ -278,3 +278,71 @@ class CountingStrategy(BasicStrategy):
         return super().decide_action(
             player, dealer_up_card
         )  # Default to basic strategy otherwise
+
+
+class AggressiveStrategy(BasicStrategy):
+    """
+    A super aggressive blackjack strategy that takes more risks, hits more often,
+    and doubles down more frequently.
+    """
+
+    def decide_action(self, player, dealer_up_card: Card) -> Action:
+        current_hand = player.current_hand
+        if current_hand.is_blackjack:
+            return Action.STAND
+
+        action = self._decide_on_split(current_hand, dealer_up_card)
+        if action is not None:
+            return action
+
+        action = self._decide_on_double(current_hand, dealer_up_card)
+        if action is not None:
+            return action
+
+        return self._decide_on_stand_or_hit(current_hand, dealer_up_card)
+
+    def _decide_on_split(self, current_hand, dealer_up_card: Card) -> Optional[Action]:
+        if not current_hand.can_split:
+            return None
+
+        # Always split if possible, except for 5s and 10s
+        if current_hand.cards[0].rank not in [Rank.FIVE, Rank.TEN]:
+            return Action.SPLIT
+
+        return None
+
+    def _decide_on_double(self, current_hand, dealer_up_card: Card) -> Optional[Action]:
+        if not current_hand.can_double:
+            return None
+
+        hand_value = current_hand.value()
+        dealer_rank = dealer_up_card.rank.rank_value
+
+        # Double down on any hand 9-11, and on soft 13-18 against dealer 2-6
+        double_conditions = [
+            9 <= hand_value <= 11,
+            current_hand.is_soft and 13 <= hand_value <= 18 and dealer_rank <= 6,
+        ]
+
+        return Action.DOUBLE if any(double_conditions) else None
+
+    def _decide_on_stand_or_hit(self, current_hand, dealer_up_card: Card) -> Action:
+        hand_value = current_hand.value()
+        dealer_rank = dealer_up_card.rank.rank_value
+
+        if current_hand.is_soft:
+            # Hit on all soft hands up to 18, stand on 19+
+            return Action.HIT if hand_value <= 18 else Action.STAND
+        else:
+            # Hit on all hard hands up to 16, even against dealer's low cards
+            if hand_value <= 16:
+                return Action.HIT
+            # Hit on 17 if dealer shows 7 or higher
+            elif hand_value == 17 and dealer_rank >= 7:
+                return Action.HIT
+            else:
+                return Action.STAND
+
+    def _decide_on_surrender(self, current_hand, dealer_up_card: Card) -> Optional[Action]:
+        # Never surrender in this super aggressive strategy
+        return None
