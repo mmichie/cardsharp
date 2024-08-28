@@ -19,6 +19,7 @@ python = "^3.12"
 asyncio = "*"
 aiofiles = "*"
 matplotlib = "^3.9.2"
+streamlit = "^1.38.0"
 
 [tool.poetry.dev-dependencies]
 black = "^24.8.0"
