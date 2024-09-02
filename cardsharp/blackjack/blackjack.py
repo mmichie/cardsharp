@@ -21,6 +21,9 @@ import pstats
 import io
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+import threading
+from copy import deepcopy
+
 
 
 from cardsharp.blackjack.actor import Dealer, Player
@@ -33,6 +36,7 @@ from cardsharp.blackjack.stats import SimulationStats
 from cardsharp.blackjack.strategy import BasicStrategy
 from cardsharp.blackjack.strategy import CountingStrategy
 from cardsharp.blackjack.strategy import AggressiveStrategy
+from cardsharp.blackjack.strategy import MartingaleStrategy
 from cardsharp.common.deck import Deck
 from cardsharp.common.io_interface import (
     ConsoleIOInterface,
@@ -72,6 +76,45 @@ class BlackjackGraph:
         
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
+
+class MultiStrategyBlackjackGraph:
+    def __init__(self, max_games, strategies):
+        self.max_games = max_games
+        self.strategies = strategies
+        self.data = {strategy: {'games': [], 'earnings': []} for strategy in strategies}
+        
+        plt.ion()  # Turn on interactive mode
+        self.fig, self.ax = plt.subplots(figsize=(12, 6))
+        self.lines = {strategy: self.ax.plot([], [], label=strategy)[0] for strategy in strategies}
+        
+        self.ax.set_xlim(0, max_games)
+        self.ax.set_ylim(-1000, 1000)  # Adjust as needed
+        self.ax.set_title('Blackjack Performance by Strategy')
+        self.ax.set_xlabel('Games')
+        self.ax.set_ylabel('Net Earnings')
+        self.ax.grid(True)
+        self.ax.legend()
+        
+        self.lock = threading.Lock()
+
+    def update(self, strategy, game_number, earnings):
+        with self.lock:
+            self.data[strategy]['games'].append(game_number)
+            self.data[strategy]['earnings'].append(earnings)
+            
+            self.lines[strategy].set_data(self.data[strategy]['games'], self.data[strategy]['earnings'])
+            
+            all_earnings = [earn for strat_data in self.data.values() for earn in strat_data['earnings']]
+            if all_earnings:
+                y_min = min(min(all_earnings) - 10, -1000)
+                y_max = max(max(all_earnings) + 10, 1000)
+                self.ax.set_ylim(y_min, y_max)
+            
+            if game_number > self.ax.get_xlim()[1]:
+                self.ax.set_xlim(0, game_number + 10)
+            
+            self.fig.canvas.draw()
+            self.fig.canvas.flush_events()
 
 class BlackjackGame:
     """
@@ -167,6 +210,8 @@ def create_io_interface(args):
                 strategy = CountingStrategy()
             elif args.strat == "aggro":
                 strategy = AggressiveStrategy()
+            elif args.strat == "martin":
+                strategy = MartingaleStrategy()
             else:
                 strategy = BasicStrategy()
         else:
@@ -213,6 +258,105 @@ def play_game_batch(rules, io_interface, player_names, num_games, strategy):
         earnings.append(game_earnings)
     return results, earnings
 
+def play_game_and_record(rules, io_interface, player_names, strategy):
+    """
+    Play a single game of Blackjack and record the card sequence.
+    """
+    players = [Player(name, io_interface, strategy) for name in player_names]
+    game = BlackjackGame(rules, io_interface)
+    
+    for player in players:
+        game.add_player(player)
+
+    game.set_state(PlacingBetsState())
+    
+    # Record the initial deck state
+    initial_deck = deepcopy(game.deck)
+    
+    game.play_round()
+
+    earnings = sum(player.money - 1000 for player in game.players)
+    
+    # Return earnings, stats, and the initial deck state
+    return earnings, game.stats.report(), initial_deck
+
+def replay_game_with_strategy(rules, io_interface, player_names, strategy, initial_deck):
+    """
+    Replay a game with a specific strategy and initial deck state.
+    """
+    players = [Player(name, io_interface, strategy) for name in player_names]
+    game = BlackjackGame(rules, io_interface)
+    
+    for player in players:
+        game.add_player(player)
+
+    game.set_state(PlacingBetsState())
+    
+    # Set the deck to the initial state
+    game.deck = initial_deck
+    
+    game.play_round()
+
+    earnings = sum(player.money - 1000 for player in game.players)
+    
+    return earnings, game.stats.report()
+
+def run_strategy_analysis(args, rules):
+    strategies = {
+        "Basic": BasicStrategy(),
+        "Counting": CountingStrategy(),
+        "Aggressive": AggressiveStrategy(),
+        "Martingale": MartingaleStrategy(),
+    }
+    
+    results = {strategy: {"net_earnings": 0, "wins": 0, "losses": 0, "draws": 0} for strategy in strategies}
+    player_names = ["Bob"]
+    
+    graph = MultiStrategyBlackjackGraph(args.num_games, strategies.keys()) if args.vis else None
+    
+    for game_number in range(args.num_games):
+        print(f"\nPlaying game {game_number + 1}")
+        
+        # Play the game once to get the card sequence
+        _, _, initial_deck = play_game_and_record(rules, DummyIOInterface(), player_names, BasicStrategy())
+        
+        # Replay the same game with each strategy
+        for strategy_name, strategy in strategies.items():
+            earnings, result = replay_game_with_strategy(rules, DummyIOInterface(), player_names, strategy, deepcopy(initial_deck))
+            
+            results[strategy_name]["net_earnings"] += earnings
+            results[strategy_name]["wins"] += result["player_wins"]
+            results[strategy_name]["losses"] += result["dealer_wins"]
+            results[strategy_name]["draws"] += result["draws"]
+            
+            if graph:
+                graph.update(strategy_name, game_number + 1, results[strategy_name]["net_earnings"])
+    
+    print("\nStrategy Analysis Results:")
+    print("--------------------------")
+    for strategy_name, result in results.items():
+        print(f"\n{strategy_name} Strategy:")
+        print(f"Net Earnings: ${result['net_earnings']:,.2f}")
+        print(f"Wins: {result['wins']:,}")
+        print(f"Losses: {result['losses']:,}")
+        print(f"Draws: {result['draws']:,}")
+        
+        total_games = result['wins'] + result['losses'] + result['draws']
+        if total_games > 0:
+            win_rate = result['wins'] / total_games
+            print(f"Win Rate: {win_rate:.2%}")
+    
+    best_strategy = max(results, key=lambda x: results[x]['net_earnings'])
+    worst_strategy = min(results, key=lambda x: results[x]['net_earnings'])
+    
+    print(f"\nBest Performing Strategy: {best_strategy}")
+    print(f"Worst Performing Strategy: {worst_strategy}")
+    
+    if args.vis:
+        plt.ioff()
+        plt.show()  # Keep the graph window open after simulation ends
+
+
 
 def main():
     """
@@ -257,7 +401,7 @@ def main():
     parser.add_argument(
         "--strat",
         type=str,
-        choices=["basic", "count", "aggro"],
+        choices=["basic", "count", "aggro", "martin"],
         default="basic",
         help="Pick your strategy. 'basic' for basic strategy, 'count' for counting cards, 'aggro' for aggressive strategy"
     )
@@ -265,6 +409,12 @@ def main():
         "--vis",
         action="store_true",
         help="Visualize the simulation results in real-time graph.",
+        default=False,
+    )
+    parser.add_argument(
+        "--analysis",
+        action="store_true",
+        help="Analyze every strategy, compare results",
         default=False,
     )
     args = parser.parse_args()
@@ -289,7 +439,16 @@ def main():
         for _ in range(args.num_games):
             play_game(rules, io_interface, player_names, strategy)
 
-    if args.simulate:
+    if args.analysis:
+        rules = {
+            "blackjack_payout": 1.5,
+            "allow_insurance": True,
+            "min_players": 1,
+            "min_bet": 10,
+            "max_players": 6,
+        }
+        run_strategy_analysis(args, rules)
+    elif args.simulate:
         # Define your rules
         rules = {
             "blackjack_payout": 1.5,

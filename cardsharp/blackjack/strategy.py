@@ -280,33 +280,89 @@ class CountingStrategy(BasicStrategy):
         )  # Default to basic strategy otherwise
 
 
+class MartingaleStrategy(BasicStrategy):
+    def __init__(self, initial_bet=1, max_bet=100):
+        super().__init__()
+        self.initial_bet = initial_bet
+        self.current_bet = initial_bet
+        self.max_bet = max_bet
+        self.consecutive_losses = 0
+
+    def decide_action(self, player, dealer_up_card: Card) -> Action:
+        # Use the BasicStrategy to decide the action
+        return super().decide_action(player, dealer_up_card)
+
+    def place_bet(self) -> int:
+        return self.current_bet
+
+    def update_bet(self, result: str):
+        if result == 'win':
+            self.current_bet = self.initial_bet
+            self.consecutive_losses = 0
+        elif result == 'lose':
+            self.consecutive_losses += 1
+            new_bet = self.current_bet * 2
+            self.current_bet = min(new_bet, self.max_bet)
+        # In case of a push (tie), the bet remains the same
+
+    def reset_bet(self):
+        self.current_bet = self.initial_bet
+        self.consecutive_losses = 0
+
+
 class AggressiveStrategy(BasicStrategy):
     """
-    A super aggressive blackjack strategy that takes more risks, hits more often,
+    An aggressive blackjack strategy that takes more risks, hits more often,
     and doubles down more frequently.
     """
 
     def decide_action(self, player, dealer_up_card: Card) -> Action:
+        """
+        Decides the action to take based on the player's hand and the dealer's up card.
+
+        Args:
+            player: The player instance.
+            dealer_up_card (Card): The dealer's up card.
+
+        Returns:
+            Action: The action to take.
+        """
         current_hand = player.current_hand
         if current_hand.is_blackjack:
             return Action.STAND
 
-        action = self._decide_on_split(current_hand, dealer_up_card)
-        if action is not None:
-            return action
+        actions = [
+            self._decide_on_split,
+            self._decide_on_double,
+            self._decide_on_surrender,
+            self._decide_on_stand_or_hit
+        ]
 
-        action = self._decide_on_double(current_hand, dealer_up_card)
-        if action is not None:
-            return action
+        for action_method in actions:
+            action = action_method(current_hand, dealer_up_card)
+            if action is not None:
+                return action
 
-        return self._decide_on_stand_or_hit(current_hand, dealer_up_card)
+        # If no action was decided, default to hit
+        return Action.HIT
 
     def _decide_on_split(self, current_hand, dealer_up_card: Card) -> Optional[Action]:
         if not current_hand.can_split:
             return None
 
-        # Always split if possible, except for 5s and 10s
-        if current_hand.cards[0].rank not in [Rank.FIVE, Rank.TEN]:
+        player_rank = current_hand.cards[0].rank
+        dealer_rank = dealer_up_card.rank.rank_value
+
+        # Always split Aces and 8s
+        if player_rank in [Rank.ACE, Rank.EIGHT]:
+            return Action.SPLIT
+
+        # Split 2s, 3s, 6s, 7s against dealer 2-7
+        if player_rank in [Rank.TWO, Rank.THREE, Rank.SIX, Rank.SEVEN] and dealer_rank <= 7:
+            return Action.SPLIT
+
+        # Split 9s against dealer 2-9, except 7
+        if player_rank == Rank.NINE and dealer_rank <= 9 and dealer_rank != 7:
             return Action.SPLIT
 
         return None
@@ -318,31 +374,40 @@ class AggressiveStrategy(BasicStrategy):
         hand_value = current_hand.value()
         dealer_rank = dealer_up_card.rank.rank_value
 
-        # Double down on any hand 9-11, and on soft 13-18 against dealer 2-6
-        double_conditions = [
-            9 <= hand_value <= 11,
-            current_hand.is_soft and 13 <= hand_value <= 18 and dealer_rank <= 6,
-        ]
+        # Double down on hard 9-11 against dealer 2-9
+        if 9 <= hand_value <= 11 and dealer_rank <= 9:
+            return Action.DOUBLE
 
-        return Action.DOUBLE if any(double_conditions) else None
+        # Double down on soft 13-18 against dealer 2-6
+        if current_hand.is_soft and 13 <= hand_value <= 18 and dealer_rank <= 6:
+            return Action.DOUBLE
+
+        return None
+
+    def _decide_on_surrender(self, current_hand, dealer_up_card: Card) -> Optional[Action]:
+        # Aggressive strategy rarely surrenders
+        return None
 
     def _decide_on_stand_or_hit(self, current_hand, dealer_up_card: Card) -> Action:
         hand_value = current_hand.value()
         dealer_rank = dealer_up_card.rank.rank_value
 
         if current_hand.is_soft:
-            # Hit on all soft hands up to 18, stand on 19+
-            return Action.HIT if hand_value <= 18 else Action.STAND
-        else:
-            # Hit on all hard hands up to 16, even against dealer's low cards
-            if hand_value <= 16:
+            # Always hit soft 17 or lower
+            if hand_value <= 17:
                 return Action.HIT
-            # Hit on 17 if dealer shows 7 or higher
-            elif hand_value == 17 and dealer_rank >= 7:
+            # Hit soft 18 against dealer 9, 10, or Ace
+            elif hand_value == 18 and dealer_rank >= 9:
                 return Action.HIT
             else:
                 return Action.STAND
-
-    def _decide_on_surrender(self, current_hand, dealer_up_card: Card) -> Optional[Action]:
-        # Never surrender in this super aggressive strategy
-        return None
+        else:
+            # Always hit 11 or lower
+            if hand_value <= 11:
+                return Action.HIT
+            # Hit 12-16 against dealer 7 or higher
+            elif 12 <= hand_value <= 16 and dealer_rank >= 7:
+                return Action.HIT
+            else:
+                return Action.STAND
+    
