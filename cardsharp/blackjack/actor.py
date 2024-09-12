@@ -16,7 +16,6 @@ Exceptions:
 This module is part of the `cardsharp` package, a framework for creating and playing card games.
 """
 
-
 from typing import Optional
 
 from cardsharp.blackjack.action import Action
@@ -60,6 +59,8 @@ class Player(SimplePlayer):
         self.strategy = strategy
         self.bet = 0
         self.insurance = 0
+        self.total_bets = 0
+        self.total_winnings = 0
         self.hands = [BlackjackHand()]
         self.done = False
         self.blackjack = False
@@ -108,12 +109,13 @@ class Player(SimplePlayer):
         if not self.current_hand.can_split:
             raise InvalidActionError(f"{self.name} cannot split at this time.")
 
-        if self.bet >= self.money:
+        if self.bet > self.money:
             raise InsufficientFundsError(
                 f"{self.name} does not have enough money to split."
             )
 
         self.money -= self.bet
+        self.total_bets += self.bet
         new_hand = BlackjackHand()
         new_hand.add_card(self.current_hand.cards.pop())
         self.hands.append(new_hand)
@@ -153,6 +155,7 @@ class Player(SimplePlayer):
             )
 
         self.money -= self.bet
+        self.total_bets += self.bet
         self.bet *= 2
         self.done = True
 
@@ -181,6 +184,8 @@ class Player(SimplePlayer):
             self.money -= amount
             self.done = False
 
+        self.total_bets += amount
+
     def buy_insurance(self, amount: int):
         """Attempts to buy insurance for the given amount."""
         if amount > self.money:
@@ -193,7 +198,8 @@ class Player(SimplePlayer):
 
     def payout(self, amount: int):
         """Gives the player a payout of the given amount."""
-        self.money += amount + self.bet
+        self.money += amount
+        self.total_winnings += amount
         self.bet = 0
         self.insurance = 0
         self.done = True
@@ -209,8 +215,9 @@ class Player(SimplePlayer):
         self.done = False
         self.blackjack = False
         self.winner = None
-        self.money = 1000
         self.bet = 0
+        self.total_bets = 0
+        self.total_winnings = 0
 
 
 class Dealer(SimplePlayer):

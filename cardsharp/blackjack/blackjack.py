@@ -24,8 +24,6 @@ from matplotlib.animation import FuncAnimation
 import threading
 from copy import deepcopy
 
-
-
 from cardsharp.blackjack.actor import Dealer, Player
 from cardsharp.blackjack.state import (
     EndRoundState,
@@ -44,77 +42,88 @@ from cardsharp.common.io_interface import (
     LoggingIOInterface,
 )
 
+
 class BlackjackGraph:
     def __init__(self, max_games):
         self.max_games = max_games
         self.games = []
         self.net_earnings = []
-        
+
         plt.ion()  # Turn on interactive mode
         self.fig, self.ax = plt.subplots()
-        self.line, = self.ax.plot([], [], 'b-')
-        
+        (self.line,) = self.ax.plot([], [], "b-")
+
         self.ax.set_xlim(0, max_games)
         self.ax.set_ylim(-100, 100)  # Adjust as needed
-        self.ax.set_title('Blackjack Performance')
-        self.ax.set_xlabel('Games')
-        self.ax.set_ylabel('Net Earnings')
+        self.ax.set_title("Blackjack Performance")
+        self.ax.set_xlabel("Games")
+        self.ax.set_ylabel("Net Earnings")
         self.ax.grid(True)
 
     def update(self, game_number, earnings):
         self.games.append(game_number)
         self.net_earnings.append(earnings)
-        
+
         self.line.set_data(self.games, self.net_earnings)
-        
+
         if game_number > self.ax.get_xlim()[1]:
             self.ax.set_xlim(0, game_number + 10)
-        
+
         y_min = min(self.net_earnings) - 10
         y_max = max(self.net_earnings) + 10
         self.ax.set_ylim(y_min, y_max)
-        
+
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
+
 
 class MultiStrategyBlackjackGraph:
     def __init__(self, max_games, strategies):
         self.max_games = max_games
         self.strategies = strategies
-        self.data = {strategy: {'games': [], 'earnings': []} for strategy in strategies}
-        
+        self.data = {strategy: {"games": [], "earnings": []} for strategy in strategies}
+
         plt.ion()  # Turn on interactive mode
         self.fig, self.ax = plt.subplots(figsize=(12, 6))
-        self.lines = {strategy: self.ax.plot([], [], label=strategy)[0] for strategy in strategies}
-        
+        self.lines = {
+            strategy: self.ax.plot([], [], label=strategy)[0] for strategy in strategies
+        }
+
         self.ax.set_xlim(0, max_games)
         self.ax.set_ylim(-1000, 1000)  # Adjust as needed
-        self.ax.set_title('Blackjack Performance by Strategy')
-        self.ax.set_xlabel('Games')
-        self.ax.set_ylabel('Net Earnings')
+        self.ax.set_title("Blackjack Performance by Strategy")
+        self.ax.set_xlabel("Games")
+        self.ax.set_ylabel("Net Earnings")
         self.ax.grid(True)
         self.ax.legend()
-        
+
         self.lock = threading.Lock()
 
     def update(self, strategy, game_number, earnings):
         with self.lock:
-            self.data[strategy]['games'].append(game_number)
-            self.data[strategy]['earnings'].append(earnings)
-            
-            self.lines[strategy].set_data(self.data[strategy]['games'], self.data[strategy]['earnings'])
-            
-            all_earnings = [earn for strat_data in self.data.values() for earn in strat_data['earnings']]
+            self.data[strategy]["games"].append(game_number)
+            self.data[strategy]["earnings"].append(earnings)
+
+            self.lines[strategy].set_data(
+                self.data[strategy]["games"], self.data[strategy]["earnings"]
+            )
+
+            all_earnings = [
+                earn
+                for strat_data in self.data.values()
+                for earn in strat_data["earnings"]
+            ]
             if all_earnings:
                 y_min = min(min(all_earnings) - 10, -1000)
                 y_max = max(max(all_earnings) + 10, 1000)
                 self.ax.set_ylim(y_min, y_max)
-            
+
             if game_number > self.ax.get_xlim()[1]:
                 self.ax.set_xlim(0, game_number + 10)
-            
+
             self.fig.canvas.draw()
             self.fig.canvas.flush_events()
+
 
 class BlackjackGame:
     """
@@ -227,36 +236,38 @@ def play_game(rules, io_interface, player_names, strategy):
     Function to play a single game of Blackjack, to be executed in a separate process.
     """
     players = [Player(name, io_interface, strategy) for name in player_names]
-
-    # Create a game
     game = BlackjackGame(rules, io_interface)
 
-    # Add players
     for player in players:
         game.add_player(player)
 
-    # Change state to PlacingBetsState and play a round
     game.set_state(PlacingBetsState())
     game.play_round()
-    
-    # Calculate earnings
-    earnings = sum(player.money - 1000 for player in game.players)  # Assuming initial money is 1000
-    
+
+    net_earnings = sum(
+        player.total_winnings - player.total_bets for player in game.players
+    )
+    total_bets = sum(player.total_bets for player in game.players)
+
     game.reset()
 
-    # Return earnings and relevant statistics or results
-    return earnings, game.stats.report()
+    return net_earnings, total_bets, game.stats.report()
 
 
 def play_game_batch(rules, io_interface, player_names, num_games, strategy):
     """Function to play a batch of games of Blackjack, to be executed in a separate process."""
     results = []
     earnings = []
+    total_bets = 0
     for _ in range(num_games):
-        game_earnings, result = play_game(rules, io_interface, player_names, strategy)
+        game_earnings, game_bets, result = play_game(
+            rules, io_interface, player_names, strategy
+        )
         results.append(result)
         earnings.append(game_earnings)
-    return results, earnings
+        total_bets += game_bets
+    return results, earnings, total_bets
+
 
 def play_game_and_record(rules, io_interface, player_names, strategy):
     """
@@ -264,42 +275,44 @@ def play_game_and_record(rules, io_interface, player_names, strategy):
     """
     players = [Player(name, io_interface, strategy) for name in player_names]
     game = BlackjackGame(rules, io_interface)
-    
+
     for player in players:
         game.add_player(player)
 
     game.set_state(PlacingBetsState())
-    
-    # Record the initial deck state
+
     initial_deck = deepcopy(game.deck)
-    
+
     game.play_round()
 
     earnings = sum(player.money - 1000 for player in game.players)
-    
-    # Return earnings, stats, and the initial deck state
-    return earnings, game.stats.report(), initial_deck
+    total_bets = sum(player.bet for player in game.players)
 
-def replay_game_with_strategy(rules, io_interface, player_names, strategy, initial_deck):
+    return earnings, total_bets, game.stats.report(), initial_deck
+
+
+def replay_game_with_strategy(
+    rules, io_interface, player_names, strategy, initial_deck
+):
+    players = [Player(name, io_interface, strategy) for name in player_names]
+    game = BlackjackGame(rules, io_interface)
     """
     Replay a game with a specific strategy and initial deck state.
     """
-    players = [Player(name, io_interface, strategy) for name in player_names]
-    game = BlackjackGame(rules, io_interface)
-    
     for player in players:
         game.add_player(player)
 
     game.set_state(PlacingBetsState())
-    
-    # Set the deck to the initial state
+
     game.deck = initial_deck
-    
+
     game.play_round()
 
     earnings = sum(player.money - 1000 for player in game.players)
-    
-    return earnings, game.stats.report()
+    total_bets = sum(player.bet for player in game.players)
+
+    return earnings, total_bets, game.stats.report()
+
 
 def run_strategy_analysis(args, rules):
     strategies = {
@@ -308,54 +321,84 @@ def run_strategy_analysis(args, rules):
         "Aggressive": AggressiveStrategy(),
         "Martingale": MartingaleStrategy(),
     }
-    
-    results = {strategy: {"net_earnings": 0, "wins": 0, "losses": 0, "draws": 0} for strategy in strategies}
+
+    results = {
+        strategy: {
+            "net_earnings": 0,
+            "total_bets": 0,
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+        }
+        for strategy in strategies
+    }
     player_names = ["Bob"]
-    
-    graph = MultiStrategyBlackjackGraph(args.num_games, strategies.keys()) if args.vis else None
-    
+
+    graph = (
+        MultiStrategyBlackjackGraph(args.num_games, strategies.keys())
+        if args.vis
+        else None
+    )
+
     for game_number in range(args.num_games):
         print(f"\nPlaying game {game_number + 1}")
-        
-        # Play the game once to get the card sequence
-        _, _, initial_deck = play_game_and_record(rules, DummyIOInterface(), player_names, BasicStrategy())
-        
-        # Replay the same game with each strategy
+
+        _, _, _, initial_deck = play_game_and_record(
+            rules, DummyIOInterface(), player_names, BasicStrategy()
+        )
+
         for strategy_name, strategy in strategies.items():
-            earnings, result = replay_game_with_strategy(rules, DummyIOInterface(), player_names, strategy, deepcopy(initial_deck))
-            
+            earnings, total_bets, result = replay_game_with_strategy(
+                rules,
+                DummyIOInterface(),
+                player_names,
+                strategy,
+                deepcopy(initial_deck),
+            )
+
             results[strategy_name]["net_earnings"] += earnings
+            results[strategy_name]["total_bets"] += total_bets
             results[strategy_name]["wins"] += result["player_wins"]
             results[strategy_name]["losses"] += result["dealer_wins"]
             results[strategy_name]["draws"] += result["draws"]
-            
+
             if graph:
-                graph.update(strategy_name, game_number + 1, results[strategy_name]["net_earnings"])
-    
+                graph.update(
+                    strategy_name,
+                    game_number + 1,
+                    results[strategy_name]["net_earnings"],
+                )
+
     print("\nStrategy Analysis Results:")
     print("--------------------------")
     for strategy_name, result in results.items():
         print(f"\n{strategy_name} Strategy:")
         print(f"Net Earnings: ${result['net_earnings']:,.2f}")
+        print(f"Total Bets: ${result['total_bets']:,.2f}")
         print(f"Wins: {result['wins']:,}")
         print(f"Losses: {result['losses']:,}")
         print(f"Draws: {result['draws']:,}")
-        
-        total_games = result['wins'] + result['losses'] + result['draws']
+
+        total_games = result["wins"] + result["losses"] + result["draws"]
         if total_games > 0:
-            win_rate = result['wins'] / total_games
+            win_rate = result["wins"] / total_games
             print(f"Win Rate: {win_rate:.2%}")
-    
-    best_strategy = max(results, key=lambda x: results[x]['net_earnings'])
-    worst_strategy = min(results, key=lambda x: results[x]['net_earnings'])
-    
+
+        if result["total_bets"] > 0:
+            house_edge = (
+                (result["total_bets"] - result["net_earnings"]) / result["total_bets"]
+            ) * 100
+            print(f"House Edge: {house_edge:.2f}%")
+
+    best_strategy = max(results, key=lambda x: results[x]["net_earnings"])
+    worst_strategy = min(results, key=lambda x: results[x]["net_earnings"])
+
     print(f"\nBest Performing Strategy: {best_strategy}")
     print(f"Worst Performing Strategy: {worst_strategy}")
-    
+
     if args.vis:
         plt.ioff()
         plt.show()  # Keep the graph window open after simulation ends
-
 
 
 def main():
@@ -403,7 +446,7 @@ def main():
         type=str,
         choices=["basic", "count", "aggro", "martin"],
         default="basic",
-        help="Pick your strategy. 'basic' for basic strategy, 'count' for counting cards, 'aggro' for aggressive strategy"
+        help="Pick your strategy. 'basic' for basic strategy, 'count' for counting cards, 'aggro' for aggressive strategy",
     )
     parser.add_argument(
         "--vis",
@@ -449,7 +492,6 @@ def main():
         }
         run_strategy_analysis(args, rules)
     elif args.simulate:
-        # Define your rules
         rules = {
             "blackjack_payout": 1.5,
             "allow_insurance": True,
@@ -468,15 +510,19 @@ def main():
             graph = BlackjackGraph(args.num_games)
 
         net_earnings = 0
+        total_bets = 0
         results = []
 
         if args.single_cpu:
             # Run simulations sequentially
             for i in range(args.num_games):
-                earnings, result = play_game(rules, DummyIOInterface(), player_names, strategy)
+                earnings, bets, result = play_game(
+                    rules, DummyIOInterface(), player_names, strategy
+                )
                 net_earnings += earnings
+                total_bets += bets
                 if graph:
-                    graph.update(i+1, net_earnings)
+                    graph.update(i + 1, net_earnings)
                 results.append(result)
         else:
             # Run simulations in parallel
@@ -493,7 +539,8 @@ def main():
                 ]
                 batch_results = pool.starmap(play_game_batch, batch_args)
                 game_number = 0
-                for batch_result, batch_earnings in batch_results:
+                for batch_result, batch_earnings, batch_bets in batch_results:
+                    total_bets += batch_bets
                     for result, earnings in zip(batch_result, batch_earnings):
                         game_number += 1
                         net_earnings += earnings
@@ -527,15 +574,21 @@ def main():
             player_wins_ratio = 0
             dealer_wins_ratio = 0
 
-        house_edge = dealer_wins_ratio - player_wins_ratio
+        if total_bets > 0:
+            house_edge = (
+                -net_earnings / total_bets
+            ) * 100  # Negative because player's net earnings are negative when the house wins
+        else:
+            house_edge = 0
 
         print("Simulation completed.")
         print(f"Games played (excluding pushes): {games_played_excluding_pushes:,}")
         print(f"Player wins: {total_player_wins:,}")
         print(f"Dealer wins: {total_dealer_wins:,}")
         print(f"Draws: {total_draws:,}")
-        print(f"Net Earnings: ${net_earnings:,.2f}") 
-        print(f"House Edge: {house_edge:.2f}")
+        print(f"Net Earnings: ${net_earnings:,.2f}")
+        print(f"Total Bets: ${total_bets:,.2f}")
+        print(f"House Edge: {house_edge:.2f}%")
 
         print(f"\nDuration of simulation: {duration:.2f} seconds")
         print(f"Games simulated per second: {games_per_second:,.2f}")
