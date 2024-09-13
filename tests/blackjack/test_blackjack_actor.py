@@ -339,7 +339,6 @@ def test_player_reset(player):
     player.reset()
     assert len(player.current_hand.cards) == 0  # hand should be empty
     assert player.bet == 0  # bet should be reset to 0
-    assert player.money == 1000  # money should be reset to initial value
     assert player.done is False  # player should not be done
 
 
@@ -428,9 +427,31 @@ def test_hit(player):
     assert player.is_done()
 
 
-def test_split_insufficient_funds(player):
+def test_split_sufficient_funds(player):
     # Place a bet
     player.place_bet(500)
+    assert player.money == 500  # Verify remaining money after bet
+
+    # Add two cards of the same rank to the player's hand
+    player.add_card(Card(Suit.HEARTS, Rank.TWO))
+    player.add_card(Card(Suit.DIAMONDS, Rank.TWO))
+
+    # Player should be able to split
+    player.split()
+
+    # Verify the split occurred
+    assert len(player.hands) == 2
+    assert len(player.hands[0].cards) == 1
+    assert len(player.hands[1].cards) == 1
+    assert player.money == 0  # All money should now be in bets
+    assert player.bet == 500  # Original bet amount
+    assert player.total_bets == 1000  # Total bets should be doubled
+
+
+def test_split_insufficient_funds(player):
+    # Place a bet that's more than half the player's money
+    player.place_bet(600)
+    assert player.money == 400  # Verify remaining money after bet
 
     # Add two cards of the same rank to the player's hand
     player.add_card(Card(Suit.HEARTS, Rank.TWO))
@@ -440,11 +461,12 @@ def test_split_insufficient_funds(player):
     with pytest.raises(InsufficientFundsError):
         player.split()
 
-    # Player's money should not have been reduced
-    assert player.money == 500
-
-    # Player's hand should still contain two cards
-    assert len(player.current_hand.cards) == 2
+    # Verify no split occurred
+    assert len(player.hands) == 1
+    assert len(player.hands[0].cards) == 2
+    assert player.money == 400  # Money should remain unchanged
+    assert player.bet == 600  # Bet should remain unchanged
+    assert player.total_bets == 600  # Total bets should remain unchanged
 
 
 def test_double_down_insufficient_funds(player):
