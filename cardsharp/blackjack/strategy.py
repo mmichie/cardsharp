@@ -296,10 +296,10 @@ class MartingaleStrategy(BasicStrategy):
         return self.current_bet
 
     def update_bet(self, result: str):
-        if result == 'win':
+        if result == "win":
             self.current_bet = self.initial_bet
             self.consecutive_losses = 0
-        elif result == 'lose':
+        elif result == "lose":
             self.consecutive_losses += 1
             new_bet = self.current_bet * 2
             self.current_bet = min(new_bet, self.max_bet)
@@ -335,7 +335,7 @@ class AggressiveStrategy(BasicStrategy):
             self._decide_on_split,
             self._decide_on_double,
             self._decide_on_surrender,
-            self._decide_on_stand_or_hit
+            self._decide_on_stand_or_hit,
         ]
 
         for action_method in actions:
@@ -358,7 +358,10 @@ class AggressiveStrategy(BasicStrategy):
             return Action.SPLIT
 
         # Split 2s, 3s, 6s, 7s against dealer 2-7
-        if player_rank in [Rank.TWO, Rank.THREE, Rank.SIX, Rank.SEVEN] and dealer_rank <= 7:
+        if (
+            player_rank in [Rank.TWO, Rank.THREE, Rank.SIX, Rank.SEVEN]
+            and dealer_rank <= 7
+        ):
             return Action.SPLIT
 
         # Split 9s against dealer 2-9, except 7
@@ -384,7 +387,9 @@ class AggressiveStrategy(BasicStrategy):
 
         return None
 
-    def _decide_on_surrender(self, current_hand, dealer_up_card: Card) -> Optional[Action]:
+    def _decide_on_surrender(
+        self, current_hand, dealer_up_card: Card
+    ) -> Optional[Action]:
         # Aggressive strategy rarely surrenders
         return None
 
@@ -410,4 +415,3 @@ class AggressiveStrategy(BasicStrategy):
                 return Action.HIT
             else:
                 return Action.STAND
-    

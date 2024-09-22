@@ -62,18 +62,32 @@ def test_payout(player):
     # Initial state
     assert player.money == 1000
     assert player.bet == 0
+    assert player.total_winnings == 0
 
     # Place a bet
     player.place_bet(10)
+    assert player.money == 990
+    assert player.bet == 10
 
-    # Perform a payout
-    player.payout(20)
+    # Perform a payout (winning scenario)
+    player.payout(20)  # Total payout including original bet
+
+    # Check final state
+    assert player.money == 1010, "Player's money should be 1010 after payout"
+    assert player.bet == 0, "Bet should be reset to 0 after payout"
     assert (
-        player.money == 1020
-    )  # 990 (money after bet) + 10 (original bet) + 20 (payout)
-    assert player.bet == 0  # Bet should be reset to 0
-    assert player.insurance == 0  # Insurance should be reset to 0
-    assert player.is_done()  # Player should be done after getting a payout
+        player.total_winnings == 10
+    ), "Total winnings should be 10 (20 payout - 10 original bet)"
+    assert player.done == True, "Player should be marked as done after payout"
+
+    # Additional test for a larger payout (e.g., blackjack scenario)
+    player.place_bet(20)
+    player.payout(50)  # 20 original bet + 30 winnings (1.5x for blackjack)
+
+    assert player.money == 1040, "Player's money should be 1040 after blackjack payout"
+    assert (
+        player.total_winnings == 40
+    ), "Total winnings should be 40 (10 from first win + 30 from blackjack)"
 
 
 def test_payout_no_bet(player):

@@ -197,13 +197,33 @@ class Player(SimplePlayer):
             self.money -= amount
 
     def payout(self, amount: int):
-        """Gives the player a payout of the given amount."""
+        """
+        Handles the payout to the player.
+
+        Args:
+            amount (int): The total amount the player receives, including their original bet.
+
+        This method updates the player's money, calculates winnings, and resets bet-related attributes.
+        """
+        winnings = amount - self.bet  # Calculate actual winnings
         self.money += amount
-        self.total_winnings += amount
+        self.total_winnings += winnings
+        self.done = True
+
+        # Reset bet, but don't reset blackjack flag
         self.bet = 0
         self.insurance = 0
-        self.done = True
-        self.blackjack = False
+
+    def payout_insurance(self, amount: int):
+        """
+        Handles the insurance payout to the player.
+
+        Args:
+            amount (int): The amount of insurance payout.
+        """
+        self.money += amount
+        self.total_winnings += amount
+        self.insurance = 0
 
     def add_card(self, card):
         """Adds a card to the player's current hand."""

@@ -115,24 +115,24 @@ class DealingState(GameState):
         Checks for blackjack for all players and handles the payouts.
         """
         for player in game.players:
-            if player.current_hand.value() == 21:
+            if player.current_hand.is_blackjack:
                 game.io_interface.output(f"{player.name} got a blackjack!")
-                player.payout(player.bet * game.rules["blackjack_payout"])
+                payout_amount = player.bet + int(
+                    player.bet * game.rules["blackjack_payout"]
+                )
+                player.payout(payout_amount)
                 player.blackjack = True
                 player.winner = "player"
+                player.done = True
 
-        # Check for dealer's blackjack
-        if game.dealer.current_hand.value() == 21:
+        if game.dealer.current_hand.is_blackjack:
             game.io_interface.output("Dealer got a blackjack!")
-            dealer_win = True
             for player in game.players:
-                if player.blackjack:  # If the player also has a blackjack, it's a draw
-                    game.stats.draws += 1
-                    dealer_win = False
-                else:  # If the player doesn't have a blackjack, dealer wins
-                    player.winner = "dealer"
-            if dealer_win:
-                game.dealer.winner = "dealer"
+                if not player.blackjack:
+                    player.done = True
+                else:
+                    # Push - return the bet
+                    player.payout(player.bet)
 
 
 class OfferInsuranceState(GameState):
