@@ -244,9 +244,7 @@ def play_game(rules, io_interface, player_names, strategy):
     game.set_state(PlacingBetsState())
     game.play_round()
 
-    net_earnings = sum(
-        player.total_winnings - player.total_bets for player in game.players
-    )
+    net_earnings = sum(player.money - 1000 for player in game.players)
     total_bets = sum(player.total_bets for player in game.players)
 
     game.reset()
