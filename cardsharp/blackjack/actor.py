@@ -41,8 +41,6 @@ class Player(SimplePlayer):
         current_hand: The current hand of the player.
     """
 
-    current_hand: BlackjackHand
-
     def __init__(
         self,
         name: str,
@@ -57,18 +55,27 @@ class Player(SimplePlayer):
                 f"{self.name} must have a valid strategy or IOInterface."
             )
         self.strategy = strategy
-        self.bet = 0
+        self.bets = []  # Initialize bets as an empty list
         self.insurance = 0
         self.total_bets = 0
         self.total_winnings = 0
         self.hands = [BlackjackHand()]
         self.done = False
         self.blackjack = False
-        self.winner = None
+        self.winner = []  # Now a list to handle multiple hands
+        self.current_hand_index = 0
+        self.hand_done = [False] * len(self.hands)
+
+        @property
+        def current_hand(self):
+            """Returns the player's current hand."""
+            return self.hands[self.current_hand_index]
 
     @property
     def valid_actions(self) -> list[Action]:
         """Returns a list of valid actions for the player."""
+        if self.hand_done[self.current_hand_index]:
+            return []  # No actions are valid if the hand is done
         if self.done:  # No actions are valid after the player stands
             return []
         elif not self.current_hand.cards:  # Player can't hit or stand without cards
@@ -97,67 +104,83 @@ class Player(SimplePlayer):
 
     def has_bet(self) -> bool:
         """Check if player has placed a bet."""
-        return self.bet > 0
+        return any(bet > 0 for bet in self.bets)
 
     def is_done(self) -> bool:
-        """Check if player has finished their turn."""
-        return self.done
+        """Check if the player is done with all hands."""
+        return all(self.hand_done)
 
     def split(self):
         """Attempts to split the player's hand into two hands."""
-
         if not self.current_hand.can_split:
             raise InvalidActionError(f"{self.name} cannot split at this time.")
 
-        if self.bet > self.money:
+        bet_for_current_hand = self.bets[self.current_hand_index]
+
+        if bet_for_current_hand > self.money:
             raise InsufficientFundsError(
                 f"{self.name} does not have enough money to split."
             )
 
-        self.money -= self.bet
-        self.total_bets += self.bet
+        # Deduct the bet amount for the new hand
+        self.money -= bet_for_current_hand
+        self.total_bets += bet_for_current_hand
+
+        # Split the cards into two hands
+        card_to_move = self.current_hand.cards.pop()
         new_hand = BlackjackHand()
-        new_hand.add_card(self.current_hand.cards.pop())
+        new_hand.add_card(card_to_move)
         self.hands.append(new_hand)
+
+        # Add a new entry to hand_done for the new hand
+        self.hand_done.append(False)
+
+        # Add the bet for the new hand
+        self.bets.append(bet_for_current_hand)
 
     def surrender(self):
         """Player chooses to surrender, forfeiting half their bet."""
         if len(self.current_hand.cards) != 2:
             raise InvalidActionError(f"{self.name} can only surrender with two cards.")
-        self.money += self.bet // 2
-        self.bet = 0
-        self.done = True
+
+        bet_for_current_hand = self.bets[self.current_hand_index]
+        surrender_amount = bet_for_current_hand // 2
+        self.money += surrender_amount
+        self.total_winnings -= (
+            bet_for_current_hand - surrender_amount
+        )  # Update total winnings
+        self.bets[self.current_hand_index] = 0  # Reset bet for this hand
+        self.hand_done[self.current_hand_index] = True  # Mark the current hand as done
 
     def hit(self, card):
         """Player chooses to take another card."""
         self.current_hand.add_card(card)
-        if self.is_busted():
-            self.done = True
+        if self.current_hand.value() > 21:
+            self.hand_done[self.current_hand_index] = True
 
     def stand(self):
-        """Player chooses to stop taking more cards."""
-        self.done = True
+        """Player chooses to stand."""
+        self.hand_done[self.current_hand_index] = True  # Mark the current hand as done
 
     def double_down(self):
         """Attempts to double the player's current bet."""
-
         if not self.has_bet():
             raise InvalidActionError(
                 f"{self.name} must place a bet before they can double down."
             )
+        bet_for_current_hand = self.bets[self.current_hand_index]
 
         if self.is_busted():
             raise InvalidActionError(f"{self.name} cannot double down after busting.")
 
-        if self.bet > self.money:
+        if bet_for_current_hand > self.money:
             raise InsufficientFundsError(
                 f"{self.name} does not have enough money to double down."
             )
 
-        self.money -= self.bet
-        self.total_bets += self.bet
-        self.bet *= 2
-        self.done = True
+        self.money -= bet_for_current_hand
+        self.total_bets += bet_for_current_hand
+        self.bets[self.current_hand_index] *= 2
 
     def is_busted(self) -> bool:
         """Check if player's hand value is over 21."""
@@ -167,23 +190,22 @@ class Player(SimplePlayer):
         """Decides which action to take based on the player's strategy or IOInterface."""
         if self.strategy is not None:
             return self.strategy.decide_action(self, dealer_up_card)
-        else:  # if strategy is None, then io_interface must be a valid IOInterface
+        else:
             action = self.io_interface.get_player_action(self, self.valid_actions)
             if action is None:
                 raise InvalidActionError(f"{self.name} did not choose a valid action.")
             return action
 
-    def place_bet(self, amount: int):
-        """Attempts to place a bet of the given amount."""
+    def place_bet(self, amount, min_bet):
+        """Place a bet for the player."""
+        if amount < min_bet:
+            raise ValueError(f"Bet amount must be at least {min_bet}.")
         if amount > self.money:
             raise InsufficientFundsError(
-                f"{self.name} does not have enough money to place a bet of {amount}"
+                f"{self.name} does not have enough money to bet."
             )
-        else:
-            self.bet = amount
-            self.money -= amount
-            self.done = False
-
+        self.money -= amount
+        self.bets = [amount]
         self.total_bets += amount
 
     def buy_insurance(self, amount: int):
@@ -196,23 +218,19 @@ class Player(SimplePlayer):
             self.insurance = amount
             self.money -= amount
 
-    def payout(self, amount: int):
+    def payout(self, hand_index: int, amount: int):
         """
-        Handles the payout to the player.
+        Handles the payout to the player for a specific hand.
 
         Args:
-            amount (int): The total amount the player receives, including their original bet.
-
-        This method updates the player's money, calculates winnings, and resets bet-related attributes.
+            hand_index (int): The index of the hand to payout.
+            amount (int): The total amount the player receives for the hand.
         """
-        winnings = amount - self.bet  # Calculate actual winnings
+        bet_for_hand = self.bets[hand_index]
+        winnings = amount - bet_for_hand  # Calculate actual winnings
         self.money += amount
         self.total_winnings += winnings
-        self.done = True
-
-        # Reset bet, but don't reset blackjack flag
-        self.bet = 0
-        self.insurance = 0
+        self.bets[hand_index] = 0  # Reset bet for this hand
 
     def payout_insurance(self, amount: int):
         """
@@ -232,12 +250,14 @@ class Player(SimplePlayer):
     def reset(self):
         """Resets the player's state to the initial state."""
         self.hands = [BlackjackHand()]
+        self.bets = []
         self.done = False
         self.blackjack = False
-        self.winner = None
-        self.bet = 0
+        self.winner = []
         self.total_bets = 0
         self.total_winnings = 0
+        self.current_hand_index = 0
+        self.hand_done = [False] * len(self.hands)
 
 
 class Dealer(SimplePlayer):

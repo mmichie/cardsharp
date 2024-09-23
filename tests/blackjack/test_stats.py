@@ -19,8 +19,12 @@ def test_simulation_stats_update():
 
     # Mock a game object
     mock_game = Mock()
-    mock_game.players = [Mock(winner=None), Mock(winner=None)]
+    mock_game.players = [
+        Mock(winner=[]),
+        Mock(winner=[]),
+    ]  # Set winner to an empty list
     mock_game.io_interface = Mock()
+    mock_game.io_interface.output = Mock()  # Mock the output method if needed
 
     # Run update once and check values
     stats.update(mock_game)
@@ -30,7 +34,7 @@ def test_simulation_stats_update():
     assert stats.draws == 0
 
     # Set player 1 to win, run update, and check values
-    mock_game.players[0].winner = "player"
+    mock_game.players[0].winner = ["player"]  # Set winner to a list containing "player"
     stats.update(mock_game)
     assert stats.games_played == 2
     assert stats.player_wins == 1
@@ -38,7 +42,7 @@ def test_simulation_stats_update():
     assert stats.draws == 0
 
     # Set dealer to win, run update, and check values
-    mock_game.players[0].winner = "dealer"
+    mock_game.players[0].winner = ["dealer"]
     stats.update(mock_game)
     assert stats.games_played == 3
     assert stats.player_wins == 1
@@ -46,7 +50,7 @@ def test_simulation_stats_update():
     assert stats.draws == 0
 
     # Set draw, run update, and check values
-    mock_game.players[0].winner = "draw"
+    mock_game.players[0].winner = ["draw"]
     stats.update(mock_game)
     assert stats.games_played == 4
     assert stats.player_wins == 1

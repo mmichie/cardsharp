@@ -81,7 +81,8 @@ class PlacingBetsState(GameState):
         """
         Handles the bet placement of a player and notifies the interface.
         """
-        player.place_bet(amount)
+        min_bet = game.rules["min_bet"]
+        player.place_bet(amount, min_bet)
         game.io_interface.output(f"{player.name} has placed a bet of {amount}.")
 
 
@@ -111,28 +112,28 @@ class DealingState(GameState):
                     game.io_interface.output(f"Dealt {card} to {player.name}.")
 
     def check_blackjack(self, game):
-        """
-        Checks for blackjack for all players and handles the payouts.
-        """
+        """Checks for blackjack for all players and handles the payouts."""
         for player in game.players:
             if player.current_hand.is_blackjack:
                 game.io_interface.output(f"{player.name} got a blackjack!")
-                payout_amount = player.bet + int(
-                    player.bet * game.rules["blackjack_payout"]
-                )
-                player.payout(payout_amount)
+                bet = player.bets[0]  # Use the bet for the first hand
+                payout_amount = bet + int(bet * game.rules["blackjack_payout"])
+                player.payout(0, payout_amount)  # Payout for hand index 0
                 player.blackjack = True
-                player.winner = "player"
-                player.done = True
+                player.winner = ["player"]  # Since there's only one hand at this point
+                player.hand_done[player.current_hand_index] = True
 
         if game.dealer.current_hand.is_blackjack:
             game.io_interface.output("Dealer got a blackjack!")
             for player in game.players:
                 if not player.blackjack:
                     player.done = True
+                    player.winner = ["dealer"]
                 else:
                     # Push - return the bet
-                    player.payout(player.bet)
+                    bet = player.bets[0]
+                    player.payout(0, bet)
+                    player.winner = ["draw"]
 
 
 class OfferInsuranceState(GameState):
@@ -167,66 +168,59 @@ class PlayersTurnState(GameState):
     """
 
     def handle(self, game):
-        """
-        Handles the players' actions and changes the game state to DealersTurnState.
-        """
+        """Handles the players' actions and changes the game state to DealersTurnState."""
         dealer_up_card = game.dealer.current_hand.cards[0]
         for player in game.players:
-            player.done = (
-                False  # reset the done status at the start of each player's turn
-            )
+            if player.done:
+                continue  # Skip this player
             game.io_interface.output(f"{player.name}'s turn.")
-            while not player.is_done():
-                action = player.decide_action(dealer_up_card=dealer_up_card)
-                self.player_action(game, player, action)
-                if player.is_busted() or player.done:
-                    break  # Exit the loop if player is busted or done
+            # Iterate over each hand the player has
+            for hand_index, hand in enumerate(player.hands):
+                player.current_hand_index = hand_index
+                if player.hand_done[hand_index]:
+                    continue  # Skip hands that are already done
+                game.io_interface.output(f"Playing hand {hand_index + 1}")
+                while not player.hand_done[hand_index]:
+                    action = player.decide_action(dealer_up_card=dealer_up_card)
+                    self.player_action(game, player, action)
+                    if player.is_busted() or player.is_done():
+                        break  # Exit the loop if player is busted or done
         game.set_state(DealersTurnState())
 
     def player_action(self, game, player, action):
-        """
-        Handles a player action and notifies the interface.
-        """
+        """Handles a player action and notifies the interface."""
         if action == Action.HIT:
             card = game.deck.deal()
             player.hit(card)
             game.io_interface.output(f"{player.name} hits and gets {card}.")
             if player.is_busted():
                 game.io_interface.output(f"{player.name} has busted.")
-                player.stand()
-                player.done = True
-            elif player.current_hand.value() == 21:
-                game.io_interface.output(f"{player.name} has a blackjack.")
-                player.stand()
-                player.done = True
-
+                # Mark the current hand as done
+                player.hand_done[player.current_hand_index] = True
         elif action == Action.STAND:
             player.stand()
-            player.done = True
+            # Mark the current hand as done
+            player.hand_done[player.current_hand_index] = True
             game.io_interface.output(f"{player.name} stands.")
-
         elif action == Action.DOUBLE:
             player.double_down()
             card = game.deck.deal()
-            player.add_card(card)
+            player.hit(card)
             game.io_interface.output(f"{player.name} doubles down and gets {card}.")
             if player.is_busted():
                 game.io_interface.output(f"{player.name} has busted.")
-                player.stand()
-                player.done = True
-
+            # Mark the current hand as done
+            player.hand_done[player.current_hand_index] = True
         elif action == Action.SPLIT:
             player.split()
-            for hand in player.hands:
-                card = game.deck.deal()
-                hand.add_card(card)
             game.io_interface.output(f"{player.name} splits.")
-            player.done = True
-
+            # After splitting, update the hand_done list to include the new hands
+            # Note: The player will continue to play these hands in the main loop
         elif action == Action.SURRENDER:
             player.surrender()
             game.io_interface.output(f"{player.name} surrenders.")
-            player.done = True
+            # Mark the current hand as done
+            player.hand_done[player.current_hand_index] = True
 
 
 class DealersTurnState(GameState):
@@ -271,26 +265,24 @@ class EndRoundState(GameState):
         game.set_state(PlacingBetsState())
 
     def calculate_winner(self, game):
-        """
-        Calculates the winner of the round.
-        """
+        """Calculates the winner of the round."""
         dealer_hand_value = game.dealer.current_hand.value()
         for player in game.players:
-            player_hand_value = player.current_hand.value()
-            if player_hand_value > 21:
-                player.winner = "dealer"
-            elif dealer_hand_value > 21 or player_hand_value > dealer_hand_value:
-                player.winner = "player"
-            elif player_hand_value < dealer_hand_value:
-                player.winner = "dealer"
-            else:
-                player.winner = "draw"
+            player.winner = []
+            for hand in player.hands:
+                player_hand_value = hand.value()
+                if player_hand_value > 21:
+                    winner = "dealer"
+                elif dealer_hand_value > 21 or player_hand_value > dealer_hand_value:
+                    winner = "player"
+                elif player_hand_value < dealer_hand_value:
+                    winner = "dealer"
+                else:
+                    winner = "draw"
+                player.winner.append(winner)
 
     def output_results(self, game):
-        """
-        Outputs the results of the round.
-        """
-
+        """Outputs the results of the round."""
         if isinstance(game.io_interface, DummyIOInterface):
             return  # Short-circuit if the interface is a dummy
 
@@ -300,25 +292,43 @@ class EndRoundState(GameState):
         game.io_interface.output(f"Dealer's final hand value: {dealer_hand_value}")
 
         for player in game.players:
-            player_hand_value = player.current_hand.value()
-            player_cards = ", ".join(str(card) for card in player.current_hand.cards)
-            game.io_interface.output(f"{player.name}'s final cards: {player_cards}")
-            game.io_interface.output(
-                f"{player.name}'s final hand value: {player_hand_value}"
-            )
-            if player.winner == "dealer":
-                game.io_interface.output(f"{player.name} busts. Dealer wins!")
-            elif player.winner == "player":
-                game.io_interface.output(f"{player.name} wins the round!")
-            elif player.winner == "draw":
-                game.io_interface.output(f"{player.name} and Dealer tie! It's a push.")
+            for hand_index, hand in enumerate(player.hands):
+                player_hand_value = hand.value()
+                player_cards = ", ".join(str(card) for card in hand.cards)
+                game.io_interface.output(
+                    f"{player.name}'s hand {hand_index + 1} final cards: {player_cards}"
+                )
+                game.io_interface.output(
+                    f"{player.name}'s hand {hand_index + 1} final hand value: {player_hand_value}"
+                )
+                winner = player.winner[hand_index]
+                if winner == "dealer":
+                    game.io_interface.output(
+                        f"{player.name}'s hand {hand_index + 1} loses. Dealer wins!"
+                    )
+                elif winner == "player":
+                    game.io_interface.output(
+                        f"{player.name}'s hand {hand_index + 1} wins the round!"
+                    )
+                elif winner == "draw":
+                    game.io_interface.output(
+                        f"{player.name}'s hand {hand_index + 1} and Dealer tie! It's a push."
+                    )
 
     def handle_payouts(self, game):
-        """
-        Handles the payouts for the round.
-        """
+        """Handles the payouts for the round."""
         for player in game.players:
-            if player.winner == "player":
-                player.payout(player.bet * 2)
-            elif player.winner == "draw":
-                player.payout(player.bet)
+            for hand_index, hand in enumerate(player.hands):
+                winner = player.winner[hand_index]
+                bet_for_hand = player.bets[hand_index]
+                if bet_for_hand == 0:
+                    continue  # Skip hands with no bet
+                if winner == "player":
+                    payout_amount = bet_for_hand * 2
+                    player.payout(hand_index, payout_amount)
+                elif winner == "draw":
+                    payout_amount = bet_for_hand
+                    player.payout(hand_index, payout_amount)
+                else:
+                    # Player loses bet; no payout
+                    player.bets[hand_index] = 0  # Reset bet for this hand

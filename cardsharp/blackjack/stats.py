@@ -19,26 +19,22 @@ class SimulationStats:
         self.draws = 0
 
     def update(self, game):
-        """
-        Updates the statistics based on the current state of the game.
-        """
+        """Updates the statistics based on the current state of the game."""
         self.games_played += 1
 
         game.io_interface.output("Updating statistics...")
-        player_win = any(player.winner == "player" for player in game.players)
-        dealer_win = any(player.winner == "dealer" for player in game.players)
-        draw = any(player.winner == "draw" for player in game.players)
-
-        if player_win:
-            self.player_wins += 1
-        if dealer_win:
-            self.dealer_wins += 1
-        if draw:
-            self.draws += 1
+        for player in game.players:
+            for winner in player.winner:
+                if winner == "player":
+                    self.player_wins += 1
+                elif winner == "dealer":
+                    self.dealer_wins += 1
+                elif winner == "draw":
+                    self.draws += 1
 
         # Reset the winners for next game
         for player in game.players:
-            player.winner = None
+            player.winner = []
 
     def report(self):
         """

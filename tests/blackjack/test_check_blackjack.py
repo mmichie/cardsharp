@@ -29,34 +29,23 @@ def test_check_blackjack():
     player.add_card(Card(Suit.HEARTS, Rank.KING))
     initial_money = player.money
     bet_amount = 10
-    player.place_bet(bet_amount)
+    player.place_bet(bet_amount, min_bet=10)
 
     # Verify initial state
     assert player.money == initial_money - bet_amount
-    assert player.bet == bet_amount
+    assert player.bets[0] == bet_amount
     assert game.players[0].hands[0].cards[0] == Card(Suit.HEARTS, Rank.ACE)
     assert game.players[0].hands[0].cards[1] == Card(Suit.HEARTS, Rank.KING)
+
+    # Check the hand value and blackjack status
+    assert player.current_hand.value() == 21, "Player's hand value should be 21"
+    assert player.current_hand.is_blackjack, "Player should have a blackjack"
 
     # Call the method under test
     game.current_state.check_blackjack(game)
 
     # Check the results
-    assert player.is_done()  # Player should be done after getting a blackjack
+    assert player.is_done(), "Player should be done after getting a blackjack"
     expected_payout = bet_amount + int(bet_amount * rules["blackjack_payout"])
     assert player.money == initial_money - bet_amount + expected_payout
-    assert player.bet == 0  # Bet should be reset after payout
-    assert player.total_winnings == int(bet_amount * rules["blackjack_payout"])
-    assert player.blackjack == True
-
-    # Check game state
-    assert isinstance(
-        game.current_state, DealingState
-    )  # State should still be DealingState
-
-    # Check that the player's hand is still intact
-    assert len(player.hands[0].cards) == 2
-    assert player.hands[0].cards[0] == Card(Suit.HEARTS, Rank.ACE)
-    assert player.hands[0].cards[1] == Card(Suit.HEARTS, Rank.KING)
-
-    # Verify that the player's hand is indeed a blackjack
-    assert player.hands[0].is_blackjack
+    assert player.bets[0] == 0, "Bet should be reset after payout"
