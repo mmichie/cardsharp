@@ -13,6 +13,10 @@ class Strategy(ABC):
     def decide_action(self, player, dealer_up_card=None) -> Action:
         pass
 
+    @abstractmethod
+    def decide_insurance(self, player) -> bool:
+        """Decide whether to buy insurance. Returns True if the player wants to buy insurance."""
+        pass
 
 class DealerStrategy(Strategy):
     def decide_action(self, player, dealer_up_card=None) -> Action:
@@ -143,6 +147,9 @@ class BasicStrategy(Strategy):
             # HIT and STAND are always valid
             return True
 
+    def decide_insurance(self, player) -> bool:
+        """Basic strategy does not recommend taking insurance."""
+        return False
 
 class CountingStrategy(BasicStrategy):
     def __init__(self):

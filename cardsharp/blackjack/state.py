@@ -112,28 +112,62 @@ class DealingState(GameState):
                     game.io_interface.output(f"Dealt {card} to {player.name}.")
 
     def check_blackjack(self, game):
-        """Checks for blackjack for all players and handles the payouts."""
-        for player in game.players:
-            if player.current_hand.is_blackjack:
-                game.io_interface.output(f"{player.name} got a blackjack!")
-                bet = player.bets[0]  # Use the bet for the first hand
-                payout_amount = bet + int(bet * game.rules["blackjack_payout"])
-                player.payout(0, payout_amount)  # Payout for hand index 0
-                player.blackjack = True
-                player.winner = ["player"]  # Since there's only one hand at this point
-                player.hand_done[player.current_hand_index] = True
+        """Checks for blackjack for dealer and players, handles payouts appropriately."""
+        dealer_has_blackjack = game.dealer.current_hand.is_blackjack
 
-        if game.dealer.current_hand.is_blackjack:
+        # First, check if the dealer has blackjack
+        if dealer_has_blackjack:
             game.io_interface.output("Dealer got a blackjack!")
+
+            # Handle insurance bets
             for player in game.players:
-                if not player.blackjack:
-                    player.done = True
-                    player.winner = ["dealer"]
-                else:
-                    # Push - return the bet
+                if player.insurance > 0:
+                    # Payout insurance bet at 2:1 (player receives 3 times the insurance bet)
+                    insurance_payout = player.insurance * 3
+                    player.payout_insurance(insurance_payout)
+                    game.io_interface.output(
+                        f"{player.name} wins insurance bet of ${player.insurance:.2f}."
+                    )
+
+            # Now, handle players' hands
+            for player in game.players:
+                if player.current_hand.is_blackjack:
+                    # Push - return the original bet
                     bet = player.bets[0]
                     player.payout(0, bet)
                     player.winner = ["draw"]
+                    game.io_interface.output(
+                        f"{player.name} and dealer both have blackjack. Push."
+                    )
+                else:
+                    # Dealer wins, player loses bet
+                    player.winner = ["dealer"]
+                    game.io_interface.output(
+                        f"{player.name} loses to dealer's blackjack."
+                    )
+        else:
+            # Dealer does not have blackjack
+            # Handle insurance bets: players lose insurance bets
+            for player in game.players:
+                if player.insurance > 0:
+                    game.io_interface.output(
+                        f"{player.name} loses insurance bet of ${player.insurance:.2f}."
+                    )
+                    # Insurance bet was already deducted when bought; no further action needed
+
+            # Check for player blackjacks
+            for player in game.players:
+                if player.current_hand.is_blackjack:
+                    game.io_interface.output(f"{player.name} got a blackjack!")
+                    bet = player.bets[0]  # Use the bet for the first hand
+                    # Use precise arithmetic for correct payout
+                    payout_amount = bet + (bet * game.rules["blackjack_payout"])
+                    player.payout(0, payout_amount)  # Payout for hand index 0
+                    player.blackjack = True
+                    player.winner = [
+                        "player"
+                    ]  # Since there's only one hand at this point
+                    player.hand_done[player.current_hand_index] = True
 
 
 class OfferInsuranceState(GameState):
@@ -153,13 +187,15 @@ class OfferInsuranceState(GameState):
         game.set_state(PlayersTurnState())
 
     def offer_insurance(self, game, player):
-        """
-        Offers insurance to a player and handles the insurance purchase.
-        """
+        """Offers insurance to a player based on their strategy."""
         if game.dealer.has_ace():
             game.io_interface.output("Dealer has an Ace!")
-            player.buy_insurance(10)
-            game.io_interface.output(f"{player.name} has bought insurance.")
+            # Use the strategy to decide whether to buy insurance
+            wants_insurance = player.strategy.decide_insurance(player)
+            if wants_insurance:
+                insurance_bet = player.bets[0] / 2
+                player.buy_insurance(insurance_bet)
+                game.io_interface.output(f"{player.name} has bought insurance.")
 
 
 class PlayersTurnState(GameState):
