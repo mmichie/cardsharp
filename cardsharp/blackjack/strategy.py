@@ -18,6 +18,7 @@ class Strategy(ABC):
         """Decide whether to buy insurance. Returns True if the player wants to buy insurance."""
         pass
 
+
 class DealerStrategy(Strategy):
     def decide_action(self, player, dealer_up_card=None) -> Action:
         if player.is_busted():
@@ -28,6 +29,9 @@ class DealerStrategy(Strategy):
             return Action.HIT
         else:
             return Action.STAND
+
+    def decide_insurance(self, player):
+        return False
 
 
 class BasicStrategy(Strategy):
@@ -150,6 +154,7 @@ class BasicStrategy(Strategy):
     def decide_insurance(self, player) -> bool:
         """Basic strategy does not recommend taking insurance."""
         return False
+
 
 class CountingStrategy(BasicStrategy):
     def __init__(self):

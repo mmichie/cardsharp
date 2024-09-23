@@ -284,7 +284,7 @@ def play_game_and_record(rules, io_interface, player_names, strategy):
     game.play_round()
 
     earnings = sum(player.money - 1000 for player in game.players)
-    total_bets = sum(player.bet for player in game.players)
+    total_bets = sum(sum(player.bets) for player in game.players)
 
     return earnings, total_bets, game.stats.report(), initial_deck
 
@@ -292,11 +292,12 @@ def play_game_and_record(rules, io_interface, player_names, strategy):
 def replay_game_with_strategy(
     rules, io_interface, player_names, strategy, initial_deck
 ):
-    players = [Player(name, io_interface, strategy) for name in player_names]
-    game = BlackjackGame(rules, io_interface)
     """
     Replay a game with a specific strategy and initial deck state.
     """
+    players = [Player(name, io_interface, strategy) for name in player_names]
+    game = BlackjackGame(rules, io_interface)
+
     for player in players:
         game.add_player(player)
 
@@ -307,7 +308,7 @@ def replay_game_with_strategy(
     game.play_round()
 
     earnings = sum(player.money - 1000 for player in game.players)
-    total_bets = sum(player.bet for player in game.players)
+    total_bets = sum(sum(player.bets) for player in game.players)
 
     return earnings, total_bets, game.stats.report()
 
