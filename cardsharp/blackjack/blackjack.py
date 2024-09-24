@@ -20,7 +20,6 @@ import cProfile
 import pstats
 import io
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
 import threading
 from copy import deepcopy
 
@@ -35,7 +34,7 @@ from cardsharp.blackjack.strategy import BasicStrategy
 from cardsharp.blackjack.strategy import CountingStrategy
 from cardsharp.blackjack.strategy import AggressiveStrategy
 from cardsharp.blackjack.strategy import MartingaleStrategy
-from cardsharp.common.deck import Deck
+from cardsharp.common.shoe import Shoe
 from cardsharp.common.io_interface import (
     ConsoleIOInterface,
     DummyIOInterface,
@@ -152,7 +151,7 @@ class BlackjackGame:
         self.io_interface = io_interface
         self.dealer = Dealer("Dealer", io_interface)
         self.rules = rules
-        self.deck = Deck()
+        self.shoe = Shoe(num_decks=rules["num_decks"], penetration=rules["penetration"])
         self.current_state = WaitingForPlayersState()
         self.stats = SimulationStats()
 
@@ -198,8 +197,8 @@ class BlackjackGame:
         self.current_state.handle(self)
 
     def reset(self):
-        """Reset the game by creating a new deck and resetting all players."""
-        self.deck = Deck()
+        """Reset the game by shuffling the shoe and resetting all players."""
+        self.shoe.shuffle()
         for player in self.players:
             player.reset()
         self.dealer.reset()
@@ -279,14 +278,14 @@ def play_game_and_record(rules, io_interface, player_names, strategy):
 
     game.set_state(PlacingBetsState())
 
-    initial_deck = deepcopy(game.deck)
+    initial_shoe = deepcopy(game.shoe)
 
     game.play_round()
 
     earnings = sum(player.money - 1000 for player in game.players)
     total_bets = sum(sum(player.bets) for player in game.players)
 
-    return earnings, total_bets, game.stats.report(), initial_deck
+    return earnings, total_bets, game.stats.report(), initial_shoe
 
 
 def replay_game_with_strategy(
@@ -303,7 +302,7 @@ def replay_game_with_strategy(
 
     game.set_state(PlacingBetsState())
 
-    game.deck = initial_deck
+    game.shoe = initial_deck
 
     game.play_round()
 
@@ -475,6 +474,8 @@ def main():
             "min_players": 1,
             "min_bet": 10,
             "max_players": 6,
+            "num_decks": 6,
+            "penetration": 0.75,
         }
 
         player_names = ["Player1"]
@@ -488,6 +489,8 @@ def main():
             "min_players": 1,
             "min_bet": 10,
             "max_players": 6,
+            "num_decks": 6,
+            "penetration": 0.75,
         }
         run_strategy_analysis(args, rules)
     elif args.simulate:
@@ -497,6 +500,8 @@ def main():
             "min_players": 1,
             "min_bet": 10,
             "max_players": 6,
+            "num_decks": 6,
+            "penetration": 0.75,
         }
 
         player_names = ["Bob"]  # Add more player names if needed

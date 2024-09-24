@@ -95,7 +95,6 @@ class DealingState(GameState):
         """
         Handles the card dealing, checks for blackjack, and changes the game state to OfferInsuranceState.
         """
-        game.deck.reset()
         self.deal(game)
         self.check_blackjack(game)
         game.set_state(OfferInsuranceState())
@@ -106,7 +105,7 @@ class DealingState(GameState):
         """
         for _ in range(2):
             for player in game.players + [game.dealer]:
-                card = game.deck.deal()
+                card = game.shoe.deal()
                 player.add_card(card)
                 if player != game.dealer:
                     game.io_interface.output(f"Dealt {card} to {player.name}.")
@@ -226,7 +225,7 @@ class PlayersTurnState(GameState):
     def player_action(self, game, player, action):
         """Handles a player action and notifies the interface."""
         if action == Action.HIT:
-            card = game.deck.deal()
+            card = game.shoe.deal()
             player.hit(card)
             game.io_interface.output(f"{player.name} hits and gets {card}.")
             if player.is_busted():
@@ -240,7 +239,7 @@ class PlayersTurnState(GameState):
             game.io_interface.output(f"{player.name} stands.")
         elif action == Action.DOUBLE:
             player.double_down()
-            card = game.deck.deal()
+            card = game.shoe.deal()
             player.hit(card)
             game.io_interface.output(f"{player.name} doubles down and gets {card}.")
             if player.is_busted():
@@ -280,7 +279,7 @@ class DealersTurnState(GameState):
         """
         Handles a dealer action and notifies the interface.
         """
-        card = game.deck.deal()
+        card = game.shoe.deal()
         game.dealer.add_card(card)
         game.io_interface.output(f"Dealer hits and gets {card}.")
 

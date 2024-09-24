@@ -571,6 +571,8 @@ def test_check_blackjack():
         "min_players": 1,
         "min_bet": 10,
         "max_players": 6,
+        "num_decks": 6,
+        "penetration": 0.75,
     }
     game = BlackjackGame(rules, io_interface)
     strategy = DealerStrategy()
