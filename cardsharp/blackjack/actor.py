@@ -189,7 +189,7 @@ class Player(SimplePlayer):
     def decide_action(self, dealer_up_card) -> Action:
         """Decides which action to take based on the player's strategy or IOInterface."""
         if self.strategy is not None:
-            return self.strategy.decide_action(self, dealer_up_card)
+            return self.strategy.decide_action(self, dealer_up_card, self.game)
         else:
             action = self.io_interface.get_player_action(self, self.valid_actions)
             if action is None:

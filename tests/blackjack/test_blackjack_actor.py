@@ -28,8 +28,15 @@ def dealer_strategy():
 
 
 @pytest.fixture
-def player(io_interface, dealer_strategy):
-    return Player("Alice", io_interface, dealer_strategy)
+def mock_game():
+    return Mock(spec=BlackjackGame)
+
+
+@pytest.fixture
+def player(io_interface, dealer_strategy, mock_game):
+    player = Player("Alice", io_interface, dealer_strategy)
+    player.game = mock_game
+    return player
 
 
 @pytest.fixture
@@ -143,7 +150,7 @@ def test_is_busted(player):
     assert not player.is_busted()
 
 
-def test_decide_action(player):
+def test_decide_action(player, mock_game):
     # Test when the player's hand value is less than 17
     player.add_card(Card(Suit.HEARTS, Rank.SIX))
     player.add_card(Card(Suit.DIAMONDS, Rank.FIVE))
@@ -337,7 +344,7 @@ def test_player_reset(player):
     assert player.done is False  # player should not be done
 
 
-def test_player_dealer_interaction(player, dealer):
+def test_player_dealer_interaction(player, dealer, mock_game):
     player.add_card(Card(Suit.HEARTS, Rank.TWO))
     player.add_card(Card(Suit.HEARTS, Rank.THREE))
     dealer.add_card(Card(Suit.SPADES, Rank.TEN))
@@ -577,6 +584,7 @@ def test_check_blackjack():
     game = BlackjackGame(rules, io_interface)
     strategy = DealerStrategy()
     player = Player("Alice", game.io_interface, strategy)
+    player.game = game  # Set the game attribute for the player
     game.add_player(player)
     game.set_state(DealingState())
 

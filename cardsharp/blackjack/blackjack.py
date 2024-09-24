@@ -154,6 +154,11 @@ class BlackjackGame:
         self.shoe = Shoe(num_decks=rules["num_decks"], penetration=rules["penetration"])
         self.current_state = WaitingForPlayersState()
         self.stats = SimulationStats()
+        self.visible_cards = []
+
+    def add_visible_card(self, card):
+        """Add a card to the list of visible cards."""
+        self.visible_cards.append(card)
 
     def set_state(self, state):
         """Change the current state of the game."""
@@ -174,6 +179,7 @@ class BlackjackGame:
             self.io_interface.output("Game has already started.")
             return
 
+        player.game = self
         if self.current_state is not None:
             self.current_state.add_player(self, player)
 
@@ -202,6 +208,7 @@ class BlackjackGame:
         for player in self.players:
             player.reset()
         self.dealer.reset()
+        self.visible_cards = []
 
 
 def create_io_interface(args):
@@ -245,6 +252,9 @@ def play_game(rules, io_interface, player_names, strategy):
 
     net_earnings = sum(player.money - 1000 for player in game.players)
     total_bets = sum(player.total_bets for player in game.players)
+
+    if isinstance(strategy, CountingStrategy):
+        strategy.update_decks_remaining(len(game.visible_cards))
 
     game.reset()
 

@@ -20,7 +20,7 @@ class Strategy(ABC):
 
 
 class DealerStrategy(Strategy):
-    def decide_action(self, player, dealer_up_card=None) -> Action:
+    def decide_action(self, player, dealer_up_card=None, game=None) -> Action:
         if player.is_busted():
             return Action.STAND
         if player.current_hand.value() < 17 or (
@@ -112,7 +112,7 @@ class BasicStrategy(Strategy):
         }
         return mapping[symbol]
 
-    def decide_action(self, player, dealer_up_card: Card) -> Action:
+    def decide_action(self, player, dealer_up_card: Card, game: None) -> Action:
         current_hand = player.current_hand
         hand_type = self._get_hand_type(current_hand)
         dealer_card = self._get_dealer_card(dealer_up_card)
@@ -160,6 +160,8 @@ class CountingStrategy(BasicStrategy):
     def __init__(self):
         super().__init__()
         self.count = 0
+        self.true_count = 0
+        self.decks_remaining = 6  # Assume 6 decks by default
 
     def update_count(self, card: Card):
         if card.rank in [Rank.TWO, Rank.THREE, Rank.FOUR, Rank.FIVE, Rank.SIX]:
@@ -167,20 +169,29 @@ class CountingStrategy(BasicStrategy):
         elif card.rank in [Rank.TEN, Rank.JACK, Rank.QUEEN, Rank.KING, Rank.ACE]:
             self.count -= 1
 
-    def decide_action(self, player, dealer_up_card: Card) -> Action:
-        # Update count based on the visible cards (player's cards and dealer's up card)
-        for card in player.current_hand.cards + [dealer_up_card]:
+    def calculate_true_count(self):
+        self.true_count = self.count / self.decks_remaining
+
+    def decide_action(self, player, dealer_up_card: Card, game) -> Action:
+        # Update count based on all visible cards
+        for card in game.visible_cards:
             self.update_count(card)
 
-        if self.count > 2:  # Adjust this threshold as needed
-            return self.aggressive_strategy(player, dealer_up_card)
-        else:
-            return super().decide_action(player, dealer_up_card)
+        # Calculate true count
+        self.calculate_true_count()
 
-    def aggressive_strategy(self, player, dealer_up_card: Card) -> Action:
+        # Adjust bet size based on true count
+        self.adjust_bet(player)
+
+        if self.true_count > 2:  # Adjust this threshold as needed
+            return self.aggressive_strategy(player, dealer_up_card, game)
+        else:
+            return super().decide_action(player, dealer_up_card, game)
+
+    def aggressive_strategy(self, player, dealer_up_card: Card, game) -> Action:
         # More aggressive play decisions when the count is high
         if (
-            self.count >= 4
+            self.true_count >= 4
         ):  # Strongly positive count indicates more high cards are present
             if player.current_hand.can_double and player.current_hand.value() in [
                 9,
@@ -191,8 +202,26 @@ class CountingStrategy(BasicStrategy):
             elif player.current_hand.value() <= 16:
                 return Action.HIT
         return super().decide_action(
-            player, dealer_up_card
+            player, dealer_up_card, game
         )  # Default to basic strategy otherwise
+
+    def adjust_bet(self, player):
+        # Increase bet size when the count is favorable
+        if self.true_count > 2:
+            bet_multiplier = min(self.true_count, 5)  # Cap the multiplier at 5
+            new_bet = int(player.bets[0] * bet_multiplier)
+            max_bet = player.money  # Assuming the max bet is the player's current money
+            player.bets[0] = min(new_bet, max_bet)
+
+    def update_decks_remaining(self, cards_played):
+        total_cards = 52 * 6  # Assuming 6 decks
+        self.decks_remaining = (total_cards - cards_played) / 52
+
+    def reset_count(self):
+        """Reset the count at the start of a new shoe."""
+        self.count = 0
+        self.true_count = 0
+        self.decks_remaining = 6  # Reset to initial number of decks
 
 
 class MartingaleStrategy(BasicStrategy):

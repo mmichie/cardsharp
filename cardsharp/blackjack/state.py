@@ -107,6 +107,7 @@ class DealingState(GameState):
             for player in game.players + [game.dealer]:
                 card = game.shoe.deal()
                 player.add_card(card)
+                game.add_visible_card(card)
                 if player != game.dealer:
                     game.io_interface.output(f"Dealt {card} to {player.name}.")
 
@@ -227,6 +228,7 @@ class PlayersTurnState(GameState):
         if action == Action.HIT:
             card = game.shoe.deal()
             player.hit(card)
+            game.add_visible_card(card)
             game.io_interface.output(f"{player.name} hits and gets {card}.")
             if player.is_busted():
                 game.io_interface.output(f"{player.name} has busted.")
@@ -281,6 +283,7 @@ class DealersTurnState(GameState):
         """
         card = game.shoe.deal()
         game.dealer.add_card(card)
+        game.add_visible_card(card)
         game.io_interface.output(f"Dealer hits and gets {card}.")
 
 
@@ -297,6 +300,7 @@ class EndRoundState(GameState):
         self.output_results(game)
         self.handle_payouts(game)
         game.stats.update(game)
+        game.visible_cards = []
         game.set_state(PlacingBetsState())
 
     def calculate_winner(self, game):
