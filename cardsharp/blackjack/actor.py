@@ -55,14 +55,15 @@ class Player(SimplePlayer):
                 f"{self.name} must have a valid strategy or IOInterface."
             )
         self.strategy = strategy
-        self.bets = []  # Initialize bets as an empty list
+        self.game = None
+        self.bets = []
         self.insurance = 0
         self.total_bets = 0
         self.total_winnings = 0
         self.hands = [BlackjackHand()]
         self.done = False
         self.blackjack = False
-        self.winner = []  # Now a list to handle multiple hands
+        self.winner = []
         self.current_hand_index = 0
         self.hand_done = [False] * len(self.hands)
 

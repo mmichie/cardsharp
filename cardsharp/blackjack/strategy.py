@@ -10,7 +10,7 @@ from cardsharp.common.card import Card, Rank
 
 class Strategy(ABC):
     @abstractmethod
-    def decide_action(self, player, dealer_up_card=None) -> Action:
+    def decide_action(self, player, dealer_up_card, game=None) -> Action:
         pass
 
     @abstractmethod
@@ -58,7 +58,7 @@ class BasicStrategy(Strategy):
         strategy = {}
         with open(strategy_file, "r") as f:
             reader = csv.reader(f)
-            headers = next(reader)
+            _ = next(reader)  # Skip header row
             for row in reader:
                 hand_type = row[0]
                 actions = [action.strip() for action in row[1:]]  # Strip whitespace
@@ -112,7 +112,7 @@ class BasicStrategy(Strategy):
         }
         return mapping[symbol]
 
-    def decide_action(self, player, dealer_up_card: Card, game: None) -> Action:
+    def decide_action(self, player, dealer_up_card: Card, game=None) -> Action:
         current_hand = player.current_hand
         hand_type = self._get_hand_type(current_hand)
         dealer_card = self._get_dealer_card(dealer_up_card)
@@ -232,9 +232,9 @@ class MartingaleStrategy(BasicStrategy):
         self.max_bet = max_bet
         self.consecutive_losses = 0
 
-    def decide_action(self, player, dealer_up_card: Card) -> Action:
+    def decide_action(self, player, dealer_up_card: Card, game=None) -> Action:
         # Use the BasicStrategy to decide the action
-        return super().decide_action(player, dealer_up_card)
+        return super().decide_action(player, dealer_up_card, game)
 
     def place_bet(self) -> int:
         return self.current_bet
@@ -260,13 +260,14 @@ class AggressiveStrategy(BasicStrategy):
     and doubles down more frequently.
     """
 
-    def decide_action(self, player, dealer_up_card: Card) -> Action:
+    def decide_action(self, player, dealer_up_card: Card, game=None) -> Action:
         """
         Decides the action to take based on the player's hand and the dealer's up card.
 
         Args:
             player: The player instance.
             dealer_up_card (Card): The dealer's up card.
+            game: The game instance (optional).
 
         Returns:
             Action: The action to take.
