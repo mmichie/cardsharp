@@ -67,10 +67,10 @@ class Player(SimplePlayer):
         self.current_hand_index = 0
         self.hand_done = [False] * len(self.hands)
 
-        @property
-        def current_hand(self):
-            """Returns the player's current hand."""
-            return self.hands[self.current_hand_index]
+    @property
+    def current_hand(self):
+        """Returns the player's current hand."""
+        return self.hands[self.current_hand_index]
 
     @property
     def valid_actions(self) -> list[Action]:
