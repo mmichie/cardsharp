@@ -81,7 +81,7 @@ class PlacingBetsState(GameState):
         """
         Handles the bet placement of a player and notifies the interface.
         """
-        min_bet = game.rules["min_bet"]
+        min_bet = game.rules.min_bet
         player.place_bet(amount, min_bet)
         game.io_interface.output(f"{player.name} has placed a bet of {amount}.")
 
@@ -161,7 +161,7 @@ class DealingState(GameState):
                     game.io_interface.output(f"{player.name} got a blackjack!")
                     bet = player.bets[0]  # Use the bet for the first hand
                     # Use precise arithmetic for correct payout
-                    payout_amount = bet + (bet * game.rules["blackjack_payout"])
+                    payout_amount = bet + (bet * game.rules.blackjack_payout)
                     player.payout(0, payout_amount)  # Payout for hand index 0
                     player.blackjack = True
                     player.winner = [

@@ -4,22 +4,23 @@ from cardsharp.blackjack.state import DealingState
 from cardsharp.blackjack.strategy import DealerStrategy
 from cardsharp.common.card import Card, Rank, Suit
 from cardsharp.common.io_interface import TestIOInterface
+from cardsharp.blackjack.rules import Rules
 
 
 def test_check_blackjack():
     # Setup io_interface and dealing_state
     io_interface = TestIOInterface()
 
+    # Setup rules
+    rules = Rules(
+        blackjack_payout=1.5,
+        allow_insurance=True,
+        min_bet=10,
+        max_bet=1000,
+        num_decks=6,
+    )
+
     # Setup game and player
-    rules = {
-        "blackjack_payout": 1.5,
-        "allow_insurance": True,
-        "min_players": 1,
-        "min_bet": 10,
-        "max_players": 6,
-        "num_decks": 6,
-        "penetration": 0.75,
-    }
     game = BlackjackGame(rules, io_interface)
     strategy = DealerStrategy()
     player = Player("Alice", game.io_interface, strategy)
@@ -47,7 +48,9 @@ def test_check_blackjack():
     game.current_state.check_blackjack(game)
 
     # Check the results
-    assert player.is_done(), "Player should be done after getting a blackjack"
-    expected_payout = bet_amount + int(bet_amount * rules["blackjack_payout"])
+    assert player.hand_done[
+        0
+    ], "Player's hand should be marked as done after getting a blackjack"
+    expected_payout = bet_amount + int(bet_amount * rules.blackjack_payout)
     assert player.money == initial_money - bet_amount + expected_payout
     assert player.bets[0] == 0, "Bet should be reset after payout"

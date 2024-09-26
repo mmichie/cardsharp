@@ -37,9 +37,11 @@ from cardsharp.blackjack.strategy import MartingaleStrategy
 from cardsharp.common.shoe import Shoe
 from cardsharp.common.io_interface import (
     ConsoleIOInterface,
+    IOInterface,
     DummyIOInterface,
     LoggingIOInterface,
 )
+from cardsharp.blackjack.rules import Rules
 
 
 class BlackjackGraph:
@@ -136,22 +138,24 @@ class BlackjackGame:
         Interface for input and output operations.
     dealer : Dealer
         Dealer for the game.
-    rules : dict
-        Dictionary defining game rules.
-    deck : Deck
-        Deck of cards for the game.
+    rules : Rules
+        Object defining game rules.
+    shoe : Shoe
+        Shoe of cards for the game.
     current_state : GameState
         Current state of the game.
     stats : SimulationStats
         Statistics for the game.
+    visible_cards : list
+        List of visible cards in the game.
     """
 
-    def __init__(self, rules, io_interface):
+    def __init__(self, rules: Rules, io_interface: IOInterface):
         self.players = []
         self.io_interface = io_interface
         self.dealer = Dealer("Dealer", io_interface)
         self.rules = rules
-        self.shoe = Shoe(num_decks=rules["num_decks"], penetration=rules["penetration"])
+        self.shoe = Shoe(num_decks=rules.num_decks, penetration=0.75)
         self.current_state = WaitingForPlayersState()
         self.stats = SimulationStats()
         self.visible_cards = []
@@ -171,10 +175,6 @@ class BlackjackGame:
             self.io_interface.output("Invalid player.")
             return
 
-        if len(self.players) >= self.rules["max_players"]:
-            self.io_interface.output("Game is full.")
-            return
-
         if not isinstance(self.current_state, WaitingForPlayersState):
             self.io_interface.output("Game has already started.")
             return
@@ -185,21 +185,8 @@ class BlackjackGame:
 
     def play_round(self):
         """Play a round of the game until it reaches the end state."""
-        if isinstance(self.io_interface, DummyIOInterface):
-            while not isinstance(self.current_state, EndRoundState):
-                self.current_state.handle(self)
+        while not isinstance(self.current_state, EndRoundState):
             self.current_state.handle(self)
-            return
-
-        is_end_round = isinstance(self.current_state, EndRoundState)
-
-        while not is_end_round:
-            current_state = self.current_state
-            self.io_interface.output(f"Current state: {current_state}")
-            current_state.handle(self)
-            is_end_round = isinstance(self.current_state, EndRoundState)
-
-        self.io_interface.output("Calculating winner...")
         self.current_state.handle(self)
 
     def reset(self):
@@ -209,6 +196,50 @@ class BlackjackGame:
             player.reset()
         self.dealer.reset()
         self.visible_cards = []
+
+    def is_blackjack(self, hand):
+        """Check if a hand is a blackjack."""
+        return self.rules.is_blackjack(hand)
+
+    def should_dealer_hit(self):
+        """Determine if the dealer should hit based on the game rules."""
+        return self.rules.should_dealer_hit(self.dealer.current_hand)
+
+    def can_split(self, hand):
+        """Check if the hand can be split."""
+        return self.rules.can_split(hand)
+
+    def can_double_down(self, hand):
+        """Check if the hand can be doubled down."""
+        return self.rules.can_double_down(hand)
+
+    def can_insure(self, player):
+        """Check if the player can opt for insurance."""
+        return self.rules.can_insure(self.dealer.current_hand, player.current_hand)
+
+    def can_surrender(self, hand):
+        """Check if the player can surrender."""
+        return self.rules.can_surrender(hand)
+
+    def get_min_bet(self):
+        """Get the minimum bet allowed in the game."""
+        return self.rules.min_bet
+
+    def get_max_bet(self):
+        """Get the maximum bet allowed in the game."""
+        return self.rules.max_bet
+
+    def get_blackjack_payout(self):
+        """Get the payout multiplier for a blackjack."""
+        return self.rules.blackjack_payout
+
+    def get_insurance_payout(self):
+        """Get the payout multiplier for insurance."""
+        return 2.0  # Standard insurance payout is 2:1
+
+    def get_bonus_payout(self, card_combination):
+        """Get the bonus payout for a specific card combination."""
+        return self.rules.get_bonus_payout(card_combination)
 
 
 def create_io_interface(args):
@@ -409,6 +440,21 @@ def run_strategy_analysis(args, rules):
         plt.show()  # Keep the graph window open after simulation ends
 
 
+def create_rules(args):
+    """Create the Rules object based on the command line arguments."""
+    return Rules(
+        blackjack_payout=1.5,
+        dealer_hit_soft_17=True,
+        allow_split=True,
+        allow_double_down=True,
+        allow_insurance=True,
+        allow_surrender=True,
+        num_decks=6,
+        min_bet=args.min_bet,
+        max_bet=args.max_bet,
+    )
+
+
 def main():
     """
     Main function to start the game.
@@ -468,9 +514,12 @@ def main():
         help="Analyze every strategy, compare results",
         default=False,
     )
+    parser.add_argument("--min_bet", type=int, default=10, help="Minimum bet amount")
+    parser.add_argument("--max_bet", type=int, default=1000, help="Maximum bet amount")
     args = parser.parse_args()
 
     io_interface, strategy = create_io_interface(args)
+    rules = create_rules(args)
 
     profiler = None
     if args.profile:
@@ -478,50 +527,18 @@ def main():
         profiler.enable()
 
     if args.console:
-        rules = {
-            "blackjack_payout": 1.5,
-            "allow_insurance": True,
-            "min_players": 1,
-            "min_bet": 10,
-            "max_players": 6,
-            "num_decks": 6,
-            "penetration": 0.75,
-        }
-
-        player_names = ["Player1"]
         for _ in range(args.num_games):
-            play_game(rules, io_interface, player_names, strategy)
+            game = BlackjackGame(rules, io_interface)
+            player = Player("Player1", io_interface, strategy)
+            game.add_player(player)
+            game.play_round()
 
-    if args.analysis:
-        rules = {
-            "blackjack_payout": 1.5,
-            "allow_insurance": True,
-            "min_players": 1,
-            "min_bet": 10,
-            "max_players": 6,
-            "num_decks": 6,
-            "penetration": 0.75,
-        }
+    elif args.analysis:
         run_strategy_analysis(args, rules)
     elif args.simulate:
-        rules = {
-            "blackjack_payout": 1.5,
-            "allow_insurance": True,
-            "min_players": 1,
-            "min_bet": 10,
-            "max_players": 6,
-            "num_decks": 6,
-            "penetration": 0.75,
-        }
-
-        player_names = ["Bob"]  # Add more player names if needed
-
         start_time = time.time()  # Record the start time
-        io_interface, strategy = create_io_interface(args)
 
-        graph = None
-        if args.vis:
-            graph = BlackjackGraph(args.num_games)
+        graph = BlackjackGraph(args.num_games) if args.vis else None
 
         net_earnings = 0
         total_bets = 0
@@ -531,7 +548,7 @@ def main():
             # Run simulations sequentially
             for i in range(args.num_games):
                 earnings, bets, result = play_game(
-                    rules, DummyIOInterface(), player_names, strategy
+                    rules, DummyIOInterface(), ["Bob"], strategy
                 )
                 net_earnings += earnings
                 total_bets += bets
@@ -548,7 +565,7 @@ def main():
 
             with multiprocessing.Pool() as pool:
                 batch_args = [
-                    (rules, DummyIOInterface(), player_names, game_count, strategy)
+                    (rules, DummyIOInterface(), ["Bob"], game_count, strategy)
                     for game_count in game_batches
                 ]
                 batch_results = pool.starmap(play_game_batch, batch_args)
