@@ -445,6 +445,7 @@ def create_rules(args):
     return Rules(
         blackjack_payout=1.5,
         dealer_hit_soft_17=False,
+        dealer_peek=True,
         allow_split=True,
         allow_double_down=True,
         allow_insurance=True,

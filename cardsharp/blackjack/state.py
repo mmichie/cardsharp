@@ -196,18 +196,22 @@ class OfferInsuranceState(GameState):
         # Get the dealer's upcard rank
         dealer_up_rank = game.dealer.current_hand.cards[0].rank
 
-        # Check if the dealer's upcard is an Ace or a ten-value card
-        if dealer_up_rank == Rank.ACE or dealer_up_rank.rank_value == 10:
-            # If so, check if the dealer has blackjack
-            dealer_has_blackjack = game.dealer.current_hand.is_blackjack
-            if dealer_has_blackjack:
-                # Handle the case where the dealer has blackjack
-                self.handle_dealer_blackjack(game)
-                # Set the game state to EndRoundState since the round is over
-                game.set_state(EndRoundState())
-                return  # Exit the handle method to prevent further actions
+        # Check if dealer peek is allowed
+        if game.rules.should_dealer_peek():
+            # Dealer peeks only if the upcard is an Ace or ten-value card
+            if dealer_up_rank == Rank.ACE or dealer_up_rank.rank_value == 10:
+                dealer_has_blackjack = game.dealer.current_hand.is_blackjack
+                if dealer_has_blackjack:
+                    self.handle_dealer_blackjack(game)
+                    game.set_state(EndRoundState())
+                    return
+        else:
+            # In games without dealer peek (e.g., European Blackjack), insurance is only offered if the upcard is an Ace
+            if dealer_up_rank == Rank.ACE:
+                # Offer insurance and proceed without checking for dealer blackjack
+                pass  # Already handled above
 
-        # If the dealer does not have blackjack, proceed to players' turns
+        # Proceed to players' turns
         game.set_state(PlayersTurnState())
 
     def offer_insurance(self, game, player):
