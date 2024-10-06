@@ -25,6 +25,8 @@ import time
 
 from abc import ABC
 from abc import abstractmethod
+
+from cardsharp.common.card import Rank
 from cardsharp.blackjack.action import Action
 from cardsharp.common.io_interface import DummyIOInterface
 
@@ -96,7 +98,6 @@ class DealingState(GameState):
         Handles the card dealing, checks for blackjack, and changes the game state to OfferInsuranceState.
         """
         self.deal(game)
-        self.check_blackjack(game)
         game.set_state(OfferInsuranceState())
 
     def deal(self, game):
@@ -172,30 +173,88 @@ class DealingState(GameState):
 
 class OfferInsuranceState(GameState):
     """
-    The game state where insurance is offered if the dealer has an Ace.
+    The game state where insurance is offered if the dealer has an Ace,
+    and the dealer checks for blackjack if appropriate.
     """
 
     def handle(self, game):
         """
-        Offers insurance to the players if the dealer has an Ace, and changes the game state to PlayersTurnState.
+        Offers insurance to the players if the dealer's upcard is an Ace.
+        If the dealer's upcard is an Ace or a ten-value card, checks for dealer blackjack
+        after insurance decisions are made. If the dealer has blackjack, resolves bets immediately.
+        Otherwise, proceeds to the players' turns.
         """
+        # Offer insurance to each player if the dealer has an Ace
         for player in game.players:
             self.offer_insurance(game, player)
+
+        # Show the dealer's face-up card
         game.io_interface.output(
             "Dealer's face up card is: " + str(game.dealer.current_hand.cards[0])
         )
+
+        # Get the dealer's upcard rank
+        dealer_up_rank = game.dealer.current_hand.cards[0].rank
+
+        # Check if the dealer's upcard is an Ace or a ten-value card
+        if dealer_up_rank == Rank.ACE or dealer_up_rank.rank_value == 10:
+            # If so, check if the dealer has blackjack
+            dealer_has_blackjack = game.dealer.current_hand.is_blackjack
+            if dealer_has_blackjack:
+                # Handle the case where the dealer has blackjack
+                self.handle_dealer_blackjack(game)
+                # Set the game state to EndRoundState since the round is over
+                game.set_state(EndRoundState())
+                return  # Exit the handle method to prevent further actions
+
+        # If the dealer does not have blackjack, proceed to players' turns
         game.set_state(PlayersTurnState())
 
     def offer_insurance(self, game, player):
-        """Offers insurance to a player based on their strategy."""
+        """
+        Offers insurance to a player if the dealer's upcard is an Ace.
+        """
         if game.dealer.has_ace():
             game.io_interface.output("Dealer has an Ace!")
-            # Use the strategy to decide whether to buy insurance
+            # Use the player's strategy to decide whether to buy insurance
             wants_insurance = player.strategy.decide_insurance(player)
             if wants_insurance:
+                # Calculate the insurance bet amount (usually half of the original bet)
                 insurance_bet = player.bets[0] / 2
                 player.buy_insurance(insurance_bet)
                 game.io_interface.output(f"{player.name} has bought insurance.")
+
+    def handle_dealer_blackjack(self, game):
+        """
+        Handles the scenario where the dealer has blackjack.
+        Resolves insurance bets and player bets accordingly.
+        """
+        game.io_interface.output("Dealer has blackjack!")
+
+        # Handle insurance payouts
+        for player in game.players:
+            if player.insurance > 0:
+                # Payout insurance bets at 2:1
+                insurance_payout = player.insurance * 3
+                player.payout_insurance(insurance_payout)
+                game.io_interface.output(
+                    f"{player.name} wins insurance bet of ${player.insurance:.2f}."
+                )
+
+        # Resolve player bets
+        for player in game.players:
+            if player.current_hand.is_blackjack:
+                # If the player also has blackjack, it's a push
+                bet = player.bets[0]
+                player.payout(0, bet)  # Return the original bet
+                player.winner = ["draw"]
+                game.io_interface.output(
+                    f"{player.name} and dealer both have blackjack. Push."
+                )
+            else:
+                # Dealer wins; player loses their bet
+                player.winner = ["dealer"]
+                game.io_interface.output(f"{player.name} loses to dealer's blackjack.")
 
 
 class PlayersTurnState(GameState):
