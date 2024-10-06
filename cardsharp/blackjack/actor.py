@@ -284,12 +284,9 @@ class Dealer(SimplePlayer):
         """Adds a card to the dealer's hand."""
         self.current_hand.add_card(card)
 
-    def should_hit(self):
-        """Returns True if the dealer should hit based on their current hand, False otherwise."""
-
-        return self.current_hand.value() < 17 or (
-            self.current_hand.value() == 17 and self.current_hand.is_soft
-        )
+    def should_hit(self, rules):
+        """Determine if the dealer should hit based on the game's rules."""
+        return rules.should_dealer_hit(self.current_hand)
 
     def reset(self):
         """Resets the dealer's state to the initial state."""

@@ -444,7 +444,7 @@ def create_rules(args):
     """Create the Rules object based on the command line arguments."""
     return Rules(
         blackjack_payout=1.5,
-        dealer_hit_soft_17=True,
+        dealer_hit_soft_17=False,
         allow_split=True,
         allow_double_down=True,
         allow_insurance=True,

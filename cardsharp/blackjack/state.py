@@ -266,12 +266,10 @@ class DealersTurnState(GameState):
     """
 
     def handle(self, game):
-        """
-        Handles the dealer's actions and changes the game state to EndRoundState.
-        """
+        """Handles the dealer's actions and changes the game state to EndRoundState."""
         all_players_busted = all(player.is_busted() for player in game.players)
 
-        while not all_players_busted and game.dealer.should_hit():
+        while not all_players_busted and game.dealer.should_hit(game.rules):
             self.dealer_action(game)
 
         game.io_interface.output("Dealer stands.")

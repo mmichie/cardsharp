@@ -92,31 +92,15 @@ class Rules:
         self.time_limit = time_limit
         self.use_csm = use_csm
 
-    def is_blackjack(self, hand: Hand) -> bool:
-        """
-        Check if a hand is a blackjack.
-
-        Args:
-            hand (Hand): The hand to check.
-
-        Returns:
-            bool: True if the hand is a blackjack, False otherwise.
-        """
-        return hand.calculate_score() == 21 and len(hand.cards) == 2
-
     def should_dealer_hit(self, hand: Hand) -> bool:
-        """
-        Determine if the dealer should hit based on the game rules.
-
-        Args:
-            hand (Hand): The dealer's hand.
-
-        Returns:
-            bool: True if the dealer should hit, False otherwise.
-        """
-        score = hand.calculate_score()
-        is_soft_17 = score == 17 and any(card.rank == "A" for card in hand.cards)
+        """Determine if the dealer should hit based on the game rules."""
+        score = hand.value()
+        is_soft_17 = score == 17 and hand.is_soft
         return score < 17 or (is_soft_17 and self.dealer_hit_soft_17)
+
+    def is_blackjack(self, hand: Hand) -> bool:
+        """Check if a hand is a blackjack."""
+        return hand.value() == 21 and len(hand.cards) == 2
 
     def can_split(self, hand: Hand) -> bool:
         """
