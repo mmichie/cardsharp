@@ -128,13 +128,17 @@ class BasicStrategy(Strategy):
         return final_action
 
     def _get_valid_action(self, player, action, action_symbol):
-        if action == Action.DOUBLE and not self._is_action_valid(player, Action.DOUBLE):
-            return Action.HIT if action_symbol == "D" else Action.STAND
-        elif action == Action.SPLIT and not self._is_action_valid(player, Action.SPLIT):
-            return Action.HIT
-        elif action == Action.SURRENDER and not self._is_action_valid(
-            player, Action.SURRENDER
-        ):
+        if not self._is_action_valid(player, action):
+            # Remove the invalid action from consideration
+            possible_actions = player.valid_actions
+            # Exclude the invalid action
+            possible_actions = [act for act in possible_actions if act != action]
+            # Re-evaluate the strategy without the invalid action
+            for alt_action_symbol in ["S", "H"]:  # Prioritize Stand over Hit
+                alt_action = self._map_action_symbol(alt_action_symbol)
+                if alt_action in possible_actions:
+                    return alt_action
+            # Default to Hit if no other valid actions
             return Action.HIT
         return action
 
