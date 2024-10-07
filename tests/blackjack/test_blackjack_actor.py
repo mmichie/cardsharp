@@ -15,11 +15,17 @@ from cardsharp.blackjack.state import DealingState
 from cardsharp.blackjack.blackjack import BlackjackGame
 from cardsharp.common.card import Card, Rank, Suit
 from cardsharp.common.io_interface import TestIOInterface
+from cardsharp.blackjack.rules import Rules
 
 
 @pytest.fixture
 def io_interface():
     return TestIOInterface()
+
+
+@pytest.fixture
+def rules():
+    return Rules()
 
 
 @pytest.fixture
@@ -227,35 +233,25 @@ def test_add_card(dealer):
     assert dealer.current_hand.cards[0] == Card(Suit.HEARTS, Rank.THREE)
 
 
-def test_should_hit(dealer):
+def test_should_hit(dealer, rules):
     # Test when hand value is less than 17
     dealer.add_card(Card(Suit.DIAMONDS, Rank.FOUR))
     dealer.add_card(Card(Suit.SPADES, Rank.FIVE))
-    assert dealer.should_hit()
+    assert dealer.should_hit(rules)
 
+    # Test when hand value is 17 but not a soft 17
+    dealer.add_card(Card(Suit.CLUBS, Rank.EIGHT))
+    assert not dealer.should_hit(rules)
+
+    # Test when hand value is a soft 17
     dealer.reset()
+    dealer.add_card(Card(Suit.HEARTS, Rank.ACE))
+    dealer.add_card(Card(Suit.SPADES, Rank.SIX))
+    assert dealer.should_hit(rules)  # Assuming the default rule is to hit on soft 17
 
-    # Assert that dealer current hand is BlackjackHand
-    assert isinstance(dealer.current_hand, BlackjackHand)
-
-    # Test when hand value is 17 but soft
-    dealer.add_card(Card(Suit.HEARTS, Rank.SIX))
-    dealer.add_card(Card(Suit.DIAMONDS, Rank.ACE))
-    assert dealer.should_hit()
-
-    dealer.reset()
-
-    # Test when hand value is more than 17
+    # Test when hand value is over 17
     dealer.add_card(Card(Suit.CLUBS, Rank.KING))
-    dealer.add_card(Card(Suit.SPADES, Rank.EIGHT))
-    assert not dealer.should_hit()
-
-    dealer.reset()
-
-    # Test when hand value is exactly 17 and not soft
-    dealer.add_card(Card(Suit.HEARTS, Rank.SEVEN))
-    dealer.add_card(Card(Suit.CLUBS, Rank.TEN))
-    assert not dealer.should_hit()
+    assert not dealer.should_hit(rules)
 
 
 def test_invalid_action(player):
@@ -272,23 +268,23 @@ def test_invalid_action(player):
         player.double_down()
 
 
-def test_dealer_should_hit(dealer):
+def test_dealer_should_hit(dealer, rules):
     # Test when dealer's hand value is less than 17
     dealer.add_card(Card(Suit.HEARTS, Rank.FOUR))
     dealer.add_card(Card(Suit.DIAMONDS, Rank.FIVE))
-    assert dealer.should_hit()
+    assert dealer.should_hit(rules)
 
     # Test when dealer's hand value is 17 but not a soft 17
     dealer.reset()
     dealer.add_card(Card(Suit.CLUBS, Rank.SEVEN))
     dealer.add_card(Card(Suit.SPADES, Rank.TEN))
-    assert not dealer.should_hit()
+    assert not dealer.should_hit(rules)
 
     # Test when dealer's hand value is over 17
     dealer.reset()
     dealer.add_card(Card(Suit.HEARTS, Rank.KING))
     dealer.add_card(Card(Suit.CLUBS, Rank.EIGHT))
-    assert not dealer.should_hit()
+    assert not dealer.should_hit(rules)
 
 
 def test_dealer_reset(dealer):
