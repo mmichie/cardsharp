@@ -448,6 +448,7 @@ def create_rules(args):
         dealer_peek=True,
         allow_split=True,
         allow_double_down=True,
+        allow_double_after_split=True,
         allow_insurance=True,
         allow_surrender=True,
         num_decks=6,

@@ -66,6 +66,7 @@ class Player(SimplePlayer):
         self.winner = []
         self.current_hand_index = 0
         self.hand_done = [False] * len(self.hands)
+        self.split_hands = [False] * len(self.hands)
 
     @property
     def current_hand(self):
@@ -138,6 +139,10 @@ class Player(SimplePlayer):
 
         # Add the bet for the new hand
         self.bets.append(bet_for_current_hand)
+
+        # Mark both hands as split hands
+        self.split_hands[self.current_hand_index] = True
+        self.split_hands.append(True)
 
     def surrender(self):
         """Player chooses to surrender, forfeiting half their bet."""
@@ -259,6 +264,7 @@ class Player(SimplePlayer):
         self.total_winnings = 0
         self.current_hand_index = 0
         self.hand_done = [False] * len(self.hands)
+        self.split_hands = [False] * len(self.hands)
 
 
 class Dealer(SimplePlayer):

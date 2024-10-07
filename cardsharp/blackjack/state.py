@@ -280,11 +280,39 @@ class PlayersTurnState(GameState):
                     continue  # Skip hands that are already done
                 game.io_interface.output(f"Playing hand {hand_index + 1}")
                 while not player.hand_done[hand_index]:
+                    valid_actions = self.get_valid_actions(game, player, hand_index)
                     action = player.decide_action(dealer_up_card=dealer_up_card)
-                    self.player_action(game, player, action)
+                    if action in valid_actions:
+                        self.player_action(game, player, action)
+                    else:
+                        game.io_interface.output(
+                            f"Invalid action {action}. Standing instead."
+                        )
+                        player.stand()
+                        player.hand_done[hand_index] = True
                     if player.is_busted() or player.is_done():
                         break  # Exit the loop if player is busted or done
         game.set_state(DealersTurnState())
+
+    def get_valid_actions(self, game, player, hand_index):
+        """Determines the valid actions for the current hand."""
+        valid_actions = [Action.HIT, Action.STAND]
+        hand = player.hands[hand_index]
+
+        if len(hand.cards) == 2:
+            if game.can_double_down(hand):
+                if hand_index == 0 or game.rules.can_double_after_split():
+                    valid_actions.append(Action.DOUBLE)
+
+            if (
+                game.can_split(hand) and len(player.hands) < 4
+            ):  # Limit splits to 3 times
+                valid_actions.append(Action.SPLIT)
+
+            if game.can_surrender(hand):
+                valid_actions.append(Action.SURRENDER)
+
+        return valid_actions
 
     def player_action(self, game, player, action):
         """Handles a player action and notifies the interface."""
@@ -314,8 +342,12 @@ class PlayersTurnState(GameState):
         elif action == Action.SPLIT:
             player.split()
             game.io_interface.output(f"{player.name} splits.")
-            # After splitting, update the hand_done list to include the new hands
-            # Note: The player will continue to play these hands in the main loop
+            # After splitting, deal a card to each new hand
+            for i in range(player.current_hand_index, player.current_hand_index + 2):
+                card = game.shoe.deal()
+                player.hands[i].add_card(card)
+                game.add_visible_card(card)
+                game.io_interface.output(f"{player.name}'s hand {i + 1} gets {card}.")
         elif action == Action.SURRENDER:
             player.surrender()
             game.io_interface.output(f"{player.name} surrenders.")
