@@ -456,7 +456,14 @@ class EndRoundState(GameState):
                 if bet_for_hand == 0:
                     continue  # Skip hands with no bet
                 if winner == "player":
-                    payout_amount = bet_for_hand * 2
+                    if player.blackjack:
+                        # Use the blackjack payout from the rules
+                        payout_multiplier = game.get_blackjack_payout()
+                        payout_amount = bet_for_hand + (
+                            bet_for_hand * payout_multiplier
+                        )
+                    else:
+                        payout_amount = bet_for_hand * 2  # Regular win pays 1:1
                     player.payout(hand_index, payout_amount)
                 elif winner == "draw":
                     payout_amount = bet_for_hand
