@@ -182,7 +182,7 @@ class OfferInsuranceState(GameState):
         Offers insurance to the players if the dealer's upcard is an Ace.
         If the dealer's upcard is an Ace or a ten-value card, checks for dealer blackjack
         after insurance decisions are made. If the dealer has blackjack, resolves bets immediately.
-        Otherwise, proceeds to the players' turns.
+        Otherwise, checks for player blackjacks and proceeds to the players' turns.
         """
         # Offer insurance to each player if the dealer has an Ace
         for player in game.players:
@@ -190,11 +190,14 @@ class OfferInsuranceState(GameState):
 
         # Show the dealer's face-up card
         game.io_interface.output(
-            "Dealer's face up card is: " + str(game.dealer.current_hand.cards[0])
+            "Dealer's face-up card is: " + str(game.dealer.current_hand.cards[0])
         )
 
         # Get the dealer's upcard rank
         dealer_up_rank = game.dealer.current_hand.cards[0].rank
+
+        # Initialize dealer_has_blackjack flag
+        dealer_has_blackjack = False
 
         # Check if dealer peek is allowed
         if game.rules.should_dealer_peek():
@@ -206,10 +209,35 @@ class OfferInsuranceState(GameState):
                     game.set_state(EndRoundState())
                     return
         else:
-            # In games without dealer peek (e.g., European Blackjack), insurance is only offered if the upcard is an Ace
+            # In games without dealer peek, insurance is only offered if the upcard is an Ace
             if dealer_up_rank == Rank.ACE:
                 # Offer insurance and proceed without checking for dealer blackjack
                 pass  # Already handled above
+
+        # If dealer does not have blackjack, handle insurance bets and check for player blackjacks
+        if not dealer_has_blackjack:
+            # Handle insurance bets: players lose insurance bets
+            for player in game.players:
+                if player.insurance > 0:
+                    game.io_interface.output(
+                        f"{player.name} loses insurance bet of ${player.insurance:.2f}."
+                    )
+                    # Insurance bet was already deducted when bought; no further action needed
+                    player.insurance = 0  # Reset insurance bet
+
+            # Check for player blackjacks
+            for player in game.players:
+                if player.current_hand.is_blackjack:
+                    game.io_interface.output(f"{player.name} got a blackjack!")
+                    bet = player.bets[0]  # Use the bet for the first hand
+                    # Calculate the payout for blackjack
+                    payout_amount = bet + (bet * game.rules.blackjack_payout)
+                    player.payout(0, payout_amount)  # Payout for hand index 0
+                    player.blackjack = True
+                    player.winner = [
+                        "player"
+                    ]  # Since there's only one hand at this point
+                    player.hand_done[player.current_hand_index] = True
 
         # Proceed to players' turns
         game.set_state(PlayersTurnState())
@@ -244,6 +272,7 @@ class OfferInsuranceState(GameState):
                 game.io_interface.output(
                     f"{player.name} wins insurance bet of ${player.insurance:.2f}."
                 )
+                player.insurance = 0  # Reset insurance bet
 
         # Resolve player bets
         for player in game.players:
