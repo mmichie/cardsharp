@@ -21,6 +21,7 @@ class Rules:
         allow_early_surrender: bool = False,
         bonus_payouts: dict = {},
         time_limit: int = 0,
+        max_splits: int = 3,
     ):
         """
         Initialize the game rules.
@@ -73,6 +74,10 @@ class Rules:
 
             time_limit (int, optional): Time limit in seconds for player
             decisions. Defaults to 0 (no time limit).
+
+            max_splits (int, optional): Maximum number of times a player can split their hand.
+            Defaults to 3 (resulting in up to 4 hands).
+
         """
         self.allow_double_after_split = allow_double_after_split
         self.allow_double_down = allow_double_down
@@ -91,6 +96,7 @@ class Rules:
         self.num_decks = num_decks
         self.time_limit = time_limit
         self.use_csm = use_csm
+        self.max_splits = max_splits
 
     def should_dealer_hit(self, hand: Hand) -> bool:
         """Determine if the dealer should hit based on the game rules."""
@@ -112,9 +118,38 @@ class Rules:
         Returns:
             bool: True if the hand can be split, False otherwise.
         """
-        if len(hand.cards) == 2 and self.allow_split:
-            return hand.cards[0].rank == hand.cards[1].rank
+        if not self.allow_split:
+            return False
+
+        # Check if hand has exactly two cards of the same rank
+        if len(hand.cards) == 2 and hand.cards[0].rank == hand.cards[1].rank:
+            # If resplitting is not allowed, this implicitly means only the first split is allowed
+            if not self.allow_resplitting and hand.is_split:
+                return False
+            return True
+
         return False
+
+    def get_max_splits(self) -> int:
+        """
+        Get the maximum number of splits allowed per hand.
+
+        Returns:
+            int: Maximum number of splits allowed.
+        """
+        return self.max_splits
+
+    def can_split_more(self, current_num_hands: int) -> bool:
+        """
+        Check if a player can split again based on their current number of hands.
+
+        Args:
+            current_num_hands (int): The player's current number of hands.
+
+        Returns:
+            bool: True if the player can split again, False otherwise.
+        """
+        return current_num_hands < (self.max_splits + 1)
 
     def can_double_down(self, hand: Hand) -> bool:
         """

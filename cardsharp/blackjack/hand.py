@@ -40,11 +40,25 @@ class BlackjackHand(Hand):
     specific to the rules of Blackjack.
     """
 
-    __slots__ = ("_cards", "_cached_value")
+    __slots__ = ("_cards", "_cached_value", "_is_split")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, is_split: bool = False, **kwargs):
+        """
+        Initialize a BlackjackHand.
+
+        Args:
+            is_split (bool): Whether this hand was created from splitting another hand.
+            *args: Variable length argument list.
+            **kwargs: Arbitrary keyword arguments.
+        """
         super().__init__(*args, **kwargs)
         self._cached_value = None  # Cache for hand value
+        self._is_split = is_split  # Track if this hand was created from a split
+
+    @property
+    def is_split(self) -> bool:
+        """Whether this hand was created from a split."""
+        return self._is_split
 
     def _invalidate_cache(self):
         """Invalidate the cache when the hand changes."""
@@ -102,8 +116,9 @@ class BlackjackHand(Hand):
         """
         Check if the hand is a blackjack, meaning it contains only two cards
         and their combined value is exactly 21.
+        Note: Split hands can't be blackjack, even if they total 21 with two cards.
         """
-        return len(self.cards) == 2 and self.value() == 21
+        return len(self.cards) == 2 and self.value() == 21 and not self._is_split
 
     @property
     def can_double(self) -> bool:
