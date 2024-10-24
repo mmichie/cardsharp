@@ -182,67 +182,24 @@ class OfferInsuranceState(GameState):
 
     def handle(self, game):
         """
-        Offers insurance to the players if the dealer's upcard is an Ace.
-        If the dealer's upcard is an Ace or a ten-value card, checks for dealer blackjack
-        after insurance decisions are made. If the dealer has blackjack, resolves bets immediately.
-        Otherwise, checks for player blackjacks and proceeds to the players' turns.
+        Handles insurance offers and dealer blackjack checks properly.
         """
-        # Offer insurance to each player if the dealer has an Ace
-        for player in game.players:
-            self.offer_insurance(game, player)
+        dealer_up_card = game.dealer.current_hand.cards[0]
 
-        # Show the dealer's face-up card
-        game.io_interface.output(
-            "Dealer's face-up card is: " + str(game.dealer.current_hand.cards[0])
-        )
+        # Only offer insurance if dealer shows Ace
+        if dealer_up_card.rank == Rank.ACE:
+            for player in game.players:
+                self.offer_insurance(game, player)
 
-        # Get the dealer's upcard rank
-        dealer_up_rank = game.dealer.current_hand.cards[0].rank
-
-        # Initialize dealer_has_blackjack flag
-        dealer_has_blackjack = False
-
-        # Check if dealer peek is allowed
+        # Check for dealer blackjack if allowed to peek
         if game.rules.should_dealer_peek():
-            # Dealer peeks only if the upcard is an Ace or ten-value card
-            if dealer_up_rank == Rank.ACE or dealer_up_rank.rank_value == 10:
-                dealer_has_blackjack = game.dealer.current_hand.is_blackjack
-                if dealer_has_blackjack:
+            if dealer_up_card.rank == Rank.ACE or dealer_up_card.rank.rank_value == 10:
+                if game.dealer.current_hand.is_blackjack:
                     self.handle_dealer_blackjack(game)
                     game.set_state(EndRoundState())
                     return
-        else:
-            # In games without dealer peek, insurance is only offered if the upcard is an Ace
-            if dealer_up_rank == Rank.ACE:
-                # Offer insurance and proceed without checking for dealer blackjack
-                pass  # Already handled above
 
-        # If dealer does not have blackjack, handle insurance bets and check for player blackjacks
-        if not dealer_has_blackjack:
-            # Handle insurance bets: players lose insurance bets
-            for player in game.players:
-                if player.insurance > 0:
-                    game.io_interface.output(
-                        f"{player.name} loses insurance bet of ${player.insurance:.2f}."
-                    )
-                    # Insurance bet was already deducted when bought; no further action needed
-                    player.insurance = 0  # Reset insurance bet
-
-            # Check for player blackjacks
-            for player in game.players:
-                if player.current_hand.is_blackjack:
-                    game.io_interface.output(f"{player.name} got a blackjack!")
-                    bet = player.bets[0]  # Use the bet for the first hand
-                    # Calculate the payout for blackjack
-                    payout_amount = bet + (bet * game.rules.blackjack_payout)
-                    player.payout(0, payout_amount)  # Payout for hand index 0
-                    player.blackjack = True
-                    player.winner = [
-                        "player"
-                    ]  # Since there's only one hand at this point
-                    player.hand_done[player.current_hand_index] = True
-
-        # Proceed to players' turns
+        # If no dealer blackjack or no peek, continue to player turns
         game.set_state(PlayersTurnState())
 
     def offer_insurance(self, game, player):
