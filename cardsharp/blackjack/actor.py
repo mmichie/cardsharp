@@ -263,17 +263,15 @@ class Player(SimplePlayer):
     def buy_insurance(self, amount: int):
         """Attempts to buy insurance."""
         # Insurance must be exactly half the original bet
-        max_insurance = self.bets[0] / 2
-        if amount > max_insurance:
+        required_insurance = self.bets[0] / 2
+        if amount != required_insurance:
             raise ValueError(
-                f"Insurance cannot exceed half the original bet ({max_insurance})"
+                f"Insurance must be exactly half the original bet ({required_insurance})"
             )
-
         if amount > self.money:
             raise InsufficientFundsError(
                 f"{self.name} does not have enough money to buy insurance of {amount}"
             )
-
         self.insurance = amount
         self.money -= amount
         self.total_bets += amount

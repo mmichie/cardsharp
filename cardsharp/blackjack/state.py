@@ -98,6 +98,7 @@ class DealingState(GameState):
         Handles the card dealing, checks for blackjack, and changes the game state to OfferInsuranceState.
         """
         self.deal(game)
+        self.check_blackjack(game)
         game.set_state(OfferInsuranceState())
 
     def deal(self, game):
@@ -182,39 +183,55 @@ class OfferInsuranceState(GameState):
 
     def handle(self, game):
         """
-        Handles insurance offers and dealer blackjack checks properly.
+        Handles insurance offers, dealer blackjack checks, and resolves insurance bets.
         """
         dealer_up_card = game.dealer.current_hand.cards[0]
 
         # Only offer insurance if dealer shows Ace
         if dealer_up_card.rank == Rank.ACE:
+            game.io_interface.output("Dealer shows an Ace.")
             for player in game.players:
                 self.offer_insurance(game, player)
 
         # Check for dealer blackjack if allowed to peek
+        dealer_has_blackjack = False
         if game.rules.should_dealer_peek():
             if dealer_up_card.rank == Rank.ACE or dealer_up_card.rank.rank_value == 10:
                 if game.dealer.current_hand.is_blackjack:
+                    dealer_has_blackjack = True
                     self.handle_dealer_blackjack(game)
                     game.set_state(EndRoundState())
                     return
 
-        # If no dealer blackjack or no peek, continue to player turns
+        # Dealer does not have blackjack
+        # Handle loss of insurance bets
+        for player in game.players:
+            if player.insurance > 0:
+                game.io_interface.output(
+                    f"{player.name} loses insurance bet of ${player.insurance:.2f}."
+                )
+                # Insurance bet was already deducted when bought; reset insurance amount
+                player.insurance = 0
+
+        # Proceed to players' turns
         game.set_state(PlayersTurnState())
 
     def offer_insurance(self, game, player):
         """
         Offers insurance to a player if the dealer's upcard is an Ace.
         """
-        if game.dealer.has_ace():
-            game.io_interface.output("Dealer has an Ace!")
-            # Use the player's strategy to decide whether to buy insurance
-            wants_insurance = player.strategy.decide_insurance(player)
-            if wants_insurance:
-                # Calculate the insurance bet amount (usually half of the original bet)
-                insurance_bet = player.bets[0] / 2
+        # Use the player's strategy to decide whether to buy insurance
+        wants_insurance = player.strategy.decide_insurance(player)
+        if wants_insurance:
+            # Insurance bet must be exactly half the original bet
+            insurance_bet = player.bets[0] / 2
+            try:
                 player.buy_insurance(insurance_bet)
                 game.io_interface.output(f"{player.name} has bought insurance.")
+            except (ValueError, InsufficientFundsError) as e:
+                game.io_interface.output(str(e))
+        else:
+            game.io_interface.output(f"{player.name} declines insurance.")
 
     def handle_dealer_blackjack(self, game):
         """
@@ -226,15 +243,15 @@ class OfferInsuranceState(GameState):
         # Handle insurance payouts
         for player in game.players:
             if player.insurance > 0:
-                # Calculate winnings at 2:1 odds
-                winnings = player.insurance * 2
-                # Total payout includes the original insurance bet plus winnings
-                total_payout = player.insurance + winnings
+                # Insurance pays 2:1, so total payout is 3x the insurance bet
+                total_payout = player.insurance * 3
                 player.payout_insurance(total_payout)
                 game.io_interface.output(
                     f"{player.name} wins insurance bet of ${total_payout:.2f}."
                 )
                 player.insurance = 0
+            else:
+                game.io_interface.output(f"{player.name} did not take insurance.")
 
         # Resolve player bets
         for player in game.players:
