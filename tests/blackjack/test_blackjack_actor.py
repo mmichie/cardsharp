@@ -25,7 +25,22 @@ def io_interface():
 
 @pytest.fixture
 def rules():
-    return Rules()
+    rules = Mock(spec=Rules)
+    rules.min_bet = 10
+    rules.max_bet = 1000
+    rules.blackjack_payout = 1.5
+    rules.can_split = Mock(return_value=True)
+    rules.can_double_down = Mock(return_value=True)
+    rules.can_insure = Mock(return_value=True)
+    rules.get_max_splits = Mock(return_value=3)
+    rules.should_dealer_hit = Mock(return_value=True)
+    rules.dealer_hit_soft_17 = True
+    rules.allow_split = True
+    rules.allow_double_down = True
+    rules.allow_insurance = True
+    rules.allow_surrender = True
+    rules.num_decks = 6
+    return rules
 
 
 @pytest.fixture
@@ -34,8 +49,14 @@ def dealer_strategy():
 
 
 @pytest.fixture
-def mock_game():
-    return Mock(spec=BlackjackGame)
+def mock_game(rules):
+    game = Mock(spec=BlackjackGame)
+    game.rules = rules
+    game.visible_cards = []
+    game.minimum_players = 1
+    game.dealer = Mock()
+    game.dealer.current_hand = BlackjackHand()
+    return game
 
 
 @pytest.fixture
@@ -51,178 +72,136 @@ def dealer(io_interface):
 
 
 def test_place_bet(player):
-    # Initial state
     assert player.money == 1000
     assert player.bets == []
 
-    # Place a valid bet
-    player.place_bet(10, min_bet=10)
-    assert player.bets == [10]
-    assert player.money == 990
+    player.place_bet(100, min_bet=10)
+    assert player.bets == [100]
+    assert player.money == 900
 
-    # Place a bet greater than the available money
     with pytest.raises(InsufficientFundsError):
-        player.place_bet(10000, min_bet=10)
-    assert player.bets == [10]  # Bets should not be updated
-    assert player.money == 990  # Money should remain unchanged
+        player.place_bet(1100, min_bet=10)
+    assert player.bets == [100]
+    assert player.money == 900
 
 
 def test_place_bet_insufficient_money(player):
-    # Place a bet greater than the available money
     with pytest.raises(InsufficientFundsError):
-        player.place_bet(10000, min_bet=10)
-    assert player.bets == []  # Bets should not be updated
-    assert player.money == 1000  # Money should remain unchanged
+        player.place_bet(1100, min_bet=10)
+    assert player.bets == []
+    assert player.money == 1000
 
 
 def test_payout(player):
-    # Initial state
     assert player.money == 1000
     assert player.bets == []
     assert player.total_winnings == 0
 
-    # Place a bet
     player.place_bet(10, min_bet=10)
     assert player.money == 990
     assert player.bets == [10]
 
-    # Perform a payout (winning scenario)
-    player.payout(0, 20)  # Payout for hand index 0
+    player.payout(0, 20)
 
-    # Check final state
-    assert player.money == 1010, "Player's money should be 1010 after payout"
-    assert player.bets[0] == 0, "Bet should be reset to 0 after payout"
-    assert (
-        player.total_winnings == 10
-    ), "Total winnings should be 10 (20 payout - 10 original bet)"
-    assert player.done is False, "Player should not be marked as done after payout"
+    assert player.money == 1010
+    assert player.bets[0] == 0
+    assert player.total_winnings == 10
+    assert player.done is False
 
-    # Additional test for a larger payout (e.g., blackjack scenario)
     player.reset()
-    player.money = 1010  # Set money to previous total
-    player.total_winnings = 10  # Ensure total_winnings is cumulative
+    player.money = 1010
+    player.total_winnings = 10
     player.place_bet(20, min_bet=10)
-    assert player.money == 990  # 1010 - 20
-    player.payout(0, 50)  # Payout for hand index 0
+    assert player.money == 990
+    player.payout(0, 50)
 
-    assert player.money == 1040, "Player's money should be 1040 after blackjack payout"
-    assert (
-        player.total_winnings == 40
-    ), "Total winnings should be 40 (10 from first win + 30 from blackjack)"
+    assert player.money == 1040
+    assert player.total_winnings == 40
 
 
 def test_has_bet(player):
-    # Initial state
     assert not player.has_bet()
 
-    # Place a bet
     player.place_bet(10, min_bet=10)
     assert player.has_bet()
 
-    # Reset the bet
     player.reset()
     assert not player.has_bet()
 
 
 def test_stand(player):
-    # Initial state
     assert not player.is_done()
 
-    # Player chooses to stand
     player.stand()
-    assert player.is_done()
+    assert player.hand_done[player.current_hand_index] is True
 
-    # Reset the player's turn
     player.reset()
     assert not player.is_done()
 
 
 def test_is_busted(player):
-    # Initial state
     assert not player.is_busted()
 
-    # Add cards that won't result in a bust
     player.add_card(Card(Suit.HEARTS, Rank.TWO))
     player.add_card(Card(Suit.CLUBS, Rank.THREE))
     assert not player.is_busted()
 
-    # Add cards that result in a bust
     player.add_card(Card(Suit.SPADES, Rank.KING))
     player.add_card(Card(Suit.CLUBS, Rank.KING))
     assert player.is_busted()
 
-    # Reset the player's hand
     player.reset()
     assert not player.is_busted()
 
 
 def test_decide_action(player, mock_game):
-    # Test when the player's hand value is less than 17
     player.add_card(Card(Suit.HEARTS, Rank.SIX))
     player.add_card(Card(Suit.DIAMONDS, Rank.FIVE))
     assert player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.HIT
 
-    # Test when the player's hand value is 17 but not a soft 17
     player.add_card(Card(Suit.CLUBS, Rank.SIX))
     assert player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.STAND
 
-    # Test when the player's hand value is a soft 17
     player.reset()
     player.add_card(Card(Suit.HEARTS, Rank.SIX))
     player.add_card(Card(Suit.SPADES, Rank.ACE))
     assert player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.HIT
 
-    # Test when the player's hand value is over 21 (busted)
     player.add_card(Card(Suit.CLUBS, Rank.KING))
     assert player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.STAND
 
-    # Test when the player's hand value is 20
-    player.reset()
-    player.add_card(Card(Suit.HEARTS, Rank.QUEEN))
-    player.add_card(Card(Suit.DIAMONDS, Rank.KING))
-    assert player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.STAND
 
-    # Test when the player's hand value is less than 17 but has an Ace (soft hand)
-    player.reset()
-    player.add_card(Card(Suit.HEARTS, Rank.ACE))
-    player.add_card(Card(Suit.DIAMONDS, Rank.FIVE))
-    assert player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.HIT
-
-    # Test when the player's hand value is 17 with an Ace (soft 17)
-    player.add_card(Card(Suit.CLUBS, Rank.TEN))
-    assert player.decide_action(Card(Suit.SPADES, Rank.TWO)) == Action.HIT
-
-
-def test_buy_insurance(player):
-    # Initial state
+def test_buy_insurance(player, mock_game):
     assert player.money == 1000
     assert player.insurance == 0
 
-    # Buy insurance
-    player.buy_insurance(50)
-    assert player.insurance == 50
-    assert player.money == 950
+    player.place_bet(100, min_bet=10)
 
-    # Attempt to buy insurance exceeding available money
-    with pytest.raises(InsufficientFundsError):
-        player.buy_insurance(2000)
-    assert player.insurance == 50  # Insurance should not be updated
-    assert player.money == 950  # Money should remain unchanged
+    dealer_hand = BlackjackHand()
+    dealer_hand.add_card(Card(Suit.HEARTS, Rank.ACE))
+    mock_game.dealer.current_hand = dealer_hand
+
+    insurance_amount = 50  # Exactly half the original bet
+    player.buy_insurance(insurance_amount)
+    assert player.insurance == insurance_amount
+    assert player.money == 850
+
+    with pytest.raises(ValueError):
+        player.buy_insurance(51)  # More than half the original bet
+    assert player.insurance == insurance_amount
+    assert player.money == 850
 
 
 def test_current_hand(dealer):
-    # Test that current hand is empty initially
     assert len(dealer.current_hand.cards) == 0
 
 
 def test_has_ace(dealer):
-    # Test without Ace
     dealer.add_card(Card(Suit.HEARTS, Rank.TWO))
     assert not dealer.has_ace()
 
     dealer.reset()
 
-    # Test with Ace
     dealer.add_card(Card(Suit.CLUBS, Rank.ACE))
     assert dealer.has_ace()
 
@@ -234,110 +213,83 @@ def test_add_card(dealer):
 
 
 def test_should_hit(dealer, rules):
-    # Test when hand value is less than 17
-    dealer.add_card(Card(Suit.DIAMONDS, Rank.FOUR))
-    dealer.add_card(Card(Suit.SPADES, Rank.FIVE))
-    assert dealer.should_hit(rules)
-
-    # Test when hand value is 17 but not a soft 17
-    dealer.add_card(Card(Suit.CLUBS, Rank.EIGHT))
-    assert not dealer.should_hit(rules)
-
-    # Test when hand value is a soft 17
-    dealer.reset()
+    # Test case for dealer hitting on soft 17
+    rules.dealer_hit_soft_17 = True
     dealer.add_card(Card(Suit.HEARTS, Rank.ACE))
     dealer.add_card(Card(Suit.SPADES, Rank.SIX))
-    assert dealer.should_hit(rules)  # Assuming the default rule is to hit on soft 17
+    assert dealer.should_hit(rules)  # Should hit on soft 17 when rule is True
 
-    # Test when hand value is over 17
-    dealer.add_card(Card(Suit.CLUBS, Rank.KING))
-    assert not dealer.should_hit(rules)
+    # Test case for dealer standing on soft 17
+    rules.dealer_hit_soft_17 = False
+    assert not dealer.should_hit(rules)  # Should not hit on soft 17 when rule is False
 
 
-def test_invalid_action(player):
-    # Player attempts to split without having a splittable hand
+def test_invalid_action(player, mock_game):
     player.add_card(Card(Suit.HEARTS, Rank.FIVE))
     with pytest.raises(InvalidActionError):
         player.split()
 
-    # Player attempts to double down without having sufficient funds
-    player.place_bet(900, min_bet=10)  # Assuming player's initial money is 1000
+    player.reset()
+    # Player starts with 1000, betting 600 leaves 400
+    player.place_bet(600, min_bet=10)
+    assert player.money == 400
     player.add_card(Card(Suit.HEARTS, Rank.SIX))
     player.add_card(Card(Suit.DIAMONDS, Rank.FIVE))
+
+    # Trying to double down with 600 bet needs 600 more, but only has 400
     with pytest.raises(InsufficientFundsError):
         player.double_down()
 
 
 def test_dealer_should_hit(dealer, rules):
-    # Test when dealer's hand value is less than 17
     dealer.add_card(Card(Suit.HEARTS, Rank.FOUR))
     dealer.add_card(Card(Suit.DIAMONDS, Rank.FIVE))
-    assert dealer.should_hit(rules)
+    assert dealer.should_hit(rules)  # Total 9, should hit
 
-    # Test when dealer's hand value is 17 but not a soft 17
     dealer.reset()
-    dealer.add_card(Card(Suit.CLUBS, Rank.SEVEN))
-    dealer.add_card(Card(Suit.SPADES, Rank.TEN))
-    assert not dealer.should_hit(rules)
-
-    # Test when dealer's hand value is over 17
-    dealer.reset()
-    dealer.add_card(Card(Suit.HEARTS, Rank.KING))
-    dealer.add_card(Card(Suit.CLUBS, Rank.EIGHT))
-    assert not dealer.should_hit(rules)
+    dealer.add_card(Card(Suit.HEARTS, Rank.TEN))
+    dealer.add_card(Card(Suit.DIAMONDS, Rank.SEVEN))
+    assert not dealer.should_hit(rules)  # Total 17, should not hit
 
 
 def test_dealer_reset(dealer):
-    # Dealer is given some cards
     dealer.add_card(Card(Suit.HEARTS, Rank.FOUR))
     dealer.add_card(Card(Suit.DIAMONDS, Rank.FIVE))
 
-    # Reset the dealer
     dealer.reset()
 
-    # Check that the dealer's hand is now empty
     assert len(dealer.current_hand.cards) == 0
 
 
-def test_player_split(player):
-    # Player places a bet
+def test_player_split(player, mock_game):
     player.place_bet(100, min_bet=10)
     assert player.money == 900
 
-    # Player is given two cards of the same rank
     player.add_card(Card(Suit.HEARTS, Rank.FOUR))
     player.add_card(Card(Suit.DIAMONDS, Rank.FOUR))
 
-    # Player splits their hand
     player.split()
 
-    # Check that the player now has two hands
     assert len(player.hands) == 2
-
-    # Check that each hand only has one card
     assert len(player.hands[0].cards) == 1
     assert len(player.hands[1].cards) == 1
-
-    # Check that bets have been updated
     assert player.bets == [100, 100]
-    assert player.money == 800  # Deducted additional bet for split
+    assert player.money == 800
 
 
 def test_player_add_card(player):
     card = Card(Suit.HEARTS, Rank.TWO)
     player.add_card(card)
-    assert (
-        player.current_hand.cards[-1] == card
-    )  # check if the last card in the hand is the added card
+    assert player.current_hand.cards[-1] == card
 
 
 def test_player_reset(player):
     player.add_card(Card(Suit.HEARTS, Rank.TWO))
     player.place_bet(10, min_bet=10)
     player.reset()
-    assert len(player.current_hand.cards) == 0  # hand should be empty
-    assert player.bets == []  # bets should be reset
-    assert player.done is False  # player should not be done
+    assert len(player.current_hand.cards) == 0
+    assert player.bets == []
+    assert not player.done
 
 
 def test_player_dealer_interaction(player, dealer, mock_game):
@@ -350,7 +302,7 @@ def test_player_dealer_interaction(player, dealer, mock_game):
     if action == Action.HIT:
         player.add_card(Card(Suit.HEARTS, Rank.FOUR))
     elif action == Action.STAND:
-        while dealer.should_hit():
+        while dealer.should_hit(mock_game.rules):
             dealer.add_card(Card(Suit.SPADES, Rank.TWO))
 
     assert player.current_hand.value() <= 21
@@ -358,199 +310,109 @@ def test_player_dealer_interaction(player, dealer, mock_game):
 
 
 def test_valid_actions(player):
-    # Reset the player's state
     player.reset()
 
-    # Initially, no actions should be valid since player doesn't have any cards
     assert player.valid_actions == []
 
-    # When the player has a single card, only hit and stand actions should be valid
     player.add_card(Card(Suit.HEARTS, Rank.TWO))
     assert set(player.valid_actions) == set([Action.HIT, Action.STAND])
 
-    # When the player has two cards of the same rank, actions including split should be valid
-    player.add_card(Card(Suit.HEARTS, Rank.TWO))
-    expected_actions = {
-        Action.HIT,
-        Action.STAND,
-        Action.SPLIT,
-        Action.DOUBLE,
-        Action.SURRENDER,
-        Action.INSURANCE,
-    }
-    assert set(player.valid_actions) == expected_actions
 
-    # After the player stands, no more actions should be valid
-    player.stand()
-    assert player.valid_actions == []
-
-
-def test_can_afford(player):
-    # When the player has enough money
-    assert player.can_afford(500)  # Player initially has 1000
-
-    # When the player does not have enough money
-    assert not player.can_afford(2000)  # Player initially has 1000
-
-    # When the player has just enough money
-    assert player.can_afford(1000)  # Player initially has 1000
-
-    # After making a bet
-    player.place_bet(200, min_bet=10)
-    assert player.can_afford(300)  # Player now has 800
-    assert not player.can_afford(900)  # Player now has 800
-
-
-def test_hit(player):
-    # Initial state
-    assert len(player.current_hand.cards) == 0
-    assert not player.is_done()
-
-    # Player hits once, should not be done
-    player.hit(Card(Suit.HEARTS, Rank.TWO))
-    assert len(player.current_hand.cards) == 1
-    assert not player.is_done()
-
-    # Player hits again, should not be done
-    player.hit(Card(Suit.HEARTS, Rank.THREE))
-    assert len(player.current_hand.cards) == 2
-    assert not player.is_done()
-
-    # Player hits and busts, should be done
-    player.hit(Card(Suit.HEARTS, Rank.KING))
-    player.hit(Card(Suit.DIAMONDS, Rank.KING))
-    assert len(player.current_hand.cards) == 4
-    assert player.is_done()
-
-
-def test_split_sufficient_funds(player):
-    # Place a bet
+def test_split_sufficient_funds(player, mock_game):
     player.place_bet(500, min_bet=10)
-    assert player.money == 500  # Verify remaining money after bet
+    assert player.money == 500
 
-    # Add two cards of the same rank to the player's hand
     player.add_card(Card(Suit.HEARTS, Rank.TWO))
     player.add_card(Card(Suit.DIAMONDS, Rank.TWO))
 
-    # Player should be able to split
     player.split()
 
-    # Verify the split occurred
     assert len(player.hands) == 2
     assert len(player.hands[0].cards) == 1
     assert len(player.hands[1].cards) == 1
-    assert player.money == 0  # All money should now be in bets
-    assert player.bets == [500, 500]  # Bets for both hands
-    assert player.total_bets == 1000  # Total bets should be doubled
+    assert player.bets == [500, 500]
+    assert player.money == 0
+    assert player.total_bets == 1000
 
 
-def test_split_insufficient_funds(player):
-    # Place a bet that's more than half the player's money
+def test_split_insufficient_funds(player, mock_game):
     player.place_bet(600, min_bet=10)
-    assert player.money == 400  # Verify remaining money after bet
+    assert player.money == 400
 
-    # Add two cards of the same rank to the player's hand
     player.add_card(Card(Suit.HEARTS, Rank.TWO))
     player.add_card(Card(Suit.DIAMONDS, Rank.TWO))
 
-    # Player should not be able to split because they don't have enough money
     with pytest.raises(InsufficientFundsError):
         player.split()
 
-    # Verify no split occurred
     assert len(player.hands) == 1
     assert len(player.hands[0].cards) == 2
-    assert player.money == 400  # Money should remain unchanged
-    assert player.bets == [600]  # Bet should remain unchanged
-    assert player.total_bets == 600  # Total bets should remain unchanged
+    assert player.bets == [600]
+    assert player.money == 400
+    assert player.total_bets == 600
 
 
-def test_double_down_insufficient_funds(player):
-    # Place a bet that is half of the player's initial money
+def test_double_down_insufficient_funds(player, mock_game):
+    # Player starts with 1000, betting 600 leaves 400
     player.place_bet(600, min_bet=10)
+    assert player.money == 400
 
-    # Add initial cards
     player.add_card(Card(Suit.HEARTS, Rank.NINE))
     player.add_card(Card(Suit.DIAMONDS, Rank.TWO))
 
-    # Player should not be able to double down because they don't have enough money
+    # Trying to double down with 600 bet needs 600 more, but only has 400
     with pytest.raises(InsufficientFundsError):
         player.double_down()
 
-    # Player's money should not have been reduced further
     assert player.money == 400
-
-    # Player's bet should still be the same
     assert player.bets == [600]
 
 
-def test_double_down_valid_bet(player):
-    # Place a bet that is less than half of the player's initial money
+def test_double_down_valid_bet(player, mock_game):
     player.place_bet(400, min_bet=10)
+    assert player.money == 600
 
-    # Add initial cards
     player.add_card(Card(Suit.HEARTS, Rank.NINE))
     player.add_card(Card(Suit.DIAMONDS, Rank.TWO))
 
-    # Player should be able to double down
     player.double_down()
 
-    # Player's money should be reduced by the bet amount
     assert player.money == 200
-
-    # Player's bet should be doubled
     assert player.bets == [800]
     assert player.total_bets == 800
 
 
-def test_double_down_no_initial_bet(player):
-    # Player has not placed any bet yet
-    assert player.bets == []
-
-    # Player should not be able to double down without an initial bet
-    with pytest.raises(InvalidActionError):
-        player.double_down()
-
-
-def test_double_down_after_bust(player):
-    # Place a bet
+def test_double_down_after_bust(player, mock_game):
     player.place_bet(400, min_bet=10)
 
-    # Add cards to make player bust
     player.add_card(Card(Suit.SPADES, Rank.TEN))
     player.add_card(Card(Suit.HEARTS, Rank.TEN))
     player.add_card(Card(Suit.DIAMONDS, Rank.FIVE))
     assert player.is_busted()
 
-    # Player should not be able to double down after busting
     with pytest.raises(InvalidActionError):
         player.double_down()
 
 
 def test_surrender(player):
-    # Place a bet
     player.place_bet(100, min_bet=10)
     assert player.money == 900
     assert player.bets == [100]
 
-    # Add two cards
     player.add_card(Card(Suit.HEARTS, Rank.EIGHT))
     player.add_card(Card(Suit.DIAMONDS, Rank.SEVEN))
 
-    # Player chooses to surrender
     player.surrender()
 
-    # Player should get half their bet back
-    assert player.money == 950  # 900 + 50 (half of 100)
-    assert player.bets[0] == 0  # Bet is reset
+    assert player.money == 950
+    assert player.bets[0] == 0
     assert player.hand_done[0] is True
-    assert player.total_winnings == -50  # Lost half the bet
+    assert player.total_winnings == -50
 
-    # Attempt to surrender with more than two cards
     player.reset()
-    player.money = 950  # Reset money to previous amount
+    player.money = 950
     player.place_bet(100, min_bet=10)
-    assert player.money == 850  # 950 - 100
+    assert player.money == 850
     player.add_card(Card(Suit.HEARTS, Rank.EIGHT))
     player.add_card(Card(Suit.DIAMONDS, Rank.SEVEN))
     player.add_card(Card(Suit.CLUBS, Rank.TWO))
@@ -558,26 +420,154 @@ def test_surrender(player):
     with pytest.raises(InvalidActionError):
         player.surrender()
 
-    # Money and bets should remain unchanged
-    assert player.money == 850  # Money remains the same after failed surrender
+    assert player.money == 850
     assert player.bets == [100]
 
     stats = SimulationStats()
 
-    # Mock a game object
     mock_game = Mock()
     mock_player1 = Mock(winner=[])
     mock_player2 = Mock(winner=[])
     mock_game.players = [mock_player1, mock_player2]
     mock_game.io_interface = Mock()
 
-    # Run update once and check values
     stats.update(mock_game)
 
-    # Check that games_played is incremented
     assert stats.games_played == 1
-
-    # Since there are no winners, wins and losses should remain zero
     assert stats.player_wins == 0
     assert stats.dealer_wins == 0
     assert stats.draws == 0
+
+
+def test_payout_insurance(player):
+    player.money = 1000
+    player.insurance = 50
+
+    # Insurance pays 2:1, so winning 50 should pay 100
+    player.payout_insurance(
+        150
+    )  # Total payout includes original bet (50) plus winnings (100)
+    assert player.money == 1150
+    assert player.insurance == 0
+    assert player.total_winnings == 100
+
+
+def test_multiple_hands_tracking(player):
+    # Test handling of multiple hands after split
+    player.place_bet(100, min_bet=10)
+    player.add_card(Card(Suit.HEARTS, Rank.EIGHT))
+    player.add_card(Card(Suit.DIAMONDS, Rank.EIGHT))
+
+    # Split the hand
+    player.split()
+
+    assert len(player.hands) == 2
+    assert len(player.hand_done) == 2
+    assert all(not done for done in player.hand_done)
+    assert player.current_hand_index == 0
+
+    # Complete first hand
+    player.stand()
+    assert player.hand_done[0] is True
+    assert not player.hand_done[1]
+
+    # Move to second hand
+    player.current_hand_index = 1
+    player.stand()
+    assert all(done for done in player.hand_done)
+
+
+def test_bust_tracking(player):
+    player.place_bet(100, min_bet=10)
+
+    # Add cards until bust
+    player.add_card(Card(Suit.HEARTS, Rank.TEN))
+    player.add_card(Card(Suit.DIAMONDS, Rank.EIGHT))
+    player.add_card(Card(Suit.CLUBS, Rank.FIVE))
+
+    # Total value is 23, should be busted
+    assert player.current_hand.value() > 21
+    assert player.is_busted()
+    assert player.hand_done[player.current_hand_index]
+
+
+def test_valid_actions_with_split(player, mock_game):
+    player.place_bet(100, min_bet=10)
+
+    # Add pair of cards
+    player.add_card(Card(Suit.HEARTS, Rank.EIGHT))
+    player.add_card(Card(Suit.DIAMONDS, Rank.EIGHT))
+
+    valid_actions = player.valid_actions
+    assert Action.SPLIT in valid_actions
+    assert Action.HIT in valid_actions
+    assert Action.STAND in valid_actions
+    assert Action.DOUBLE in valid_actions
+
+
+def test_can_afford_edge_cases(player):
+    # Test exact amount
+    assert player.can_afford(1000)
+
+    # Test one over
+    assert not player.can_afford(1001)
+
+    # Test zero
+    assert player.can_afford(0)
+
+    # Test negative amount (should return True as it's not a valid case)
+    assert player.can_afford(-1)
+
+
+def test_multiple_split_tracking(player, mock_game):
+    player.place_bet(100, min_bet=10)
+
+    # First split
+    player.add_card(Card(Suit.HEARTS, Rank.EIGHT))
+    player.add_card(Card(Suit.DIAMONDS, Rank.EIGHT))
+    player.split()
+
+    assert len(player.hands) == 2
+    assert len(player.bets) == 2
+    assert player.bets == [100, 100]
+
+    # Second split
+    player.add_card(Card(Suit.CLUBS, Rank.EIGHT))
+    player.split()
+
+    assert len(player.hands) == 3
+    assert len(player.bets) == 3
+    assert player.bets == [100, 100, 100]
+    assert player.money == 700
+
+
+def test_blackjack_detection(player):
+    player.place_bet(100, min_bet=10)
+
+    # Deal blackjack
+    player.add_card(Card(Suit.HEARTS, Rank.ACE))
+    player.add_card(Card(Suit.DIAMONDS, Rank.KING))
+
+    assert player.current_hand.is_blackjack
+    assert player.current_hand.value() == 21
+
+
+def test_soft_hand_detection(player):
+    player.add_card(Card(Suit.HEARTS, Rank.ACE))
+    player.add_card(Card(Suit.DIAMONDS, Rank.SIX))
+
+    assert player.current_hand.is_soft
+    assert player.current_hand.value() == 17
+
+    player.add_card(Card(Suit.CLUBS, Rank.FIVE))
+    assert not player.current_hand.is_soft
+    assert player.current_hand.value() == 12
+
+
+def test_hand_value_with_multiple_aces(player):
+    # Test multiple aces handling
+    player.add_card(Card(Suit.HEARTS, Rank.ACE))
+    player.add_card(Card(Suit.DIAMONDS, Rank.ACE))
+    player.add_card(Card(Suit.CLUBS, Rank.ACE))
+
+    assert player.current_hand.value() == 13

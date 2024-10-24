@@ -5,28 +5,6 @@ This module extends the cardsharp library to provide classes and methods
 specifically designed to facilitate the game of Blackjack. It provides a class
 `BlackjackHand` that extends the `Hand` class from cardsharp and adds additional
 features pertinent to Blackjack.
-
-Classes:
-    BlackjackHand: Represents a player's hand in a game of Blackjack.
-
-The BlackjackHand class has the following public methods:
-    - value: Calculates and returns the value of the hand, accounting for the
-      flexible value of Aces in Blackjack.
-    - is_soft: Checks if the hand is soft (contains an Ace that can be valued at 11
-      without busting).
-    - is_blackjack: Checks if the hand is a Blackjack (two cards adding up to 21).
-    - can_double: Checks if the hand can be doubled down (contains exactly two cards).
-    - can_split: Checks if the hand can be split (contains two cards of the same rank).
-
-The BlackjackHand class also has the following property accessors:
-    - is_soft
-    - is_blackjack
-    - can_double
-    - can_split
-
-Dependencies:
-    cardsharp.common.hand: Hand class
-    cardsharp.common.card: Card and Rank classes
 """
 
 from cardsharp.common.card import Rank
@@ -34,26 +12,15 @@ from cardsharp.common.hand import Hand
 
 
 class BlackjackHand(Hand):
-    """
-    A class representing a hand in the game of Blackjack. This class extends
-    the Hand class from cardsharp and provides additional functionality
-    specific to the rules of Blackjack.
-    """
+    """A hand in the game of Blackjack."""
 
     __slots__ = ("_cards", "_cached_value", "_is_split")
 
     def __init__(self, *args, is_split: bool = False, **kwargs):
-        """
-        Initialize a BlackjackHand.
-
-        Args:
-            is_split (bool): Whether this hand was created from splitting another hand.
-            *args: Variable length argument list.
-            **kwargs: Arbitrary keyword arguments.
-        """
+        """Initialize a BlackjackHand."""
         super().__init__(*args, **kwargs)
-        self._cached_value = None  # Cache for hand value
-        self._is_split = is_split  # Track if this hand was created from a split
+        self._cached_value = None
+        self._is_split = is_split
 
     @property
     def is_split(self) -> bool:
@@ -87,7 +54,7 @@ class BlackjackHand(Hand):
     def value(self) -> int:
         """
         Calculate the value of the hand following Blackjack rules,
-        i.e., considering the value of Ace as 1 or 11 as necessary.
+        considering Aces as 1 or 11 as necessary.
         """
         if self._cached_value is not None:
             return self._cached_value
@@ -95,10 +62,13 @@ class BlackjackHand(Hand):
         num_aces = self._num_aces
         non_ace_value = self._non_ace_value
 
-        # Calculate value considering the flexible value of Aces
-        value = non_ace_value + num_aces  # Count all aces as 1 initially
-        if num_aces > 0 and non_ace_value + 10 <= 21:
-            value += 10  # Count one ace as 11 if it doesn't bust the hand
+        # Start with all aces counting as 1
+        value = non_ace_value + num_aces
+
+        # Try to use aces as 11 when beneficial
+        for _ in range(num_aces):
+            if value <= 11:
+                value += 10  # Convert one ace from 1 to 11
 
         self._cached_value = value
         return value
@@ -106,10 +76,17 @@ class BlackjackHand(Hand):
     @property
     def is_soft(self) -> bool:
         """
-        Check if the hand is soft, meaning it contains an Ace
-        that can be counted as 11 without causing the hand's total value to exceed 21.
+        Check if the hand is soft (contains an Ace counted as 11).
         """
-        return self._num_aces > 0 and self._non_ace_value + 10 < 21
+        if not self._num_aces:
+            return False
+
+        # Calculate value without any aces as 11
+        min_value = self._non_ace_value + self._num_aces
+        # Calculate actual value
+        actual_value = self.value()
+        # If actual value is higher than min_value, at least one ace is being used as 11
+        return actual_value > min_value and actual_value <= 21
 
     @property
     def is_blackjack(self) -> bool:

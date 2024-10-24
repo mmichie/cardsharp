@@ -85,13 +85,13 @@ def test_value_with_face_cards():
 
 def test_is_soft_with_multiple_aces():
     hand = BlackjackHand()
-    cards = [
-        Card(Suit.HEARTS, Rank.ACE),
-        Card(Suit.CLUBS, Rank.ACE),
-        Card(Suit.DIAMONDS, Rank.THREE),
-    ]
-    for card in cards:
-        hand.add_card(card)
+    hand.add_card(Card(Suit.HEARTS, Rank.ACE))
+    hand.add_card(Card(Suit.CLUBS, Rank.ACE))
+    hand.add_card(Card(Suit.DIAMONDS, Rank.THREE))
+
+    # Total should be 15 (Ace=11 + Ace=1 + Three=3)
+    assert hand.value() == 15
+    # Hand is soft because one Ace can still be counted as 11
     assert hand.is_soft
 
 
