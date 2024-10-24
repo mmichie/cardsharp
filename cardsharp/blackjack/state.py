@@ -123,12 +123,15 @@ class DealingState(GameState):
             # Handle insurance bets
             for player in game.players:
                 if player.insurance > 0:
-                    # Payout insurance bet at 2:1 (player receives 3 times the insurance bet)
-                    insurance_payout = player.insurance * 3
-                    player.payout_insurance(insurance_payout)
+                    # Calculate winnings at 2:1 odds
+                    winnings = player.insurance * 2
+                    # Total payout includes the original insurance bet plus winnings
+                    total_payout = player.insurance + winnings
+                    player.payout_insurance(total_payout)
                     game.io_interface.output(
-                        f"{player.name} wins insurance bet of ${player.insurance:.2f}."
+                        f"{player.name} wins insurance bet of ${total_payout:.2f}."
                     )
+                    player.insurance = 0  # Reset insurance bet
 
             # Now, handle players' hands
             for player in game.players:
@@ -266,13 +269,15 @@ class OfferInsuranceState(GameState):
         # Handle insurance payouts
         for player in game.players:
             if player.insurance > 0:
-                # Payout insurance bets at 2:1
-                insurance_payout = player.insurance * 3
-                player.payout_insurance(insurance_payout)
+                # Calculate winnings at 2:1 odds
+                winnings = player.insurance * 2
+                # Total payout includes the original insurance bet plus winnings
+                total_payout = player.insurance + winnings
+                player.payout_insurance(total_payout)
                 game.io_interface.output(
-                    f"{player.name} wins insurance bet of ${player.insurance:.2f}."
+                    f"{player.name} wins insurance bet of ${total_payout:.2f}."
                 )
-                player.insurance = 0  # Reset insurance bet
+                player.insurance = 0
 
         # Resolve player bets
         for player in game.players:
