@@ -311,6 +311,16 @@ class PlayersTurnState(GameState):
         valid_actions = [Action.HIT, Action.STAND]
         hand = player.hands[hand_index]
 
+        # Check if this is a split ace hand that already has two cards
+        is_split_ace = (
+            hand.is_split
+            and any(card.rank == Rank.ACE for card in hand.cards)
+            and len(hand.cards) >= 2
+        )
+
+        if is_split_ace:
+            return [Action.STAND]  # Split aces can only stand after receiving one card
+
         if len(hand.cards) == 2:
             # Check double down - not allowed on split aces
             if game.can_double_down(hand) and not (
@@ -323,9 +333,8 @@ class PlayersTurnState(GameState):
             # Check split
             if (
                 game.can_split(hand)
-                and game.rules.can_split(hand)  # Check game rules for split
-                and len(player.hands)
-                < (game.rules.get_max_splits() + 1)  # Check max splits
+                and game.rules.can_split(hand)
+                and len(player.hands) < (game.rules.get_max_splits() + 1)
                 and player.can_afford(player.bets[hand_index])
             ):
                 valid_actions.append(Action.SPLIT)
@@ -339,14 +348,25 @@ class PlayersTurnState(GameState):
     def player_action(self, game, player, action):
         """Handles a player action with proper split hand tracking."""
         if action == Action.HIT:
+            # Check if this is a split ace hand before allowing the hit
+            if (
+                player.current_hand.is_split
+                and any(card.rank == Rank.ACE for card in player.current_hand.cards)
+                and len(player.current_hand.cards) > 1
+            ):
+                game.io_interface.output(f"{player.name} cannot hit on split aces.")
+                player.hand_done[player.current_hand_index] = True
+                return
+
             card = game.shoe.deal()
             player.hit(card)
             game.add_visible_card(card)
             game.io_interface.output(f"{player.name} hits and gets {card}.")
-            # Auto-stand on split aces after getting one card
+
+            # Force stand on split aces after receiving one card
             if (
                 player.current_hand.is_split
-                and player.current_hand.cards[0].rank == Rank.ACE
+                and any(card.rank == Rank.ACE for card in player.current_hand.cards)
                 and len(player.current_hand.cards) == 2
             ):
                 player.hand_done[player.current_hand_index] = True
@@ -357,25 +377,11 @@ class PlayersTurnState(GameState):
                 game.io_interface.output(f"{player.name} has busted.")
                 player.hand_done[player.current_hand_index] = True
 
-        elif action == Action.STAND:
-            player.stand()
-            player.hand_done[player.current_hand_index] = True
-            game.io_interface.output(f"{player.name} stands.")
-
-        elif action == Action.DOUBLE:
-            player.double_down()
-            card = game.shoe.deal()
-            player.hit(card)
-            game.add_visible_card(card)
-            game.io_interface.output(f"{player.name} doubles down and gets {card}.")
-            if player.is_busted():
-                game.io_interface.output(f"{player.name} has busted.")
-            player.hand_done[player.current_hand_index] = True
-
         elif action == Action.SPLIT:
             curr_index = player.current_hand_index
+            is_splitting_aces = player.current_hand.cards[0].rank == Rank.ACE
 
-            # Create new hand with is_split=True using the same class as the current hand
+            # Create new hand with is_split=True
             new_hand = player.current_hand.__class__(is_split=True)
 
             # Move one card to the new hand
@@ -384,9 +390,9 @@ class PlayersTurnState(GameState):
 
             # Add the new hand and extend tracking lists
             player.hands.append(new_hand)
-            player.hand_done.append(False)  # Add new entry for hand_done
-            player.split_hands.append(True)  # Add new entry for split_hands
-            player.bets.append(player.bets[curr_index])  # Copy the bet for the new hand
+            player.hand_done.append(False)
+            player.split_hands.append(True)
+            player.bets.append(player.bets[curr_index])
 
             game.io_interface.output(f"{player.name} splits.")
 
@@ -398,11 +404,35 @@ class PlayersTurnState(GameState):
                 game.io_interface.output(f"{player.name}'s hand {i + 1} gets {card}.")
 
                 # If splitting aces, automatically stand after dealing one card
-                if player.hands[i].cards[0].rank == Rank.ACE:
-                    player.hand_done[i] = True  # Now safe because we extended the list
+                if is_splitting_aces:
+                    player.hand_done[i] = True
                     game.io_interface.output(
                         f"Split ace hand {i + 1} stands automatically."
                     )
+
+        elif action == Action.DOUBLE:
+            # Prevent doubling down on split aces
+            if player.current_hand.is_split and any(
+                card.rank == Rank.ACE for card in player.current_hand.cards
+            ):
+                game.io_interface.output(
+                    f"{player.name} cannot double down on split aces."
+                )
+                return
+
+            player.double_down()
+            card = game.shoe.deal()
+            player.hit(card)
+            game.add_visible_card(card)
+            game.io_interface.output(f"{player.name} doubles down and gets {card}.")
+            if player.is_busted():
+                game.io_interface.output(f"{player.name} has busted.")
+            player.hand_done[player.current_hand_index] = True
+
+        elif action == Action.STAND:
+            player.stand()
+            player.hand_done[player.current_hand_index] = True
+            game.io_interface.output(f"{player.name} stands.")
 
         elif action == Action.SURRENDER:
             player.surrender()
