@@ -91,11 +91,12 @@ class BlackjackHand(Hand):
     @property
     def is_blackjack(self) -> bool:
         """
-        Check if the hand is a blackjack, meaning it contains only two cards
-        and their combined value is exactly 21.
-        Note: Split hands can't be blackjack, even if they total 21 with two cards.
+        Check if the hand is a blackjack, meaning it contains an Ace and a ten-value card.
+        Split hands can't be blackjack, even if they total 21 with two cards.
         """
-        return len(self.cards) == 2 and self.value() == 21 and not self._is_split
+        if len(self.cards) != 2 or self._is_split:
+            return False
+        return self.value() == 21 and any(card.rank == Rank.ACE for card in self.cards)
 
     @property
     def can_double(self) -> bool:

@@ -511,8 +511,7 @@ class EndRoundState(GameState):
                 if bet_for_hand == 0:
                     continue  # Skip hands with no bet
                 if winner == "player":
-                    if player.blackjack:
-                        # Use the blackjack payout from the rules
+                    if player.blackjack and not hand.is_split:
                         payout_multiplier = game.get_blackjack_payout()
                         payout_amount = bet_for_hand + (
                             bet_for_hand * payout_multiplier
