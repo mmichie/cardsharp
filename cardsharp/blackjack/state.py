@@ -31,6 +31,12 @@ from cardsharp.blackjack.action import Action
 from cardsharp.common.io_interface import DummyIOInterface
 
 
+class InsufficientFundsError(Exception):
+    """Raised when a player does not have enough money to perform an action."""
+
+    pass
+
+
 class GameState(ABC):
     """
     Abstract base class for game states.
