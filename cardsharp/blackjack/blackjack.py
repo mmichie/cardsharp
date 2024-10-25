@@ -159,6 +159,7 @@ class BlackjackGame:
         self.current_state = WaitingForPlayersState()
         self.stats = SimulationStats()
         self.visible_cards = []
+        self.minimum_players = 1
 
     def add_visible_card(self, card):
         """Add a card to the list of visible cards."""
