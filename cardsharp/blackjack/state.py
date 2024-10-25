@@ -192,15 +192,15 @@ class OfferInsuranceState(GameState):
         Handles insurance offers, dealer blackjack checks, and resolves insurance bets.
         """
         dealer_up_card = game.dealer.current_hand.cards[0]
+        game.io_interface.output(f"Dealer shows {dealer_up_card}.")
 
-        # Only offer insurance if dealer shows Ace
-        if dealer_up_card.rank == Rank.ACE:
-            game.io_interface.output("Dealer shows an Ace.")
+        # Offer insurance if dealer's upcard is an Ace
+        if dealer_up_card.rank == Rank.ACE and game.rules.allow_insurance:
             for player in game.players:
                 self.offer_insurance(game, player)
 
-        # Check for dealer blackjack if allowed to peek
         dealer_has_blackjack = False
+        # Check for dealer blackjack if dealer peeking is allowed
         if game.rules.should_dealer_peek():
             if dealer_up_card.rank == Rank.ACE or dealer_up_card.rank.rank_value == 10:
                 if game.dealer.current_hand.is_blackjack:
@@ -217,7 +217,19 @@ class OfferInsuranceState(GameState):
                     f"{player.name} loses insurance bet of ${player.insurance:.2f}."
                 )
                 # Insurance bet was already deducted when bought; reset insurance amount
-                player.insurance = 0
+                player.insurance = 0  # Reset insurance bet
+
+        # Check for player blackjacks
+        for player in game.players:
+            if player.current_hand.is_blackjack:
+                # Player wins immediately
+                bet = player.bets[0]
+                payout_amount = bet + (bet * game.rules.blackjack_payout)
+                player.payout(0, payout_amount)
+                player.blackjack = True
+                player.winner = ["player"]
+                player.hand_done[player.current_hand_index] = True
+                game.io_interface.output(f"{player.name} got a blackjack!")
 
         # Proceed to players' turns
         game.set_state(PlayersTurnState())
@@ -226,10 +238,8 @@ class OfferInsuranceState(GameState):
         """
         Offers insurance to a player if the dealer's upcard is an Ace.
         """
-        # Use the player's strategy to decide whether to buy insurance
         wants_insurance = player.strategy.decide_insurance(player)
         if wants_insurance:
-            # Insurance bet must be exactly half the original bet
             insurance_bet = player.bets[0] / 2
             try:
                 player.buy_insurance(insurance_bet)
@@ -249,28 +259,27 @@ class OfferInsuranceState(GameState):
         # Handle insurance payouts
         for player in game.players:
             if player.insurance > 0:
-                # Insurance pays 2:1, so total payout is 3x the insurance bet
-                total_payout = player.insurance * 3
+                total_payout = player.insurance * 3  # Original bet + 2:1 payout
                 player.payout_insurance(total_payout)
                 game.io_interface.output(
                     f"{player.name} wins insurance bet of ${total_payout:.2f}."
                 )
-                player.insurance = 0
+                player.insurance = 0  # Reset insurance bet
             else:
                 game.io_interface.output(f"{player.name} did not take insurance.")
 
         # Resolve player bets
         for player in game.players:
             if player.current_hand.is_blackjack:
-                # If the player also has blackjack, it's a push
+                # Push
                 bet = player.bets[0]
-                player.payout(0, bet)  # Return the original bet
+                player.payout(0, bet)
                 player.winner = ["draw"]
                 game.io_interface.output(
                     f"{player.name} and dealer both have blackjack. Push."
                 )
             else:
-                # Dealer wins; player loses their bet
+                # Dealer wins
                 player.winner = ["dealer"]
                 game.io_interface.output(f"{player.name} loses to dealer's blackjack.")
 
