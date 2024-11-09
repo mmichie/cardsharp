@@ -110,10 +110,6 @@ class Player(SimplePlayer):
         if len(self.current_hand.cards) == 2 and not self.current_hand.is_split:
             valid.append(Action.SURRENDER)
 
-        # Check for insurance
-        if self.game.rules.can_insure(self.game.dealer.current_hand, self.current_hand):
-            valid.append(Action.INSURANCE)
-
         return valid
 
     def can_afford(self, amount: int) -> bool:
