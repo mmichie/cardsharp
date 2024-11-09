@@ -74,6 +74,7 @@ class Player(SimplePlayer):
         self.hand_done = [False]
         self.split_hands = [False]
         self.must_stand_after_hit = False
+        self.action_history = [[]]
 
     @property
     def current_hand(self):
@@ -154,6 +155,8 @@ class Player(SimplePlayer):
         self.hand_done.append(False)
         self.split_hands.append(True)
         self.bets.append(bet_for_current_hand)
+
+        self.action_history.append([])
 
         if is_splitting_aces:
             self.must_stand_after_hit = True
@@ -310,6 +313,7 @@ class Player(SimplePlayer):
         self.split_hands = [False]
         self.must_stand_after_hit = False
         self.insurance = 0
+        self.action_history = [[]]
 
 
 class Dealer(SimplePlayer):

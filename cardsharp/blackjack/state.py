@@ -316,7 +316,7 @@ class PlayersTurnState(GameState):
         game.set_state(DealersTurnState())
 
     def get_valid_actions(self, game, player, hand_index):
-        """Returns valid actions with proper validation for normal and split hands."""
+        """Returns valid actions for the player's current hand, considering game rules."""
         valid_actions = [Action.HIT, Action.STAND]
         hand = player.hands[hand_index]
 
@@ -331,31 +331,31 @@ class PlayersTurnState(GameState):
             return [Action.STAND]  # Split aces can only stand after receiving one card
 
         if len(hand.cards) == 2:
-            # Check double down - not allowed on split aces
-            if game.can_double_down(hand) and not (
-                hand.is_split and hand.cards[0].rank == Rank.ACE
-            ):
+            # Check double down based on game rules and hand value
+            if game.rules.can_double_down(hand):
                 if player.can_afford(player.bets[hand_index]):
-                    if hand_index == 0 or game.rules.can_double_after_split():
-                        valid_actions.append(Action.DOUBLE)
+                    valid_actions.append(Action.DOUBLE)
 
             # Check split
             if (
-                game.can_split(hand)
-                and game.rules.can_split(hand)
-                and len(player.hands) < (game.rules.get_max_splits() + 1)
+                game.rules.can_split(hand)
+                and game.rules.can_split_more(len(player.hands))
                 and player.can_afford(player.bets[hand_index])
             ):
                 valid_actions.append(Action.SPLIT)
 
-            # Check surrender - typically not allowed on split hands
-            if game.can_surrender(hand) and not hand.is_split:
+            is_first_action = len(player.action_history[hand_index]) == 0
+
+            if game.rules.can_surrender(hand, is_first_action) and not hand.is_split:
                 valid_actions.append(Action.SURRENDER)
 
         return valid_actions
 
     def player_action(self, game, player, action):
         """Handles a player action with proper split hand tracking."""
+
+        player.action_history[player.current_hand_index].append(action)
+
         if action == Action.HIT:
             # Check if this is a split ace hand before allowing the hit
             if (
@@ -390,18 +390,8 @@ class PlayersTurnState(GameState):
             curr_index = player.current_hand_index
             is_splitting_aces = player.current_hand.cards[0].rank == Rank.ACE
 
-            # Create new hand with is_split=True
-            new_hand = player.current_hand.__class__(is_split=True)
-
-            # Move one card to the new hand
-            card_to_move = player.current_hand.cards.pop()
-            new_hand.add_card(card_to_move)
-
-            # Add the new hand and extend tracking lists
-            player.hands.append(new_hand)
-            player.hand_done.append(False)
-            player.split_hands.append(True)
-            player.bets.append(player.bets[curr_index])
+            # Process the split using the player's split method
+            player.split()
 
             game.io_interface.output(f"{player.name} splits.")
 

@@ -153,7 +153,7 @@ class Rules:
 
     def can_double_down(self, hand: Hand) -> bool:
         """
-        Check if the hand can be doubled down.
+        Check if the hand can be doubled down based on the rules.
 
         Args:
             hand (Hand): The player's hand.
@@ -161,7 +161,12 @@ class Rules:
         Returns:
             bool: True if the hand can be doubled down, False otherwise.
         """
-        if len(hand.cards) == 2 and self.allow_double_down:
+        if not self.allow_double_down or len(hand.cards) != 2:
+            return False
+
+        hand_value = hand.value()
+        # Allow doubling on hard 9, 10, or 11
+        if not hand.is_soft and hand_value in [9, 10, 11]:
             return True
         return False
 
@@ -184,18 +189,29 @@ class Rules:
             return True
         return False
 
-    def can_surrender(self, player_hand: Hand) -> bool:
+    def can_surrender(self, hand: Hand, is_first_action: bool) -> bool:
         """
-        Check if the player can surrender.
+        Check if the player can surrender based on the rules and game state.
 
         Args:
-            player_hand (Hand): The player's hand.
+            hand (Hand): The player's hand.
+            is_first_action (bool): True if it's the player's first action on this hand.
 
         Returns:
             bool: True if surrender is allowed, False otherwise.
         """
-        if self.allow_surrender and len(player_hand.cards) == 2:
-            return True
+        if not self.allow_surrender or not is_first_action:
+            return False
+
+        if len(hand.cards) != 2:
+            return False
+
+        if self.allow_early_surrender:
+            return True  # Early surrender allowed before dealer checks for blackjack
+
+        if self.allow_late_surrender and not hand.is_split:
+            return True  # Late surrender allowed on first action and not on split hands
+
         return False
 
     def get_num_decks(self) -> int:
