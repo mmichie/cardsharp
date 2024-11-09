@@ -96,7 +96,11 @@ class BlackjackHand(Hand):
         """
         if len(self.cards) != 2 or self._is_split:
             return False
-        return self.value() == 21 and any(card.rank == Rank.ACE for card in self.cards)
+        return (
+            len(self.cards) == 2
+            and any(card.rank == Rank.ACE for card in self.cards)
+            and any(card.rank.rank_value == 10 for card in self.cards)
+        )
 
     @property
     def can_double(self) -> bool:
