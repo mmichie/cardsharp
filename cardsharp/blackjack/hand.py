@@ -1,119 +1,168 @@
 """
-Blackjack-specific extensions of the cardsharp library.
-
-This module extends the cardsharp library to provide classes and methods
-specifically designed to facilitate the game of Blackjack. It provides a class
-`BlackjackHand` that extends the `Hand` class from cardsharp and adds additional
-features pertinent to Blackjack.
+Optimized BlackjackHand implementation with improved cache handling.
 """
 
-from cardsharp.common.card import Rank
+from typing import Dict, List, Optional, Tuple
+from cardsharp.common.card import Card, Rank
 from cardsharp.common.hand import Hand
 
 
 class BlackjackHand(Hand):
-    """A hand in the game of Blackjack."""
+    """A hand in the game of Blackjack with optimized caching."""
 
-    __slots__ = ("_cards", "_cached_value", "_is_split")
+    __slots__ = ("_cards", "_cache", "_is_split")
 
     def __init__(self, *args, is_split: bool = False, **kwargs):
-        """Initialize a BlackjackHand."""
+        """Initialize a BlackjackHand with an optimized cache system."""
         super().__init__(*args, **kwargs)
-        self._cached_value = None
         self._is_split = is_split
+        # Cache structure holds multiple computed properties
+        self._cache: Dict[str, Any] = {
+            "value": None,
+            "non_ace_value": None,
+            "num_aces": None,
+            "is_soft": None,
+            "is_blackjack": None,
+            "card_ranks": None,
+            "last_card_count": 0,
+        }
 
-    @property
-    def is_split(self) -> bool:
-        """Whether this hand was created from a split."""
-        return self._is_split
+    def _should_invalidate_cache(self) -> bool:
+        """Check if cache needs invalidation based on card count changes."""
+        return len(self._cards) != self._cache["last_card_count"]
 
-    def _invalidate_cache(self):
-        """Invalidate the cache when the hand changes."""
-        self._cached_value = None
+    def _invalidate_cache(self) -> None:
+        """Invalidate only necessary cache entries."""
+        self._cache.update(
+            {
+                "value": None,
+                "is_soft": None,
+                "is_blackjack": None,
+                "last_card_count": len(self._cards),
+            }
+        )
+        # Don't invalidate card_ranks and non_ace values if we're just adding cards
 
-    def add_card(self, card):
-        """Override to invalidate cache when a new card is added."""
+    def add_card(self, card: Card) -> None:
+        """Add a card to the hand with selective cache invalidation."""
         super().add_card(card)
+
+        # Update card-specific caches without full invalidation
+        if self._cache["num_aces"] is not None:
+            if card.rank == Rank.ACE:
+                self._cache["num_aces"] += 1
+            else:
+                if self._cache["non_ace_value"] is not None:
+                    self._cache["non_ace_value"] += card.rank.rank_value
+
+        # Invalidate computed values that depend on the entire hand
         self._invalidate_cache()
 
-    def remove_card(self, card):
-        """Override to invalidate cache when a card is removed."""
+    def remove_card(self, card: Card) -> None:
+        """Remove a card from the hand with full cache invalidation."""
         super().remove_card(card)
-        self._invalidate_cache()
+        # Full cache invalidation on removal as it's less common
+        self._cache = {key: None for key in self._cache}
+        self._cache["last_card_count"] = len(self._cards)
 
     @property
     def _num_aces(self) -> int:
-        """Number of aces in the hand."""
-        return sum(card.rank == Rank.ACE for card in self.cards)
+        """Calculate and cache the number of aces in the hand."""
+        if self._cache["num_aces"] is None:
+            self._cache["num_aces"] = sum(
+                1 for card in self._cards if card.rank == Rank.ACE
+            )
+        return self._cache["num_aces"]
 
     @property
     def _non_ace_value(self) -> int:
-        """Sum of values of non-ace cards in the hand."""
-        return sum(card.rank.rank_value for card in self.cards if card.rank != Rank.ACE)
+        """Calculate and cache the sum of non-ace card values."""
+        if self._cache["non_ace_value"] is None:
+            self._cache["non_ace_value"] = sum(
+                card.rank.rank_value for card in self._cards if card.rank != Rank.ACE
+            )
+        return self._cache["non_ace_value"]
 
     def value(self) -> int:
-        """
-        Calculate the value of the hand following Blackjack rules,
-        considering Aces as 1 or 11 as necessary.
-        """
-        if self._cached_value is not None:
-            return self._cached_value
+        """Calculate the optimal value of the hand with ace handling."""
+        if self._should_invalidate_cache():
+            self._invalidate_cache()
+
+        if self._cache["value"] is not None:
+            return self._cache["value"]
 
         num_aces = self._num_aces
         non_ace_value = self._non_ace_value
 
-        # Start with all aces counting as 1
-        value = non_ace_value + num_aces
+        # Optimize ace value calculation
+        if num_aces == 0:
+            value = non_ace_value
+        else:
+            # Start with minimum value (all aces = 1)
+            value = non_ace_value + num_aces
+            # Try to use aces as 11 when beneficial
+            for _ in range(num_aces):
+                if value <= 11:
+                    value += 10  # Convert one ace from 1 to 11
+                else:
+                    break  # No need to check remaining aces
 
-        # Try to use aces as 11 when beneficial
-        for _ in range(num_aces):
-            if value <= 11:
-                value += 10  # Convert one ace from 1 to 11
-
-        self._cached_value = value
+        self._cache["value"] = value
         return value
 
     @property
     def is_soft(self) -> bool:
-        """
-        Check if the hand is soft (contains an Ace counted as 11).
-        """
+        """Determine if the hand is soft (contains an ace counted as 11)."""
+        if self._should_invalidate_cache():
+            self._invalidate_cache()
+
+        if self._cache["is_soft"] is not None:
+            return self._cache["is_soft"]
+
         if not self._num_aces:
+            self._cache["is_soft"] = False
             return False
 
-        # Calculate value without any aces as 11
+        # Calculate if any ace is being used as 11
         min_value = self._non_ace_value + self._num_aces
-        # Calculate actual value
         actual_value = self.value()
-        # If actual value is higher than min_value, at least one ace is being used as 11
-        return actual_value > min_value and actual_value <= 21
+        is_soft = actual_value > min_value and actual_value <= 21
+
+        self._cache["is_soft"] = is_soft
+        return is_soft
 
     @property
     def is_blackjack(self) -> bool:
-        """
-        Check if the hand is a blackjack, meaning it contains an Ace and a ten-value card.
-        Split hands can't be blackjack, even if they total 21 with two cards.
-        """
-        if len(self.cards) != 2 or self._is_split:
-            return False
-        return (
-            len(self.cards) == 2
-            and any(card.rank == Rank.ACE for card in self.cards)
-            and any(card.rank.rank_value == 10 for card in self.cards)
-        )
+        """Determine if the hand is a natural blackjack."""
+        if self._should_invalidate_cache():
+            self._invalidate_cache()
 
-    @property
-    def can_double(self) -> bool:
-        """
-        Check if the hand can be doubled down, meaning it contains exactly two cards.
-        Note that this method does not consider whether the player has enough money to double down.
-        """
-        return len(self.cards) == 2
+        if self._cache["is_blackjack"] is not None:
+            return self._cache["is_blackjack"]
+
+        # Early returns for obvious non-blackjack cases
+        if len(self._cards) != 2 or self._is_split:
+            self._cache["is_blackjack"] = False
+            return False
+
+        # Check for ace and ten-value card
+        has_ace = any(card.rank == Rank.ACE for card in self._cards)
+        has_ten = any(card.rank.rank_value == 10 for card in self._cards)
+
+        self._cache["is_blackjack"] = has_ace and has_ten
+        return self._cache["is_blackjack"]
 
     @property
     def can_split(self) -> bool:
-        """
-        Check if the hand can be split, meaning it contains exactly two cards of the same rank.
-        Note that this method does not consider whether the player has enough money to split.
-        """
-        return len(self.cards) == 2 and self.cards[0].rank == self.cards[1].rank
+        """Check if the hand can be split."""
+        return len(self._cards) == 2 and self._cards[0].rank == self._cards[1].rank
+
+    @property
+    def can_double(self) -> bool:
+        """Check if the hand can be doubled down."""
+        return len(self._cards) == 2
+
+    @property
+    def is_split(self) -> bool:
+        """Return whether this hand was created from a split."""
+        return self._is_split
