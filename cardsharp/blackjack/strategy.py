@@ -106,7 +106,7 @@ class BasicStrategy(Strategy):
             "H": Action.HIT,
             "S": Action.STAND,
             "D": Action.DOUBLE,
-            "DS": Action.DOUBLE,  # We'll handle the "else Stand" in decide_action
+            "DS": Action.DOUBLE,
             "P": Action.SPLIT,
             "R": Action.SURRENDER,
         }
@@ -128,19 +128,54 @@ class BasicStrategy(Strategy):
         return final_action
 
     def _get_valid_action(self, player, action, action_symbol):
-        if not self._is_action_valid(player, action):
-            # Remove the invalid action from consideration
-            possible_actions = player.valid_actions
-            # Exclude the invalid action
-            possible_actions = [act for act in possible_actions if act != action]
-            # Re-evaluate the strategy without the invalid action
-            for alt_action_symbol in ["S", "H"]:  # Prioritize Stand over Hit
-                alt_action = self._map_action_symbol(alt_action_symbol)
-                if alt_action in possible_actions:
-                    return alt_action
-            # Default to Hit if no other valid actions
-            return Action.HIT
-        return action
+        valid_actions = player.valid_actions
+
+        if action == Action.DOUBLE:
+            if Action.DOUBLE in valid_actions:
+                return Action.DOUBLE
+            else:
+                if action_symbol == "DS":
+                    if Action.STAND in valid_actions:
+                        return Action.STAND
+                    else:
+                        return Action.HIT  # Fallback to HIT if STAND not possible
+                else:
+                    if Action.HIT in valid_actions:
+                        return Action.HIT
+                    else:
+                        return Action.STAND  # Fallback if HIT is not valid
+
+        elif action == Action.SURRENDER:
+            if Action.SURRENDER in valid_actions:
+                return Action.SURRENDER
+            else:
+                if Action.HIT in valid_actions:
+                    return Action.HIT
+                else:
+                    return Action.STAND  # Fallback if HIT is not valid
+
+        elif action == Action.SPLIT:
+            if Action.SPLIT in valid_actions:
+                return Action.SPLIT
+            else:
+                if Action.HIT in valid_actions:
+                    return Action.HIT
+                else:
+                    return Action.STAND  # Fallback if HIT is not valid
+
+        elif action in valid_actions:
+            return action
+
+        else:
+            # If the recommended action is not valid, default to HIT or STAND
+            if Action.HIT in valid_actions:
+                return Action.HIT
+            elif Action.STAND in valid_actions:
+                return Action.STAND
+            else:
+                # As a last resort, return any available action
+                return valid_actions[0]
+
 
     def _is_action_valid(self, player, action):
         if action == Action.DOUBLE:
