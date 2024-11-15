@@ -150,12 +150,12 @@ class BlackjackGame:
         List of visible cards in the game.
     """
 
-    def __init__(self, rules: Rules, io_interface: IOInterface):
+    def __init__(self, rules: Rules, io_interface: IOInterface, shoe: Shoe = None):
         self.players = []
         self.io_interface = io_interface
         self.dealer = Dealer("Dealer", io_interface)
         self.rules = rules
-        self.shoe = Shoe(num_decks=rules.num_decks, penetration=0.75)
+        self.shoe = shoe if shoe else Shoe(num_decks=rules.num_decks, penetration=0.75)
         self.current_state = WaitingForPlayersState()
         self.stats = SimulationStats()
         self.visible_cards = []
@@ -268,12 +268,13 @@ def create_io_interface(args):
     return io_interface, strategy
 
 
-def play_game(rules, io_interface, player_names, strategy):
+def play_game(rules, io_interface, player_names, strategy, shoe=None):
     """
     Function to play a single game of Blackjack, to be executed in a separate process.
+    Now accepts an optional shoe parameter.
     """
     players = [Player(name, io_interface, strategy) for name in player_names]
-    game = BlackjackGame(rules, io_interface)
+    game = BlackjackGame(rules, io_interface, shoe)
 
     for player in players:
         game.add_player(player)
@@ -289,62 +290,60 @@ def play_game(rules, io_interface, player_names, strategy):
 
     game.reset()
 
-    return net_earnings, total_bets, game.stats.report()
+    return net_earnings, total_bets, game.stats.report(), game.shoe
 
 
 def play_game_batch(rules, io_interface, player_names, num_games, strategy):
     """Function to play a batch of games of Blackjack, to be executed in a separate process."""
+    shoe = Shoe(num_decks=rules.num_decks, penetration=0.75)
     results = []
     earnings = []
     total_bets = 0
+
     for _ in range(num_games):
-        game_earnings, game_bets, result = play_game(
-            rules, io_interface, player_names, strategy
+        game_earnings, game_bets, result, current_shoe = play_game(
+            rules, io_interface, player_names, strategy, shoe
         )
+        shoe = current_shoe
         results.append(result)
         earnings.append(game_earnings)
         total_bets += game_bets
+
     return results, earnings, total_bets
 
 
-def play_game_and_record(rules, io_interface, player_names, strategy):
+def play_game_and_record(rules, io_interface, player_names, strategy, shoe=None):
     """
     Play a single game of Blackjack and record the card sequence.
+    Now accepts an optional shoe parameter.
     """
     players = [Player(name, io_interface, strategy) for name in player_names]
-    game = BlackjackGame(rules, io_interface)
+    game = BlackjackGame(rules, io_interface, shoe)
 
     for player in players:
         game.add_player(player)
 
     game.set_state(PlacingBetsState())
-
-    initial_shoe = deepcopy(game.shoe)
 
     game.play_round()
 
     earnings = sum(player.money - 1000 for player in game.players)
     total_bets = sum(sum(player.bets) for player in game.players)
 
-    return earnings, total_bets, game.stats.report(), initial_shoe
+    return earnings, total_bets, game.stats.report(), game.shoe
 
 
-def replay_game_with_strategy(
-    rules, io_interface, player_names, strategy, initial_deck
-):
+def replay_game_with_strategy(rules, io_interface, player_names, strategy, shoe):
     """
-    Replay a game with a specific strategy and initial deck state.
+    Replay a game with a specific strategy and shoe state.
     """
     players = [Player(name, io_interface, strategy) for name in player_names]
-    game = BlackjackGame(rules, io_interface)
+    game = BlackjackGame(rules, io_interface, shoe)
 
     for player in players:
         game.add_player(player)
 
     game.set_state(PlacingBetsState())
-
-    game.shoe = initial_deck
-
     game.play_round()
 
     earnings = sum(player.money - 1000 for player in game.players)
@@ -373,6 +372,9 @@ def run_strategy_analysis(args, rules):
     }
     player_names = ["Bob"]
 
+    # Initialize shoe once here instead of per game
+    initial_shoe = Shoe(num_decks=rules.num_decks, penetration=0.75)
+
     graph = (
         MultiStrategyBlackjackGraph(args.num_games, strategies.keys())
         if args.vis
@@ -382,9 +384,13 @@ def run_strategy_analysis(args, rules):
     for game_number in range(args.num_games):
         print(f"\nPlaying game {game_number + 1}")
 
-        _, _, _, initial_deck = play_game_and_record(
-            rules, DummyIOInterface(), player_names, BasicStrategy()
+        # Record game with base strategy using the shared shoe
+        _, _, _, current_shoe_state = play_game_and_record(
+            rules, DummyIOInterface(), player_names, BasicStrategy(), initial_shoe
         )
+
+        # Reset shoe to state after recording
+        initial_shoe = deepcopy(current_shoe_state)
 
         for strategy_name, strategy in strategies.items():
             earnings, total_bets, result = replay_game_with_strategy(
@@ -392,7 +398,7 @@ def run_strategy_analysis(args, rules):
                 DummyIOInterface(),
                 player_names,
                 strategy,
-                deepcopy(initial_deck),
+                deepcopy(current_shoe_state),  # Use the recorded shoe state
             )
 
             results[strategy_name]["net_earnings"] += earnings
@@ -529,36 +535,39 @@ def main():
         profiler.enable()
 
     if args.console:
+        # Initialize shoe once for console mode
+        shoe = Shoe(num_decks=rules.num_decks, penetration=0.75)
         for _ in range(args.num_games):
-            game = BlackjackGame(rules, io_interface)
+            game = BlackjackGame(rules, io_interface, shoe)
             player = Player("Player1", io_interface, strategy)
             game.add_player(player)
             game.play_round()
+            shoe = game.shoe  # Update shoe state for next game
 
     elif args.analysis:
         run_strategy_analysis(args, rules)
     elif args.simulate:
-        start_time = time.time()  # Record the start time
-
+        start_time = time.time()
         graph = BlackjackGraph(args.num_games) if args.vis else None
-
         net_earnings = 0
         total_bets = 0
         results = []
 
         if args.single_cpu:
-            # Run simulations sequentially
+            # Initialize shoe once for single CPU mode
+            shoe = Shoe(num_decks=rules.num_decks, penetration=0.75)
             for i in range(args.num_games):
-                earnings, bets, result = play_game(
-                    rules, DummyIOInterface(), ["Bob"], strategy
+                earnings, bets, result, current_shoe = play_game(
+                    rules, DummyIOInterface(), ["Bob"], strategy, shoe
                 )
+                shoe = current_shoe  # Update shoe state for next game
                 net_earnings += earnings
                 total_bets += bets
                 if graph:
                     graph.update(i + 1, net_earnings)
                 results.append(result)
         else:
-            # Run simulations in parallel
+            # For parallel processing, we still need separate shoes per process
             cpu_count = multiprocessing.cpu_count()
             games_per_cpu, remainder = divmod(args.num_games, cpu_count)
             game_batches = [
@@ -581,8 +590,8 @@ def main():
                             graph.update(game_number, net_earnings)
                         results.append(result)
 
-        end_time = time.time()  # Record the end time
-        duration = end_time - start_time  # Calculate the duration
+        end_time = time.time()
+        duration = end_time - start_time
         games_per_second = args.num_games / duration if duration > 0 else 0
 
         # Initialize counters for aggregated statistics
