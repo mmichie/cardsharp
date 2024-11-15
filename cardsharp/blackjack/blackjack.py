@@ -191,8 +191,7 @@ class BlackjackGame:
         self.current_state.handle(self)
 
     def reset(self):
-        """Reset the game by shuffling the shoe and resetting all players."""
-        self.shoe.shuffle()
+        """Reset the game by resetting all players."""
         for player in self.players:
             player.reset()
         self.dealer.reset()
