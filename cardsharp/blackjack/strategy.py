@@ -176,7 +176,6 @@ class BasicStrategy(Strategy):
                 # As a last resort, return any available action
                 return valid_actions[0]
 
-
     def _is_action_valid(self, player, action):
         if action == Action.DOUBLE:
             return player.current_hand.can_double
