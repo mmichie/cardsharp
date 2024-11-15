@@ -2,7 +2,7 @@
 Optimized BlackjackHand implementation with improved cache handling.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict
 from cardsharp.common.card import Card, Rank
 from cardsharp.common.hand import Hand
 
@@ -23,13 +23,8 @@ class BlackjackHand(Hand):
             "num_aces": None,
             "is_soft": None,
             "is_blackjack": None,
-            "card_ranks": None,
             "last_card_count": 0,
         }
-
-    def _should_invalidate_cache(self) -> bool:
-        """Check if cache needs invalidation based on card count changes."""
-        return len(self._cards) != self._cache["last_card_count"]
 
     def _invalidate_cache(self) -> None:
         """Invalidate only necessary cache entries."""
@@ -41,13 +36,13 @@ class BlackjackHand(Hand):
                 "last_card_count": len(self._cards),
             }
         )
-        # Don't invalidate card_ranks and non_ace values if we're just adding cards
+        # Don't invalidate 'num_aces' and 'non_ace_value' unless necessary
 
     def add_card(self, card: Card) -> None:
         """Add a card to the hand with selective cache invalidation."""
         super().add_card(card)
 
-        # Update card-specific caches without full invalidation
+        # Update cached values for 'num_aces' and 'non_ace_value'
         if self._cache["num_aces"] is not None:
             if card.rank == Rank.ACE:
                 self._cache["num_aces"] += 1
@@ -85,27 +80,21 @@ class BlackjackHand(Hand):
 
     def value(self) -> int:
         """Calculate the optimal value of the hand with ace handling."""
-        if self._should_invalidate_cache():
-            self._invalidate_cache()
-
         if self._cache["value"] is not None:
             return self._cache["value"]
 
         num_aces = self._num_aces
         non_ace_value = self._non_ace_value
 
-        # Optimize ace value calculation
-        if num_aces == 0:
-            value = non_ace_value
-        else:
-            # Start with minimum value (all aces = 1)
-            value = non_ace_value + num_aces
-            # Try to use aces as 11 when beneficial
-            for _ in range(num_aces):
-                if value <= 11:
-                    value += 10  # Convert one ace from 1 to 11
-                else:
-                    break  # No need to check remaining aces
+        # Start with minimum value (all aces counted as 1)
+        value = non_ace_value + num_aces
+
+        # Try to use aces as 11 when beneficial
+        for _ in range(num_aces):
+            if value + 10 <= 21:
+                value += 10
+            else:
+                break
 
         self._cache["value"] = value
         return value
@@ -113,43 +102,33 @@ class BlackjackHand(Hand):
     @property
     def is_soft(self) -> bool:
         """Determine if the hand is soft (contains an ace counted as 11)."""
-        if self._should_invalidate_cache():
-            self._invalidate_cache()
-
         if self._cache["is_soft"] is not None:
             return self._cache["is_soft"]
 
-        if not self._num_aces:
+        if self._num_aces == 0:
             self._cache["is_soft"] = False
             return False
 
-        # Calculate if any ace is being used as 11
         min_value = self._non_ace_value + self._num_aces
         actual_value = self.value()
-        is_soft = actual_value > min_value and actual_value <= 21
-
-        self._cache["is_soft"] = is_soft
-        return is_soft
+        self._cache["is_soft"] = actual_value > min_value and actual_value <= 21
+        return self._cache["is_soft"]
 
     @property
     def is_blackjack(self) -> bool:
         """Determine if the hand is a natural blackjack."""
-        if self._should_invalidate_cache():
-            self._invalidate_cache()
-
         if self._cache["is_blackjack"] is not None:
             return self._cache["is_blackjack"]
 
-        # Early returns for obvious non-blackjack cases
         if len(self._cards) != 2 or self._is_split:
             self._cache["is_blackjack"] = False
             return False
 
-        # Check for ace and ten-value card
-        has_ace = any(card.rank == Rank.ACE for card in self._cards)
-        has_ten = any(card.rank.rank_value == 10 for card in self._cards)
+        ranks = {card.rank for card in self._cards}
+        has_ace = Rank.ACE in ranks
+        has_ten_value = any(rank.rank_value == 10 for rank in ranks)
 
-        self._cache["is_blackjack"] = has_ace and has_ten
+        self._cache["is_blackjack"] = has_ace and has_ten_value
         return self._cache["is_blackjack"]
 
     @property
