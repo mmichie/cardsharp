@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blackjack Quiz</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React and ReactDOM -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+
+    <!-- shadcn/ui base styles -->
+    <style>
+        @layer base {
+            :root {
+                --background: 0 0% 100%;
+                --foreground: 240 10% 3.9%;
+                --card: 0 0% 100%;
+                --card-foreground: 240 10% 3.9%;
+                --primary: 240 5.9% 10%;
+                --primary-foreground: 0 0% 98%;
+                --secondary: 240 4.8% 95.9%;
+                --secondary-foreground: 240 5.9% 10%;
+                --muted: 240 4.8% 95.9%;
+                --border: 240 5.9% 90%;
+                --input: 240 5.9% 90%;
+                --ring: 240 5.9% 10%;
+                --radius: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body class="bg-background text-foreground">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // Mock shadcn/ui components
+        const Card = ({ className, children }) => (
+            <div className={`rounded-lg border bg-card text-card-foreground shadow-sm ${className}`}>
+                {children}
+            </div>
+        );
+
+        const Button = ({ className, children, onClick, disabled }) => (
+            <button 
+                className={`inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${className}`}
+                onClick={onClick}
+                disabled={disabled}
+            >
+                {children}
+            </button>
+        );
+
+        const Input = ({ className, ...props }) => (
+            <input 
+                className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+                {...props}
+            />
+        );
+
+        // Simple Timer icon component
+        const Timer = ({ className }) => (
+            <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                width="24" 
+                height="24" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className={className}
+            >
+                <line x1="10" x2="14" y1="2" y2="2"/>
+                <line x1="12" x2="15" y1="14" y2="11"/>
+                <circle cx="12" cy="14" r="8"/>
+            </svg>
+        );
+
+        const BlackjackQuiz = () => {
+            const [cards, setCards] = React.useState([]);
+            const [userGuess, setUserGuess] = React.useState('');
+            const [feedback, setFeedback] = React.useState('');
+            const [score, setScore] = React.useState({ correct: 0, total: 0 });
+            const [showAnswer, setShowAnswer] = React.useState(false);
+            const [timer, setTimer] = React.useState(0);
+            const [timerRunning, setTimerRunning] = React.useState(false);
+            const [fastestTime, setFastestTime] = React.useState(null);
+
+            const cardValues = {
+                'A': 11, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7,
+                '8': 8, '9': 9, '10': 10, 'J': 10, 'Q': 10, 'K': 10
+            };
+
+            const suits = ['♠', '♣', '♥', '♦'];
+
+            React.useEffect(() => {
+                const handleKeyPress = (e) => {
+                    if ((e.key === ' ' || e.key === 'Enter') && showAnswer) {
+                        e.preventDefault();
+                        newQuestion();
+                    }
+                };
+
+                window.addEventListener('keydown', handleKeyPress);
+                return () => window.removeEventListener('keydown', handleKeyPress);
+            }, [showAnswer]);
+
+            React.useEffect(() => {
+                let interval;
+                if (timerRunning) {
+                    interval = setInterval(() => {
+                        setTimer(prev => prev + 0.1);
+                    }, 100);
+                }
+                return () => clearInterval(interval);
+            }, [timerRunning]);
+
+            React.useEffect(() => {
+                if (cards.length === 0) {
+                    newQuestion();
+                }
+            }, []);
+
+            const generateNewHand = () => {
+                const numCards = Math.floor(Math.random() * 3) + 2;
+                const newCards = [];
+                for (let i = 0; i < numCards; i++) {
+                    const cardKeys = Object.keys(cardValues);
+                    const randomValue = cardKeys[Math.floor(Math.random() * cardKeys.length)];
+                    const randomSuit = suits[Math.floor(Math.random() * suits.length)];
+                    newCards.push({ value: randomValue, suit: randomSuit });
+                }
+                return newCards;
+            };
+
+            const calculateTotal = (cardArray) => {
+                let total = 0;
+                let aces = 0;
+                
+                cardArray.forEach(card => {
+                    if (card.value === 'A') {
+                        aces += 1;
+                    } else {
+                        total += cardValues[card.value];
+                    }
+                });
+                
+                let possibleTotals = new Set();
+                
+                for (let i = 0; i <= aces; i++) {
+                    let aceTotal = total + (i * 11) + ((aces - i) * 1);
+                    if (aceTotal <= 21) {
+                        possibleTotals.add(aceTotal);
+                    }
+                }
+                
+                if (possibleTotals.size === 0) {
+                    return [total + aces];
+                }
+                
+                return Array.from(possibleTotals).sort((a, b) => a - b);
+            };
+
+            const newQuestion = () => {
+                const newCards = generateNewHand();
+                setCards(newCards);
+                setUserGuess('');
+                setFeedback('');
+                setShowAnswer(false);
+                setTimer(0);
+                setTimerRunning(true);
+            };
+
+            const checkAnswer = () => {
+                if (showAnswer || !userGuess.trim()) return;
+                
+                setTimerRunning(false);
+                const correctTotals = calculateTotal(cards);
+                
+                const guessedValues = userGuess
+                    .split(/[,\s]+/)
+                    .map(num => parseInt(num.trim()))
+                    .filter(num => !isNaN(num))
+                    .sort((a, b) => a - b);
+                
+                if (guessedValues.length === 0) {
+                    setFeedback('Please enter a valid number');
+                    return;
+                }
+
+                let isCorrect = false;
+                if (correctTotals.length === guessedValues.length) {
+                    isCorrect = correctTotals.every((val, idx) => val === guessedValues[idx]);
+                }
+
+                if (isCorrect && (fastestTime === null || timer < fastestTime)) {
+                    setFastestTime(timer);
+                }
+
+                setScore(prev => ({
+                    correct: prev.correct + (isCorrect ? 1 : 0),
+                    total: prev.total + 1
+                }));
+
+                if (isCorrect) {
+                    setFeedback(`✅ Correct! Time: ${timer.toFixed(1)}s`);
+                } else {
+                    setFeedback(`❌ Not quite. The correct total${correctTotals.length > 1 ? 's are' : ' is'} ${correctTotals.join(' or ')}`);
+                }
+                setShowAnswer(true);
+            };
+
+            const handleKeyDown = (e) => {
+                if (e.key === 'Enter' && !showAnswer) {
+                    e.preventDefault();
+                    checkAnswer();
+                }
+            };
+
+            return (
+                <div className="flex flex-col items-center gap-6 p-4">
+                    <div className="flex justify-between w-full max-w-md">
+                        <div className="text-xl font-bold">
+                            Score: {score.correct}/{score.total} ({score.total > 0 ? Math.round(score.correct/score.total * 100) : 0}%)
+                        </div>
+                        <div className="flex items-center gap-2 text-xl font-bold">
+                            <Timer className="w-6 h-6" />
+                            {timer.toFixed(1)}s
+                        </div>
+                    </div>
+
+                    {fastestTime !== null && (
+                        <div className="text-sm text-green-600">
+                            Fastest correct answer: {fastestTime.toFixed(1)}s
+                        </div>
+                    )}
+
+                    <div className="flex gap-4 min-h-64">
+                        {cards.map((card, index) => {
+                            const isRed = card.suit === '♥' || card.suit === '♦';
+                            return (
+                                <Card key={index} className="w-32 h-48 flex items-center justify-center bg-white">
+                                    <div className={`text-3xl ${isRed ? 'text-red-600' : 'text-black'}`}>
+                                        <div className="text-center">
+                                            {card.value}
+                                            <br />
+                                            {card.suit}
+                                        </div>
+                                    </div>
+                                </Card>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex flex-col items-center gap-4 w-full max-w-md">
+                        <div className="flex gap-4 w-full">
+                            <Input
+                                type="text"
+                                value={userGuess}
+                                onChange={(e) => setUserGuess(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                placeholder="Enter total(s)"
+                                className="flex-grow"
+                                disabled={showAnswer}
+                                autoFocus
+                            />
+                            <Button 
+                                onClick={checkAnswer}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-6"
+                                disabled={showAnswer || !userGuess.trim()}
+                            >
+                                Check
+                            </Button>
+                        </div>
+                        
+                        {feedback && (
+                            <div className={`text-lg font-bold ${feedback.includes('✅') ? 'text-green-600' : 'text-red-600'}`}>
+                                {feedback}
+                            </div>
+                        )}
+                    </div>
+
+                    <Button 
+                        onClick={newQuestion}
+                        className="bg-green-600 hover:bg-green-700 text-white px-8"
+                    >
+                        Next Hand {showAnswer && '(press Space or Enter)'}
+                    </Button>
+
+                    <div className="mt-4 text-sm text-gray-600 text-center">
+                        <div>For hands with Aces, enter multiple totals separated by commas</div>
+                        <div>Example: "8, 18" for A,7 or "2, 12, 22" for A,A</div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Render the app
+        ReactDOM.createRoot(document.getElementById('root')).render(
+            <React.StrictMode>
+                <BlackjackQuiz />
+            </React.StrictMode>
+        );
+    </script>
+</body>
+</html>
