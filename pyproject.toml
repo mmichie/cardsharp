@@ -32,7 +32,7 @@ pylint = "^3.3.1"
 ruff = "^0.7.1"
 
 [tool.poetry.group.dev.dependencies]
-py-spy = "^0.3.14"
+py-spy = ">=0.3.14,<0.5.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
