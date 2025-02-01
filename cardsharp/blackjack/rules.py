@@ -1,4 +1,5 @@
 from cardsharp.common.hand import Hand
+from cardsharp.common.card import Rank
 
 
 class Rules:
@@ -183,7 +184,7 @@ class Rules:
         """
         if (
             self.allow_insurance
-            and dealer_hand.cards[0].rank == "A"
+            and dealer_hand.cards[0].rank == Rank.ACE
             and len(dealer_hand.cards) == 2
         ):
             return True
