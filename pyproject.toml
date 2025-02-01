@@ -5,23 +5,22 @@ description = "Card Playing Simulator focused on Blackjack"
 authors = ["Matt Michie <mmichie@gmail.com>"]
 license = "MIT"
 readme = "README.md"
-
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Games/Entertainment :: Board Games",
 ]
 
 [tool.poetry.dependencies]
 python = "^3.12"
-asyncio = "*"
-aiofiles = "*"
+asyncio = ">=3.4.3,<4.0.0"
+aiofiles = ">=24.0.0"
 matplotlib = "^3.9.2"
 streamlit = "^1.38.0"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 black = "^24.10.0"
 pytest = "^8.3.3"
 pytest-cov = "^6.0.0"
@@ -30,8 +29,6 @@ pytest-asyncio = "^0.25.1"
 flake8 = "^7.1.1"
 pylint = "^3.3.1"
 ruff = "^0.9.1"
-
-[tool.poetry.group.dev.dependencies]
 py-spy = ">=0.3.14,<0.5.0"
 
 [build-system]
@@ -42,11 +39,9 @@ build-backend = "poetry.core.masonry.api"
 # Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
 select = ["E", "F"]
 ignore = []
-
 # Allow autofix for all enabled rules (when `--fix`) is provided.
 fixable = ["A", "B", "C", "D", "E", "F", "G", "I", "N", "Q", "S", "T", "W", "ANN", "ARG", "BLE", "COM", "DJ", "DTZ", "EM", "ERA", "EXE", "FBT", "ICN", "INP", "ISC", "NPY", "PD", "PGH", "PIE", "PL", "PT", "PTH", "PYI", "RET", "RSE", "RUF", "SIM", "SLF", "TCH", "TID", "TRY", "UP", "YTT"]
 unfixable = []
-
 # Exclude a variety of commonly ignored directories.
 exclude = [
     ".bzr",
@@ -71,7 +66,4 @@ exclude = [
     "node_modules",
     "venv",
 ]
-
-# Same as other linters in project
 line-length = 120
-
