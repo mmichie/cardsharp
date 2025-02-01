@@ -67,10 +67,11 @@ class DummyIOInterface(IOInterface):
         """Simulates output operation."""
         pass
 
-    def get_player_action(
-        self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
-    ) -> Action:
-        return player.decide_action(valid_actions)
+    def get_player_action(self, player: "Actor", valid_actions: list[Action]) -> Action:
+        if valid_actions:
+            return valid_actions[0]  # Default to the first valid action
+        else:
+            raise ValueError("No valid actions available.")
 
     def check_numeric_response(self, response, min_val, max_val):
         return True
