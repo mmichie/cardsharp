@@ -7,10 +7,14 @@ from __future__ import annotations
 import asyncio
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
+from typing import TYPE_CHECKING
 
 import aiofiles
 
 from cardsharp.blackjack.action import Action
+
+if TYPE_CHECKING:
+    from cardsharp.common.actor import Actor
 
 
 class IOInterface(ABC):
@@ -38,7 +42,7 @@ class IOInterface(ABC):
 
     @abstractmethod
     async def get_player_action(
-        self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
+        self, player: Actor, valid_actions: list[Action]
     ) -> Action:
         """Retrieve an action from a player."""
 
@@ -67,7 +71,7 @@ class DummyIOInterface(IOInterface):
         """Simulates output operation."""
         pass
 
-    def get_player_action(self, player: "Actor", valid_actions: list[Action]) -> Action:
+    def get_player_action(self, player: Actor, valid_actions: list[Action]) -> Action:
         if valid_actions:
             return valid_actions[0]  # Default to the first valid action
         else:
@@ -112,9 +116,7 @@ class TestIOInterface(IOInterface):
         """Add a player action to the queue."""
         self.player_actions.append(action)
 
-    def get_player_action(
-        self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
-    ) -> Action:
+    def get_player_action(self, player: Actor, valid_actions: list[Action]) -> Action:
         if self.player_actions:
             return self.player_actions.pop(0)
         else:
@@ -123,9 +125,7 @@ class TestIOInterface(IOInterface):
     def check_numeric_response(self, ctx):
         pass
 
-    def prompt_user_action(
-        self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
-    ) -> Action:
+    def prompt_user_action(self, player: Actor, valid_actions: list[Action]) -> Action:
         """Prompt a player for an action."""
         return self.get_player_action(player, valid_actions)
 
@@ -149,9 +149,7 @@ class ConsoleIOInterface(IOInterface):
     def output(self, message: str):
         print(message)
 
-    def get_player_action(
-        self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
-    ) -> Action:
+    def get_player_action(self, player: Actor, valid_actions: list[Action]) -> Action:
         attempts = 0
         while attempts < 3:  # Setting a maximum number of attempts
             action_input = input(
@@ -205,7 +203,7 @@ class LoggingIOInterface(IOInterface):
         await asyncio.sleep(0)  # Yield control to the event loop
 
     async def get_player_action(
-        self, player: "Actor", valid_actions: list[Action]  # type: ignore # noqa: F821
+        self, player: Actor, valid_actions: list[Action]
     ) -> Action:
         await asyncio.sleep(0)
         return player.decide_action(valid_actions)
