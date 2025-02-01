@@ -208,7 +208,7 @@ if st.sidebar.button("Run Simulation"):
 
     st.header("Simulation Statistics")
     st.write(f"Total simulation time: {duration:.2f} seconds")
-    st.write(f"Games simulated per second: {num_games/duration:.2f}")
+    st.write(f"Games simulated per second: {num_games / duration:.2f}")
 
     st.header("Earnings Data")
     df = pd.DataFrame(earnings_data)

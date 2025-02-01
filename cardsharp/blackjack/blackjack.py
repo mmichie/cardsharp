@@ -609,13 +609,6 @@ def main():
 
         games_played_excluding_pushes = total_games_played - total_draws
 
-        if games_played_excluding_pushes != 0:
-            player_wins_ratio = total_player_wins / games_played_excluding_pushes
-            dealer_wins_ratio = total_dealer_wins / games_played_excluding_pushes
-        else:
-            player_wins_ratio = 0
-            dealer_wins_ratio = 0
-
         if total_bets > 0:
             house_edge = (
                 -net_earnings / total_bets
@@ -631,6 +624,12 @@ def main():
         print(f"Net Earnings: ${net_earnings:,.2f}")
         print(f"Total Bets: ${total_bets:,.2f}")
         print(f"House Edge: {house_edge:.2f}%")
+
+        if games_played_excluding_pushes != 0:
+            player_win_rate = total_player_wins / games_played_excluding_pushes * 100
+            dealer_win_rate = total_dealer_wins / games_played_excluding_pushes * 100
+            print(f"Player win rate: {player_win_rate:.2f}%")
+            print(f"Dealer win rate: {dealer_win_rate:.2f}%")
 
         print(f"\nDuration of simulation: {duration:.2f} seconds")
         print(f"Games simulated per second: {games_per_second:,.2f}")
