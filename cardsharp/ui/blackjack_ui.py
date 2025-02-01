@@ -5,11 +5,21 @@ import time
 from copy import deepcopy
 
 from cardsharp.blackjack.actor import Dealer, Player
-from cardsharp.blackjack.state import PlacingBetsState, WaitingForPlayersState, EndRoundState
+from cardsharp.blackjack.state import (
+    PlacingBetsState,
+    WaitingForPlayersState,
+    EndRoundState,
+)
 from cardsharp.blackjack.stats import SimulationStats
-from cardsharp.blackjack.strategy import BasicStrategy, CountingStrategy, AggressiveStrategy, MartingaleStrategy
+from cardsharp.blackjack.strategy import (
+    BasicStrategy,
+    CountingStrategy,
+    AggressiveStrategy,
+    MartingaleStrategy,
+)
 from cardsharp.common.deck import Deck
 from cardsharp.common.io_interface import DummyIOInterface
+
 
 class BlackjackGame:
     def __init__(self, rules, io_interface):
@@ -39,42 +49,56 @@ class BlackjackGame:
             player.reset()
         self.dealer.reset()
 
+
 def play_game_and_record(rules, io_interface, player_names, strategy):
     players = [Player(name, io_interface, strategy) for name in player_names]
     game = BlackjackGame(rules, io_interface)
-    
+
     for player in players:
         game.add_player(player)
 
     game.set_state(PlacingBetsState())
-    
+
     initial_deck = deepcopy(game.deck)
-    
+
     game.play_round()
 
     earnings = sum(player.money - 1000 for player in game.players)
-    
+
     return earnings, game.stats.report(), initial_deck
 
-def replay_game_with_strategy(rules, io_interface, player_names, strategy, initial_deck):
+
+def replay_game_with_strategy(
+    rules, io_interface, player_names, strategy, initial_deck
+):
     players = [Player(name, io_interface, strategy) for name in player_names]
     game = BlackjackGame(rules, io_interface)
-    
+
     for player in players:
         game.add_player(player)
 
     game.set_state(PlacingBetsState())
-    
+
     game.deck = initial_deck
-    
+
     game.play_round()
 
     earnings = sum(player.money - 1000 for player in game.players)
-    
+
     return earnings, game.stats.report()
 
+
 def run_strategy_analysis(num_games, strategies, rules):
-    results = {strategy: {"net_earnings": 0, "wins": 0, "losses": 0, "draws": 0, "bankrupt": False} for strategy in strategies}
+    results = {
+        strategy: {
+            "net_earnings": 0,
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "bankrupt": False,
+        }
+        for strategy in strategies
+    }
     player_names = ["Bob"]
     earnings_data = {strategy: [] for strategy in strategies}
 
@@ -82,17 +106,27 @@ def run_strategy_analysis(num_games, strategies, rules):
     status_text = st.empty()
 
     for game_number in range(num_games):
-        _, _, initial_deck = play_game_and_record(rules, DummyIOInterface(), player_names, BasicStrategy())
+        _, _, initial_deck = play_game_and_record(
+            rules, DummyIOInterface(), player_names, BasicStrategy()
+        )
 
         for strategy_name, strategy in strategies.items():
             if not results[strategy_name]["bankrupt"]:
-                earnings, result = replay_game_with_strategy(rules, DummyIOInterface(), player_names, strategy, deepcopy(initial_deck))
+                earnings, result = replay_game_with_strategy(
+                    rules,
+                    DummyIOInterface(),
+                    player_names,
+                    strategy,
+                    deepcopy(initial_deck),
+                )
 
                 results[strategy_name]["net_earnings"] += earnings
                 results[strategy_name]["wins"] += result["player_wins"]
                 results[strategy_name]["losses"] += result["dealer_wins"]
                 results[strategy_name]["draws"] += result["draws"]
-                earnings_data[strategy_name].append(results[strategy_name]["net_earnings"])
+                earnings_data[strategy_name].append(
+                    results[strategy_name]["net_earnings"]
+                )
 
                 if results[strategy_name]["net_earnings"] <= -1000:
                     results[strategy_name]["bankrupt"] = True
@@ -103,6 +137,7 @@ def run_strategy_analysis(num_games, strategies, rules):
     status_text.text("Simulation complete!")
     return results, earnings_data
 
+
 st.set_page_config(page_title="Blackjack Strategy Simulator", layout="wide")
 
 st.title("Blackjack Strategy Simulator")
@@ -112,7 +147,7 @@ num_games = st.sidebar.slider("Number of Games", 100, 10000, 1000)
 selected_strategies = st.sidebar.multiselect(
     "Select Strategies",
     ["Basic", "Counting", "Aggressive", "Martingale"],
-    default=["Basic", "Counting"]
+    default=["Basic", "Counting"],
 )
 
 if st.sidebar.button("Run Simulation"):
@@ -134,7 +169,9 @@ if st.sidebar.button("Run Simulation"):
     selected_strategy_objects = {name: strategies[name] for name in selected_strategies}
 
     start_time = time.time()
-    results, earnings_data = run_strategy_analysis(num_games, selected_strategy_objects, rules)
+    results, earnings_data = run_strategy_analysis(
+        num_games, selected_strategy_objects, rules
+    )
     end_time = time.time()
     duration = end_time - start_time
 
@@ -151,9 +188,9 @@ if st.sidebar.button("Run Simulation"):
             st.write(f"Draws: {result['draws']}")
             st.write(f"Bankrupt: {'Yes' if result['bankrupt'] else 'No'}")
 
-            total_games = result['wins'] + result['losses'] + result['draws']
+            total_games = result["wins"] + result["losses"] + result["draws"]
             if total_games > 0:
-                win_rate = result['wins'] / total_games
+                win_rate = result["wins"] / total_games
                 st.write(f"Win Rate: {win_rate:.2%}")
             st.write("---")
 
@@ -179,9 +216,11 @@ if st.sidebar.button("Run Simulation"):
 
 st.sidebar.markdown("---")
 st.sidebar.header("How to Use")
-st.sidebar.markdown("""
+st.sidebar.markdown(
+    """
 1. Adjust the number of games using the slider.
 2. Select the strategies you want to compare.
 3. Click 'Run Simulation' to start.
 4. View the results, visualization, and earnings data below.
-""")
+"""
+)

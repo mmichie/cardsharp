@@ -1,5 +1,6 @@
 from cardsharp.common.actor import SimplePlayer
 
+
 class RoulettePlayer(SimplePlayer):
     """
     A roulette player, extending from the SimplePlayer class which is derived from Actor.
@@ -30,4 +31,3 @@ class RoulettePlayer(SimplePlayer):
         """
         # Placeholder logic for betting decision
         return (10, 1)  # Example: Bet $10 on number 1
-
