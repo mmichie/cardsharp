@@ -331,7 +331,10 @@ class Dealer(SimplePlayer):
 
     def has_ace(self):
         """Returns True if dealer's up card is an Ace."""
-        return self.current_hand.cards[0].rank == Rank.ACE
+        return (
+            bool(self.current_hand.cards)
+            and self.current_hand.cards[0].rank == Rank.ACE
+        )
 
     def add_card(self, card):
         """Adds a card to dealer's hand."""
