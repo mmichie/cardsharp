@@ -127,6 +127,11 @@ class Rules:
             # If resplitting is not allowed, this implicitly means only the first split is allowed
             if not self.allow_resplitting and hand.is_split:
                 return False
+
+            # Special case for Aces that are already split - cannot resplit Aces
+            if hand.cards[0].rank == Rank.ACE and hand.is_split:
+                return False
+
             return True
 
         return False
@@ -270,12 +275,17 @@ class Rules:
         Returns:
             bool: True if the hand can be resplit, False otherwise.
         """
-        if (
-            self.allow_resplitting
-            and len(hand.cards) == 2
-            and hand.cards[0].rank == hand.cards[1].rank
-        ):
+        # First check if resplitting is allowed by the rules
+        if not self.allow_resplitting:
+            return False
+
+        # Check if hand has exactly two cards of the same rank
+        if len(hand.cards) == 2 and hand.cards[0].rank == hand.cards[1].rank:
+            # Special rule: Aces cannot be resplit in most casino blackjack games
+            if hand.cards[0].rank == Rank.ACE and hand.is_split:
+                return False
             return True
+
         return False
 
     def should_dealer_peek(self) -> bool:
