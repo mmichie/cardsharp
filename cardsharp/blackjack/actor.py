@@ -231,12 +231,27 @@ class Player(SimplePlayer):
 
     def decide_action(self, dealer_up_card) -> Action:
         """Decides which action to take based on the player's strategy or IOInterface."""
+        time_limit = self.game.rules.get_time_limit()
+
         if self.strategy is not None:
             return self.strategy.decide_action(self, dealer_up_card, self.game)
         else:
-            action = self.io_interface.get_player_action(self, self.valid_actions)
+            # If there's a time limit, pass it to the IOInterface
+            if time_limit > 0:
+                self.io_interface.output(f"Time limit: {time_limit} seconds")
+                action = self.io_interface.get_player_action(
+                    self, self.valid_actions, time_limit
+                )
+            else:
+                action = self.io_interface.get_player_action(self, self.valid_actions)
+
             if action is None:
-                raise InvalidActionError(f"{self.name} did not choose a valid action.")
+                # If time limit expired or no valid action was chosen, default to STAND
+                self.io_interface.output(
+                    f"Time limit expired or no valid action chosen. {self.name} stands."
+                )
+                return Action.STAND
+
             return action
 
     def place_bet(self, amount, min_bet):

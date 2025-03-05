@@ -539,6 +539,24 @@ class EndRoundState(GameState):
                 bet_for_hand = player.bets[hand_index]
                 if bet_for_hand == 0:
                     continue  # Skip hands with no bet
+
+                # Check for bonus payout combinations first
+                bonus_combination = self.check_for_bonus_combination(hand)
+                if (
+                    bonus_combination and winner == "player"
+                ):  # Only apply bonus for winning hands
+                    bonus_multiplier = game.get_bonus_payout(bonus_combination)
+                    if bonus_multiplier > 0:
+                        bonus_amount = bet_for_hand * bonus_multiplier
+                        # Base payout (even money) + bonus amount
+                        total_payout = (bet_for_hand * 2) + bonus_amount
+                        player.payout(hand_index, total_payout)
+                        game.io_interface.output(
+                            f"{player.name} gets a bonus payout of {bonus_amount:.2f} for {bonus_combination}!"
+                        )
+                        continue  # Skip regular payout processing
+
+                # Regular payout processing
                 if winner == "player":
                     if player.blackjack and not hand.is_split:
                         payout_multiplier = game.get_blackjack_payout()
@@ -554,3 +572,41 @@ class EndRoundState(GameState):
                 else:
                     # Player loses bet; no payout
                     player.bets[hand_index] = 0  # Reset bet for this hand
+
+    def check_for_bonus_combination(self, hand):
+        """
+        Check if a hand matches any bonus payout combination.
+        Returns the combination string if found, None otherwise.
+        """
+        # Example: Check for suited 6-7-8
+        if len(hand.cards) == 3:
+            # Sort cards by rank
+            sorted_cards = sorted(hand.cards, key=lambda card: card.rank.rank_value)
+
+            # Check for consecutive ranks (like 6-7-8)
+            is_consecutive = all(
+                sorted_cards[i + 1].rank.rank_value
+                == sorted_cards[i].rank.rank_value + 1
+                for i in range(len(sorted_cards) - 1)
+            )
+
+            # Check if all cards have the same suit
+            same_suit = all(card.suit == sorted_cards[0].suit for card in sorted_cards)
+
+            if is_consecutive and same_suit:
+                # Create a key like "suited-6-7-8"
+                ranks = "-".join(str(card.rank) for card in sorted_cards)
+                return f"suited-{ranks}"
+
+        # Check for three of a kind (e.g., 7-7-7)
+        if len(hand.cards) == 3:
+            if all(card.rank == hand.cards[0].rank for card in hand.cards):
+                return f"{hand.cards[0].rank}-{hand.cards[0].rank}-{hand.cards[0].rank}"
+
+        # Check for 21 with 5 cards or more
+        if len(hand.cards) >= 5 and hand.value() == 21:
+            return "five-card-21"
+
+        # Add more patterns as needed
+
+        return None

@@ -23,6 +23,7 @@ class Rules:
         bonus_payouts: dict = {},
         time_limit: int = 0,
         max_splits: int = 3,
+        insurance_payout: float = 2.0,
     ):
         """
         Initialize the game rules.
@@ -98,6 +99,7 @@ class Rules:
         self.time_limit = time_limit
         self.use_csm = use_csm
         self.max_splits = max_splits
+        self.insurance_payout = insurance_payout
 
     def should_dealer_hit(self, hand: Hand) -> bool:
         """Determine if the dealer should hit based on the game rules."""
@@ -335,3 +337,12 @@ class Rules:
             int: Time limit in seconds. Returns 0 if no time limit.
         """
         return self.time_limit
+
+    def get_insurance_payout(self) -> float:
+        """
+        Get the payout multiplier for insurance.
+
+        Returns:
+            float: Insurance payout multiplier.
+        """
+        return self.insurance_payout

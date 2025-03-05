@@ -155,7 +155,15 @@ class BlackjackGame:
         self.io_interface = io_interface
         self.dealer = Dealer("Dealer", io_interface)
         self.rules = rules
-        self.shoe = shoe if shoe else Shoe(num_decks=rules.num_decks, penetration=0.75)
+        self.shoe = (
+            shoe
+            if shoe
+            else Shoe(
+                num_decks=rules.num_decks,
+                penetration=0.75,
+                use_csm=rules.is_using_csm(),
+            )
+        )
         self.current_state = WaitingForPlayersState()
         self.stats = SimulationStats()
         self.visible_cards = []
@@ -235,7 +243,7 @@ class BlackjackGame:
 
     def get_insurance_payout(self):
         """Get the payout multiplier for insurance."""
-        return 2.0  # Standard insurance payout is 2:1
+        return self.rules.get_insurance_payout()
 
     def get_bonus_payout(self, card_combination):
         """Get the bonus payout for a specific card combination."""
@@ -295,7 +303,9 @@ def play_game(rules, io_interface, player_names, strategy, shoe=None):
 
 def play_game_batch(rules, io_interface, player_names, num_games, strategy):
     """Function to play a batch of games of Blackjack, to be executed in a separate process."""
-    shoe = Shoe(num_decks=rules.num_decks, penetration=0.75)
+    shoe = Shoe(
+        num_decks=rules.num_decks, penetration=0.75, use_csm=rules.is_using_csm()
+    )
     results = []
     earnings = []
     total_bets = 0
@@ -373,7 +383,9 @@ def run_strategy_analysis(args, rules):
     player_names = ["Bob"]
 
     # Initialize shoe once here instead of per game
-    initial_shoe = Shoe(num_decks=rules.num_decks, penetration=0.75)
+    initial_shoe = Shoe(
+        num_decks=rules.num_decks, penetration=0.75, use_csm=rules.is_using_csm()
+    )
 
     graph = (
         MultiStrategyBlackjackGraph(args.num_games, strategies.keys())
@@ -448,18 +460,39 @@ def run_strategy_analysis(args, rules):
 
 def create_rules(args):
     """Create the Rules object based on the command line arguments."""
+    # Define default bonus payouts
+    default_bonus_payouts = {}
+
+    # Only use bonus payouts if they are explicitly enabled or not explicitly disabled
+    if args.enable_bonus_payouts or (
+        not args.disable_bonus_payouts and not hasattr(args, "enable_bonus_payouts")
+    ):
+        default_bonus_payouts = {
+            "suited-6-7-8": 2.0,  # Pays 2:1 for suited 6-7-8
+            "7-7-7": 3.0,  # Pays 3:1 for three 7s
+            "five-card-21": 1.5,  # Pays 1.5:1 for a 5+ card 21
+        }
+
     return Rules(
         blackjack_payout=1.5,
-        dealer_hit_soft_17=False,
+        dealer_hit_soft_17=args.dealer_hit_soft_17,
         dealer_peek=True,
         allow_split=True,
         allow_double_down=True,
         allow_double_after_split=True,
         allow_insurance=True,
         allow_surrender=True,
-        num_decks=6,
+        num_decks=args.num_decks,
         min_bet=args.min_bet,
         max_bet=args.max_bet,
+        insurance_payout=args.insurance_payout,
+        allow_resplitting=args.allow_resplitting,
+        allow_late_surrender=args.allow_late_surrender,
+        allow_early_surrender=args.allow_early_surrender,
+        use_csm=args.use_csm,
+        time_limit=args.time_limit,
+        max_splits=args.max_splits,
+        bonus_payouts=default_bonus_payouts,
     )
 
 
@@ -524,6 +557,47 @@ def main():
     )
     parser.add_argument("--min_bet", type=int, default=10, help="Minimum bet amount")
     parser.add_argument("--max_bet", type=int, default=1000, help="Maximum bet amount")
+    parser.add_argument(
+        "--insurance_payout",
+        type=float,
+        default=2.0,
+        help="Insurance payout multiplier",
+    )
+    parser.add_argument(
+        "--dealer_hit_soft_17", action="store_true", help="Dealer hits on soft 17"
+    )
+    parser.add_argument(
+        "--allow_resplitting", action="store_true", help="Allow resplitting"
+    )
+    parser.add_argument(
+        "--allow_late_surrender", action="store_true", help="Allow late surrender"
+    )
+    parser.add_argument(
+        "--allow_early_surrender", action="store_true", help="Allow early surrender"
+    )
+    parser.add_argument(
+        "--use_csm", action="store_true", help="Use continuous shuffling machine"
+    )
+    parser.add_argument(
+        "--time_limit",
+        type=int,
+        default=0,
+        help="Time limit for player decisions (0 for no limit)",
+    )
+    parser.add_argument(
+        "--max_splits", type=int, default=3, help="Maximum number of splits allowed"
+    )
+    parser.add_argument(
+        "--num_decks", type=int, default=6, help="Number of decks in the shoe"
+    )
+    parser.add_argument(
+        "--enable_bonus_payouts",
+        action="store_true",
+        help="Enable bonus payouts for special combinations",
+    )
+    parser.add_argument(
+        "--disable_bonus_payouts", action="store_true", help="Disable all bonus payouts"
+    )
     args = parser.parse_args()
 
     io_interface, strategy = create_io_interface(args)
@@ -536,7 +610,9 @@ def main():
 
     if args.console:
         # Initialize shoe once for console mode
-        shoe = Shoe(num_decks=rules.num_decks, penetration=0.75)
+        shoe = Shoe(
+            num_decks=rules.num_decks, penetration=0.75, use_csm=rules.is_using_csm()
+        )
         for _ in range(args.num_games):
             game = BlackjackGame(rules, io_interface, shoe)
             player = Player("Player1", io_interface, strategy)
@@ -555,7 +631,11 @@ def main():
 
         if args.single_cpu:
             # Initialize shoe once for single CPU mode
-            shoe = Shoe(num_decks=rules.num_decks, penetration=0.75)
+            shoe = Shoe(
+                num_decks=rules.num_decks,
+                penetration=0.75,
+                use_csm=rules.is_using_csm(),
+            )
             for i in range(args.num_games):
                 earnings, bets, result, current_shoe = play_game(
                     rules, DummyIOInterface(), ["Bob"], strategy, shoe

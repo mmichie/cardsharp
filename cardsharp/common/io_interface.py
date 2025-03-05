@@ -42,9 +42,9 @@ class IOInterface(ABC):
 
     @abstractmethod
     async def get_player_action(
-        self, player: Actor, valid_actions: list[Action]
+        self, player: Actor, valid_actions: list[Action], time_limit: int = 0
     ) -> Action:
-        """Retrieve an action from a player."""
+        """Retrieve an action from a player with optional time limit in seconds."""
 
     @abstractmethod
     async def check_numeric_response(self, ctx):
@@ -71,7 +71,9 @@ class DummyIOInterface(IOInterface):
         """Simulates output operation."""
         pass
 
-    def get_player_action(self, player: Actor, valid_actions: list[Action]) -> Action:
+    def get_player_action(
+        self, player: Actor, valid_actions: list[Action], time_limit: int = 0
+    ) -> Action:
         if valid_actions:
             return valid_actions[0]  # Default to the first valid action
         else:
@@ -116,7 +118,9 @@ class TestIOInterface(IOInterface):
         """Add a player action to the queue."""
         self.player_actions.append(action)
 
-    def get_player_action(self, player: Actor, valid_actions: list[Action]) -> Action:
+    def get_player_action(
+        self, player: Actor, valid_actions: list[Action], time_limit: int = 0
+    ) -> Action:
         if self.player_actions:
             return self.player_actions.pop(0)
         else:
@@ -125,9 +129,11 @@ class TestIOInterface(IOInterface):
     def check_numeric_response(self, ctx):
         pass
 
-    def prompt_user_action(self, player: Actor, valid_actions: list[Action]) -> Action:
+    def prompt_user_action(
+        self, player: Actor, valid_actions: list[Action], time_limit: int = 0
+    ) -> Action:
         """Prompt a player for an action."""
-        return self.get_player_action(player, valid_actions)
+        return self.get_player_action(player, valid_actions, time_limit)
 
 
 class ConsoleIOInterface(IOInterface):
@@ -149,19 +155,47 @@ class ConsoleIOInterface(IOInterface):
     def output(self, message: str):
         print(message)
 
-    def get_player_action(self, player: Actor, valid_actions: list[Action]) -> Action:
+    def get_player_action(
+        self, player: Actor, valid_actions: list[Action], time_limit: int = 0
+    ) -> Action:
+        import signal
+
+        def timeout_handler(signum, frame):
+            raise TimeoutError("Time limit expired")
+
         attempts = 0
         while attempts < 3:  # Setting a maximum number of attempts
-            action_input = input(
-                f"{player.name}, it's your turn. What's your action? "
-            ).lower()
-            for action in Action:
-                if action_input == action.name.lower() and action in valid_actions:
-                    return action
-            print(
-                f"Invalid action, valid actions are: {', '.join([a.name for a in valid_actions])}"
-            )
-            attempts += 1
+            # If time limit is set, configure the alarm
+            if time_limit > 0:
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(time_limit)  # Set alarm for time_limit seconds
+                print(f"You have {time_limit} seconds to decide...")
+
+            try:
+                action_input = input(
+                    f"{player.name}, it's your turn. What's your action? "
+                ).lower()
+
+                # Reset the alarm
+                if time_limit > 0:
+                    signal.alarm(0)
+
+                for action in Action:
+                    if action_input == action.name.lower() and action in valid_actions:
+                        return action
+
+                print(
+                    f"Invalid action, valid actions are: {', '.join([a.name for a in valid_actions])}"
+                )
+                attempts += 1
+
+            except TimeoutError:
+                # Time limit expired
+                print(f"Time limit expired! Defaulting to STAND.")
+                return (
+                    Action.STAND if Action.STAND in valid_actions else valid_actions[0]
+                )
+
         raise Exception("Too many invalid attempts. Game aborted.")
 
     def check_numeric_response(self, ctx):
@@ -203,7 +237,7 @@ class LoggingIOInterface(IOInterface):
         await asyncio.sleep(0)  # Yield control to the event loop
 
     async def get_player_action(
-        self, player: Actor, valid_actions: list[Action]
+        self, player: Actor, valid_actions: list[Action], time_limit: int = 0
     ) -> Action:
         await asyncio.sleep(0)
         return player.decide_action(valid_actions)
@@ -229,10 +263,14 @@ class AsyncIOInterfaceWrapper:
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(self.executor, self.io_interface.output, message)
 
-    async def get_player_action(self, player, valid_actions):
+    async def get_player_action(self, player, valid_actions, time_limit: int = 0):
         loop = asyncio.get_running_loop()
         action = await loop.run_in_executor(
-            self.executor, self.io_interface.get_player_action, player, valid_actions
+            self.executor,
+            self.io_interface.get_player_action,
+            player,
+            valid_actions,
+            time_limit,
         )
         return action
 
