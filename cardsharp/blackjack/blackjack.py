@@ -175,7 +175,9 @@ class BlackjackGame:
 
     def set_state(self, state):
         """Change the current state of the game."""
-        self.io_interface.output(f"Changing state to {state}.")
+        # During simulation with DummyIOInterface, no need to output
+        if not isinstance(self.io_interface, DummyIOInterface):
+            self.io_interface.output(f"Changing state to {state}.")
         self.current_state = state
 
     def add_player(self, player):

@@ -84,32 +84,38 @@ class Player(SimplePlayer):
     @property
     def valid_actions(self) -> list[Action]:
         """Returns a list of valid actions for the player."""
-        if self.hand_done[self.current_hand_index]:
+        # Fast path checks
+        if self.hand_done[self.current_hand_index] or self.done:
             return []
-        if self.done:
+
+        cards_len = len(self.current_hand.cards)
+
+        if not cards_len:
             return []
-        elif not self.current_hand.cards:
-            return []
-        elif len(self.current_hand.cards) == 1:
+        elif cards_len == 1:
             return [Action.HIT, Action.STAND]
 
+        # Pre-allocate valid actions for most common case
         valid = [Action.HIT, Action.STAND]
 
-        # Check for double down
-        if len(self.current_hand.cards) == 2:
+        # Only do more expensive checks if we have exactly 2 cards
+        if cards_len == 2:
+            # Check for double down - common action, check first
             if self.game.rules.can_double_down(self.current_hand):
                 doubled_bet = self.bets[self.current_hand_index] * 2
                 if doubled_bet <= self.game.rules.max_bet:
                     valid.append(Action.DOUBLE)
 
-        # Check for split
-        if self.current_hand.can_split and self.game.rules.can_split(self.current_hand):
-            if len(self.hands) < self.game.rules.get_max_splits() + 1:
-                valid.append(Action.SPLIT)
+            # Check for split - less common
+            if self.current_hand.can_split and self.game.rules.can_split(
+                self.current_hand
+            ):
+                if len(self.hands) < self.game.rules.get_max_splits() + 1:
+                    valid.append(Action.SPLIT)
 
-        # Check for surrender
-        if len(self.current_hand.cards) == 2 and not self.current_hand.is_split:
-            valid.append(Action.SURRENDER)
+            # Check for surrender - least common action
+            if not self.current_hand.is_split:
+                valid.append(Action.SURRENDER)
 
         return valid
 

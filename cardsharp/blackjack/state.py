@@ -111,13 +111,27 @@ class DealingState(GameState):
         """
         Handles the card dealing and notifies the interface.
         """
-        for _ in range(2):
-            for player in game.players + [game.dealer]:
-                card = game.shoe.deal()
-                player.add_card(card)
-                game.add_visible_card(card)
-                if player != game.dealer:
-                    game.io_interface.output(f"Dealt {card} to {player.name}.")
+        # Skip output for simulation mode
+        is_dummy_io = isinstance(game.io_interface, DummyIOInterface)
+
+        # Optimize dealing loop - reduce method lookups by having players_with_dealer ready
+        players_with_dealer = game.players + [game.dealer]
+
+        # First round - deal one card to each player and dealer
+        for player in players_with_dealer:
+            card = game.shoe.deal()
+            player.add_card(card)
+            game.add_visible_card(card)
+            if not is_dummy_io and player != game.dealer:
+                game.io_interface.output(f"Dealt {card} to {player.name}.")
+
+        # Second round - deal second card to each player and dealer
+        for player in players_with_dealer:
+            card = game.shoe.deal()
+            player.add_card(card)
+            game.add_visible_card(card)
+            if not is_dummy_io and player != game.dealer:
+                game.io_interface.output(f"Dealt {card} to {player.name}.")
 
     def check_blackjack(self, game):
         """Checks for blackjack for dealer and players, handles payouts appropriately."""

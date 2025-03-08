@@ -64,18 +64,24 @@ class BlackjackHand(Hand):
     def _num_aces(self) -> int:
         """Calculate and cache the number of aces in the hand."""
         if self._cache["num_aces"] is None:
-            self._cache["num_aces"] = sum(
-                1 for card in self._cards if card.rank == Rank.ACE
-            )
+            # Faster implementation with direct attribute access and manual loop
+            count = 0
+            for card in self._cards:
+                if card.rank == Rank.ACE:
+                    count += 1
+            self._cache["num_aces"] = count
         return self._cache["num_aces"]
 
     @property
     def _non_ace_value(self) -> int:
         """Calculate and cache the sum of non-ace card values."""
         if self._cache["non_ace_value"] is None:
-            self._cache["non_ace_value"] = sum(
-                card.rank.rank_value for card in self._cards if card.rank != Rank.ACE
-            )
+            # Faster implementation with direct calculation and manual loop
+            total = 0
+            for card in self._cards:
+                if card.rank != Rank.ACE:
+                    total += card.rank.rank_value
+            self._cache["non_ace_value"] = total
         return self._cache["non_ace_value"]
 
     def value(self) -> int:
@@ -89,7 +95,8 @@ class BlackjackHand(Hand):
         # Start with minimum value (all aces counted as 1)
         value = non_ace_value + num_aces
 
-        # Try to use aces as 11 when beneficial
+        # Try to use aces as 11 when beneficial - use original algorithm
+        # to match test expectations
         for _ in range(num_aces):
             if value + 10 <= 21:
                 value += 10
