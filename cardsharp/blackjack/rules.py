@@ -25,62 +25,6 @@ class Rules:
         max_splits: int = 3,
         insurance_payout: float = 2.0,
     ):
-        """
-        Initialize the game rules.
-
-        Args:
-            blackjack_payout (float, optional): Payout multiplier for
-            a blackjack. Defaults to 1.5.
-
-            dealer_hit_soft_17 (bool, optional): Flag indicating if the dealer
-            hits on soft 17. Defaults to True.
-
-            allow_split (bool, optional): Flag indicating if splitting pairs is
-            allowed. Defaults to True.
-
-            allow_double_down (bool, optional): Flag indicating if doubling down
-            is allowed. Defaults to True.
-
-            allow_insurance (bool, optional): Flag indicating if insurance is
-            allowed. Defaults to True.
-
-            allow_surrender (bool, optional): Flag indicating if surrender is
-            allowed. Defaults to True.
-
-            num_decks (int, optional): Number of decks used in the game. Defaults to 1.
-
-            min_bet (float, optional): Minimum bet allowed in the game. Defaults to 1.0.
-
-            max_bet (float, optional): Maximum bet allowed in the game. Defaults to 100.0.
-
-            allow_late_surrender (bool, optional): Flag indicating if late
-            surrender is allowed. Defaults to False.
-
-            allow_double_after_split (bool, optional): Flag indicating if
-            doubling down after splitting is allowed. Defaults to False.
-
-            allow_resplitting (bool, optional): Flag indicating if resplitting
-            is allowed. Defaults to False.
-
-            dealer_peek (bool, optional): Flag indicating if the dealer checks
-            for blackjack. Defaults to False.
-
-            use_csm (bool, optional): Flag indicating if a Continuous Shuffling
-            Machine (CSM) is used. Defaults to False.
-
-            allow_early_surrender (bool, optional): Flag indicating if early
-            surrender is allowed. Defaults to False.
-
-            bonus_payouts (dict, optional): Dictionary defining bonus payouts
-            for specific card combinations. Defaults to an empty dictionary.
-
-            time_limit (int, optional): Time limit in seconds for player
-            decisions. Defaults to 0 (no time limit).
-
-            max_splits (int, optional): Maximum number of times a player can split their hand.
-            Defaults to 3 (resulting in up to 4 hands).
-
-        """
         self.allow_double_after_split = allow_double_after_split
         self.allow_double_down = allow_double_down
         self.allow_early_surrender = allow_early_surrender
@@ -100,6 +44,29 @@ class Rules:
         self.use_csm = use_csm
         self.max_splits = max_splits
         self.insurance_payout = insurance_payout
+
+    def to_dict(self) -> dict:
+        """Convert rules to a dictionary for serialization."""
+        return {
+            "blackjack_payout": self.blackjack_payout,
+            "dealer_hit_soft_17": self.dealer_hit_soft_17,
+            "allow_split": self.allow_split,
+            "allow_double_down": self.allow_double_down,
+            "allow_insurance": self.allow_insurance,
+            "allow_surrender": self.allow_surrender,
+            "num_decks": self.num_decks,
+            "min_bet": self.min_bet,
+            "max_bet": self.max_bet,
+            "allow_late_surrender": self.allow_late_surrender,
+            "allow_double_after_split": self.allow_double_after_split,
+            "allow_resplitting": self.allow_resplitting,
+            "dealer_peek": self.dealer_peek,
+            "use_csm": self.use_csm,
+            "allow_early_surrender": self.allow_early_surrender,
+            "time_limit": self.time_limit,
+            "max_splits": self.max_splits,
+            "insurance_payout": self.insurance_payout,
+        }
 
     def should_dealer_hit(self, hand: Hand) -> bool:
         """Determine if the dealer should hit based on the game rules."""
