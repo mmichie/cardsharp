@@ -3,10 +3,20 @@ Casino environment integration for blackjack simulation.
 
 This module connects the casino environment modeling with the blackjack game
 simulation to create a full-fidelity integrated environment.
+
+The module implements realistic dealer behavior, including errors:
+- Card exposure errors: Dealer accidentally reveals cards that should remain hidden
+- Miscount errors: Dealer incorrectly counts hand values, affecting hit/stand decisions
+- Payout errors: Dealer pays incorrect amounts (overpaying or underpaying)
+- Procedure errors: Dealer makes mistakes in game procedure (hitting when should stand, etc.)
+
+These errors are modeled based on real casino observations and add a layer of realism
+to the simulation, affecting player advantages and game outcomes.
 """
 
 import random
 import time
+import threading
 from typing import Dict, List, Optional, Tuple, Callable, Any
 
 from cardsharp.blackjack.casino import CasinoEnvironment, TableConditions, DealerProfile
@@ -95,18 +105,26 @@ class EnvironmentIntegrator:
         if decks is None:
             decks = 6
 
-        # Create a game instance
-        self.game = BlackjackGame(rules=rules, num_decks=decks)
+        # Create a game instance using a DummyIOInterface for simulation
+        from cardsharp.common.io_interface import DummyIOInterface
 
-        # Set penetration based on dealer profile
-        penetration = self.table.penetration
-        self.game.set_penetration(penetration)
+        io_interface = DummyIOInterface()
+
+        # Create a shoe with the specified number of decks
+        from cardsharp.common.shoe import Shoe
+
+        shoe = Shoe(num_decks=decks, penetration=self.table.penetration)
+
+        # Create a game instance
+        self.game = BlackjackGame(rules=rules, io_interface=io_interface, shoe=shoe)
 
         # Add event emission if we have a recorder
         if self.event_recorder:
-            self.game.state.attach_event_emitter(
-                EventEmitter(recorder=self.event_recorder)
-            )
+            # Check if game has a current_state attribute
+            if hasattr(self.game, "current_state") and self.game.current_state:
+                self.game.current_state.attach_event_emitter(
+                    EventEmitter(recorder=self.event_recorder)
+                )
 
         return self.game
 
@@ -222,7 +240,13 @@ class EnvironmentIntegrator:
 
     def _handle_dealer_errors(self) -> Tuple[bool, str]:
         """
-        Check if dealer makes an error and apply it.
+        Check if dealer makes an error and apply it to the game.
+
+        Implements different types of dealer errors:
+        - card_exposure: Dealer accidentally exposes a card that should be hidden
+        - miscount: Dealer miscounts hand value (affects payouts)
+        - payout: Dealer pays incorrectly
+        - procedure: Dealer makes procedural error (e.g., hitting when they should stand)
 
         Returns:
             Tuple of (error_made, error_type)
@@ -239,7 +263,7 @@ class EnvironmentIntegrator:
                 from cardsharp.verification.events import EventType, GameEvent
 
                 event = GameEvent(
-                    event_type=EventType.DEALER_ACTION,  # Using the proper event type from enum
+                    event_type=EventType.DEALER_ACTION,
                     game_id=self.session_id,
                     round_id=self.current_round_id,
                     data={
@@ -254,10 +278,316 @@ class EnvironmentIntegrator:
                 # Store it using the event store
                 self.event_store.store_event(event)
 
-            # TODO: Actually implement the error effects in the game
-            # This would require modifying game state to simulate dealer errors
+            # Implement error effects based on error type
+            if self.game and hasattr(self.game, "apply_dealer_error"):
+                # Use the game's built-in error handler if available
+                error_params = {
+                    "player": self.player_actor,
+                    "environment": self,
+                    "dealer_profile": self.dealer_profile,
+                    "error_location": "environment_integrator",
+                }
+
+                # Add error-specific parameters
+                if error_type == "card_exposure":
+                    self._apply_card_exposure_error()
+                    self.game.apply_dealer_error(error_type, **error_params)
+
+                elif error_type == "miscount":
+                    # Determine error direction (counting too high or too low)
+                    error_direction = 1 if random.random() < 0.5 else -1
+                    error_amount = random.randint(1, 3)  # Miscount by 1-3 points
+                    error_params.update(
+                        {
+                            "error_direction": error_direction,
+                            "error_amount": error_amount,
+                        }
+                    )
+                    self.game.apply_dealer_error(error_type, **error_params)
+
+                elif error_type == "payout":
+                    # Determine error direction (overpay or underpay)
+                    is_overpay = random.random() < 0.6  # More likely to overpay
+                    error_percentage = random.uniform(0.1, 0.5)  # 10-50% error
+                    if hasattr(self.player_actor, "bets") and self.player_actor.bets:
+                        bet_amount = self.player_actor.bets[0]  # First bet
+                        error_amount = bet_amount * error_percentage
+                        error_params.update(
+                            {
+                                "is_overpay": is_overpay,
+                                "error_amount": error_amount,
+                                "bet_amount": bet_amount,
+                            }
+                        )
+                    self.game.apply_dealer_error(error_type, **error_params)
+
+                elif error_type == "procedure":
+                    # Different procedure errors
+                    dealer = self.game.dealer
+                    dealer_value = (
+                        dealer.current_hand.value() if dealer.current_hand else 0
+                    )
+                    procedure_errors = {
+                        "hit_when_should_stand": dealer_value >= 17,
+                        "stand_when_should_hit": dealer_value < 17,
+                        "incorrect_card_dealing": True,
+                    }
+                    applicable_errors = [k for k, v in procedure_errors.items() if v]
+                    if applicable_errors:
+                        procedure_type = random.choice(applicable_errors)
+                        error_params.update(
+                            {
+                                "procedure_type": procedure_type,
+                                "dealer_value": dealer_value,
+                            }
+                        )
+                        self.game.apply_dealer_error(error_type, **error_params)
+            # Fall back to individual error implementations if game doesn't support apply_dealer_error
+            elif self.game and hasattr(self.game, "dealer") and self.player_actor:
+                if error_type == "card_exposure":
+                    # Dealer accidentally exposes a card
+                    # This gives the player an advantage by revealing information
+                    self._apply_card_exposure_error()
+
+                elif error_type == "miscount":
+                    # Dealer miscounts hand value
+                    # This can benefit or hurt the player depending on the situation
+                    self._apply_miscount_error()
+
+                elif error_type == "payout":
+                    # Dealer makes a payout error
+                    # This can result in incorrect payment to player
+                    self._apply_payout_error()
+
+                elif error_type == "procedure":
+                    # Dealer makes a procedural error
+                    # This could be hitting when they should stand, etc.
+                    self._apply_procedure_error()
+
+            # Log the error effect if not in summary mode
+            self.game.io_interface.output(f"Dealer made an error: {error_type}")
 
         return error_made, error_type
+
+    def _apply_card_exposure_error(self):
+        """
+        Apply a card exposure error effect.
+        Dealer accidentally exposes a card that should be hidden.
+        """
+        if not self.game or not self.player_actor:
+            return
+
+        # In a real casino, this would give players advance knowledge of a card
+        # For simulation, we can model this by giving a temporary advantage
+        # to the player's strategy in the next decision
+
+        if hasattr(self.player_actor, "strategy") and hasattr(
+            self.player_actor.strategy, "receive_exposed_card_info"
+        ):
+            # If the strategy supports it, we can inform it about the exposed card
+            dealer = self.game.dealer
+            if dealer and dealer.current_hand and len(dealer.current_hand.cards) > 1:
+                # Simulate exposing the dealer's hole card
+                exposed_card = dealer.current_hand.cards[1]  # Dealer's hole card
+                self.player_actor.strategy.receive_exposed_card_info(exposed_card)
+
+                # Record the exposed card info
+                if self.event_recorder:
+                    self.event_recorder.record_event(
+                        event_type="exposed_card",
+                        round_id=self.current_round_id,
+                        details={
+                            "card": str(exposed_card),
+                            "dealer": self.dealer_profile.name,
+                        },
+                    )
+
+    def _apply_miscount_error(self):
+        """
+        Apply a miscount error effect.
+        Dealer miscounts the value of their hand.
+        """
+        if not self.game or not self.game.dealer:
+            return
+
+        dealer = self.game.dealer
+        if dealer.current_hand and len(dealer.current_hand.cards) >= 2:
+            # Temporarily save the correct dealer hand value
+            correct_value = dealer.current_hand.value()
+            is_soft = dealer.current_hand.is_soft
+
+            # Determine error direction (counting too high or too low)
+            error_direction = 1 if random.random() < 0.5 else -1
+            error_amount = random.randint(1, 3)  # Miscount by 1-3 points
+
+            # Create an overridden value method for the dealer's hand
+            def miscount_value_override():
+                return correct_value + (error_direction * error_amount)
+
+            # Store the original method
+            original_value_method = dealer.current_hand.value
+
+            # Override the value method
+            dealer.current_hand.value = miscount_value_override
+
+            # Record the miscount
+            if self.event_recorder:
+                self.event_recorder.record_event(
+                    event_type="miscount",
+                    round_id=self.current_round_id,
+                    details={
+                        "correct_value": correct_value,
+                        "miscounted_value": miscount_value_override(),
+                        "dealer": self.dealer_profile.name,
+                    },
+                )
+
+            # Schedule restoration of the correct method after dealer's turn
+            # This is a simplification; in a real implementation, we would need to
+            # handle the restoration more carefully
+            def restore_original_method():
+                dealer.current_hand.value = original_value_method
+
+            # Restore after a short delay
+            threading.Timer(0.1, restore_original_method).start()
+
+    def _apply_payout_error(self):
+        """
+        Apply a payout error effect.
+        Dealer pays incorrectly (too much or too little).
+        """
+        if not self.game or not self.player_actor:
+            return
+
+        # Determine error direction (overpay or underpay)
+        is_overpay = random.random() < 0.6  # More likely to overpay
+
+        # Determine error amount (percentage of bet)
+        error_percentage = random.uniform(0.1, 0.5)  # 10-50% error
+
+        # Calculate error amount based on player's bet
+        if hasattr(self.player_actor, "bets") and self.player_actor.bets:
+            bet_amount = self.player_actor.bets[0]  # First bet
+            error_amount = bet_amount * error_percentage
+
+            # Apply the error to player's bankroll
+            if is_overpay:
+                self.player_actor.money += error_amount
+            else:
+                self.player_actor.money -= min(error_amount, self.player_actor.money)
+
+            # Record the payout error
+            if self.event_recorder:
+                self.event_recorder.record_event(
+                    event_type="payout_error",
+                    round_id=self.current_round_id,
+                    details={
+                        "type": "overpay" if is_overpay else "underpay",
+                        "amount": error_amount,
+                        "bet": bet_amount,
+                        "dealer": self.dealer_profile.name,
+                    },
+                )
+
+    def _apply_procedure_error(self):
+        """
+        Apply a procedural error effect.
+        Dealer makes a mistake in game procedure like hitting when they should stand.
+        """
+        if not self.game or not self.game.dealer:
+            return
+
+        dealer = self.game.dealer
+        # Check if we're in a state where dealer should make decisions
+        if not dealer.current_hand or len(dealer.current_hand.cards) < 2:
+            return
+
+        # Get current dealer hand value
+        dealer_value = dealer.current_hand.value()
+
+        # Procedural errors can be of different types
+        procedure_errors = {
+            "hit_when_should_stand": dealer_value >= 17,  # Dealer hits above 17
+            "stand_when_should_hit": dealer_value < 17,  # Dealer stands below 17
+            "incorrect_card_dealing": True,  # Dealer deals incorrectly
+        }
+
+        # Find applicable errors
+        applicable_errors = [k for k, v in procedure_errors.items() if v]
+        if not applicable_errors:
+            return
+
+        # Choose one error to apply
+        error_to_apply = random.choice(applicable_errors)
+
+        if error_to_apply == "hit_when_should_stand":
+            # Dealer hits when they should stand
+            # Force an extra hit
+            if hasattr(self.game, "shoe") and self.game.shoe:
+                card = self.game.shoe.deal()
+                dealer.add_card(card)
+                if self.event_recorder:
+                    self.event_recorder.record_event(
+                        event_type="procedure_error",
+                        round_id=self.current_round_id,
+                        details={
+                            "type": "hit_when_should_stand",
+                            "dealer_value_before": dealer_value,
+                            "card_dealt": str(card),
+                            "dealer_value_after": dealer.current_hand.value(),
+                            "dealer": self.dealer_profile.name,
+                        },
+                    )
+
+        elif error_to_apply == "stand_when_should_hit":
+            # Dealer stands when they should hit
+            # This error requires adjusting the dealer's hand value temporarily
+            # to make the game logic think the dealer has a higher value
+            original_value = dealer_value
+
+            # Override dealer's hand value to be at least 17
+            def stand_value_override():
+                return max(17, original_value)
+
+            # Store the original method
+            original_value_method = dealer.current_hand.value
+
+            # Override the value method
+            dealer.current_hand.value = stand_value_override
+
+            # Record the error
+            if self.event_recorder:
+                self.event_recorder.record_event(
+                    event_type="procedure_error",
+                    round_id=self.current_round_id,
+                    details={
+                        "type": "stand_when_should_hit",
+                        "actual_value": original_value,
+                        "dealer": self.dealer_profile.name,
+                    },
+                )
+
+            # Restore the original method after a delay
+            def restore_original_method():
+                dealer.current_hand.value = original_value_method
+
+            threading.Timer(0.1, restore_original_method).start()
+
+        elif error_to_apply == "incorrect_card_dealing":
+            # Dealer deals cards in the wrong order or to wrong positions
+            # This is harder to simulate directly, but we can model it by
+            # introducing a small random effect on the next few cards
+
+            # Record the error
+            if self.event_recorder:
+                self.event_recorder.record_event(
+                    event_type="procedure_error",
+                    round_id=self.current_round_id,
+                    details={
+                        "type": "incorrect_card_dealing",
+                        "dealer": self.dealer_profile.name,
+                    },
+                )
 
     def _evaluate_decision_quality(
         self, decision: str, optimal_decision: str, state

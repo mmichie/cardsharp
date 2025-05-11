@@ -251,6 +251,94 @@ class BlackjackGame:
         """Get the bonus payout for a specific card combination."""
         return self.rules.get_bonus_payout(card_combination)
 
+    def apply_dealer_error(self, error_type: str, **params):
+        """
+        Apply a dealer error to the current game state.
+
+        Args:
+            error_type: Type of dealer error to apply
+            **params: Additional parameters specific to the error type
+
+        Returns:
+            Boolean indicating if the error was successfully applied
+        """
+        if not hasattr(self, "dealer") or not self.dealer:
+            return False
+
+        # Apply the error based on type
+        if error_type == "card_exposure":
+            # Dealer accidentally exposes a card
+            # This is primarily handled in the EnvironmentIntegrator class
+            # since it requires direct interaction with player strategy
+            return True
+
+        elif error_type == "miscount":
+            # Dealer miscounts hand value
+            # This could affect the dealer's decision to hit/stand
+            if hasattr(self.dealer, "current_hand"):
+                error_direction = params.get(
+                    "error_direction", 1
+                )  # 1=too high, -1=too low
+                error_amount = params.get("error_amount", 1)
+
+                # Store original value method
+                hand = self.dealer.current_hand
+                original_value = hand.value()
+
+                # Create a closure to override the value method
+                def miscount_value():
+                    return original_value + (error_direction * error_amount)
+
+                # Store original method reference
+                original_method = hand.value
+
+                # Apply the override
+                hand.value = miscount_value
+
+                # Schedule restoration
+                import threading
+
+                threading.Timer(
+                    0.1, lambda: setattr(hand, "value", original_method)
+                ).start()
+
+                return True
+
+        elif error_type == "payout":
+            # Dealer makes a payout error
+            # This would need to adjust player winnings
+            player = params.get("player")
+            if player and player in self.players:
+                is_overpay = params.get("is_overpay", True)
+                error_amount = params.get("error_amount", 0)
+
+                if error_amount > 0:
+                    if is_overpay:
+                        player.money += error_amount
+                    else:
+                        player.money -= min(error_amount, player.money)
+                    return True
+
+        elif error_type == "procedure":
+            # Dealer makes a procedural error
+            procedure_type = params.get("procedure_type", "hit_when_should_stand")
+
+            if procedure_type == "hit_when_should_stand" and self.dealer.current_hand:
+                # Dealer hits when they should stand
+                card = self.shoe.deal()
+                self.dealer.add_card(card)
+                self.add_visible_card(card)
+                self.io_interface.output(f"Dealer accidentally hits and gets {card}.")
+                return True
+
+            elif procedure_type == "stand_when_should_hit" and self.dealer.current_hand:
+                # Dealer stands when they should hit (harder to simulate)
+                # This would need to override dealer's decision logic temporarily
+                return True
+
+        # Error type not recognized or couldn't be applied
+        return False
+
 
 def create_io_interface(args):
     """Create the IO interface based on the command line arguments."""

@@ -16,6 +16,8 @@ allows for easy extension to other card games.
 - 🧪 Extensible framework for implementing new card games
 - 🖥️ Support for both CLI and programmatic usage
 - 🧮 Advanced statistical analysis of game outcomes
+- 🔄 Event-driven architecture for improved modularity
+- 🔌 Platform adapters for multi-platform support
 
 ## 🛠️ Installation
 
@@ -65,14 +67,44 @@ Play Blackjack interactively in the console:
 python cardsharp/blackjack/blackjack.py --console
 ```
 
+### Event System Demo
+
+Try the new event system:
+
+```bash
+python examples/event_system_demo.py
+```
+
+### Platform Adapter Demo
+
+Experience the platform adapter system:
+
+```bash
+python examples/adapter_demo.py
+```
+
 ## 📁 Project Structure
 
 - `cardsharp/`
   - `blackjack/`: Blackjack-specific implementations
   - `common/`: Shared utilities and base classes
+  - `events/`: Event system for event-driven architecture
+  - `adapters/`: Platform adapters for different environments
   - `war/`: War card game implementation
   - `high_card/`: High Card game implementation
   - `roulette/`: Roulette game implementation (in progress)
+  - `verification/`: Game verification and event recording
+
+## 🏗️ Architecture
+
+CardSharp is undergoing a phased modernization to an event-driven, adapter-based architecture:
+
+- **Event System**: Core components communicate through a robust event system
+- **Adapters**: Platform-specific code is isolated in adapters
+- **Immutable State**: Game state transitions via pure functions (coming soon)
+- **Async Support**: Built-in support for async operations (coming soon)
+
+Check out the [architecture documentation](docs/architecture_modernization.md) for details.
 
 ## 🧪 Testing
 

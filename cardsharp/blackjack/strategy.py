@@ -18,6 +18,36 @@ class Strategy(ABC):
         """Decide whether to buy insurance. Returns True if the player wants to buy insurance."""
         pass
 
+    def receive_exposed_card_info(self, card: Card) -> None:
+        """
+        Receives information about a card that has been accidentally exposed.
+
+        This method can be overridden by strategies that can take advantage of exposed card information.
+
+        Args:
+            card: The Card object that was exposed
+
+        Returns:
+            None
+        """
+        # Default implementation does nothing with the exposed card
+        pass
+
+    def get_advantage(self, game_state=None) -> float:
+        """
+        Returns the player's estimated advantage in the current situation.
+
+        This method can be overridden by strategies that can calculate their edge.
+
+        Args:
+            game_state: Current game state (optional)
+
+        Returns:
+            Float representing player advantage as a decimal (e.g., 0.01 = 1% advantage)
+        """
+        # Default implementation assumes slight house edge
+        return -0.005
+
 
 class DealerStrategy(Strategy):
     def decide_action(self, player, dealer_up_card=None, game=None) -> Action:
@@ -200,6 +230,8 @@ class CountingStrategy(BasicStrategy):
         self.count = 0
         self.true_count = 0
         self.decks_remaining = 6  # Assume 6 decks by default
+        self.exposed_cards = []  # Track cards that have been accidentally exposed
+        self.advantage_factor = 0.0  # Additional advantage from exposed cards
 
     def update_count(self, card: Card):
         if card.rank in [Rank.TWO, Rank.THREE, Rank.FOUR, Rank.FIVE, Rank.SIX]:
@@ -208,7 +240,44 @@ class CountingStrategy(BasicStrategy):
             self.count -= 1
 
     def calculate_true_count(self):
-        self.true_count = self.count / self.decks_remaining
+        self.true_count = self.count / max(1, self.decks_remaining)
+
+    def receive_exposed_card_info(self, card: Card) -> None:
+        """
+        Adjust strategy based on exposed card information.
+
+        Args:
+            card: The Card object that was exposed
+        """
+        # Add to exposed cards list
+        self.exposed_cards.append(card)
+
+        # Update count
+        self.update_count(card)
+
+        # Increase advantage factor - seeing dealer hole card is a huge advantage
+        self.advantage_factor += 0.05  # 5% advantage from seeing a key card
+
+    def get_advantage(self, game_state=None) -> float:
+        """
+        Calculate player advantage based on card counting.
+
+        Returns:
+            Float representing player advantage
+        """
+        # Calculate advantage from card counting
+        self.calculate_true_count()
+
+        # Base advantage starts with house edge
+        base_advantage = -0.005  # 0.5% house edge
+
+        # Adjust based on count - each true count point is worth ~0.5% in player advantage
+        count_advantage = self.true_count * 0.005
+
+        # Add advantage from exposed cards
+        total_advantage = base_advantage + count_advantage + self.advantage_factor
+
+        return total_advantage
 
     def decide_action(self, player, dealer_up_card: Card, game) -> Action:
         # Update count based on all visible cards
