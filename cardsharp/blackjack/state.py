@@ -460,9 +460,12 @@ class DealersTurnState(GameState):
 
     def handle(self, game):
         """Handles the dealer's actions and changes the game state to EndRoundState."""
-        all_players_busted = all(player.is_busted() for player in game.players)
+        # The dealer should always hit according to the rules, even if all players busted
+        # The original logic skipped dealer actions when all players busted, which
+        # could result in the dealer stopping at values below 17
 
-        while not all_players_busted and game.dealer.should_hit(game.rules):
+        # Hit until the dealer should stand according to the rules
+        while game.dealer.should_hit(game.rules):
             self.dealer_action(game)
 
         game.io_interface.output("Dealer stands.")

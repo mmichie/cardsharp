@@ -366,14 +366,8 @@ class Dealer(SimplePlayer):
         if not self.current_hand.cards:
             return True
 
-        value = self.current_hand.value()
-        is_soft_17 = value == 17 and self.current_hand.is_soft
-
-        if value < 17:
-            return True
-        elif is_soft_17 and rules.dealer_hit_soft_17:
-            return True
-        return False
+        # Use the rules implementation directly to avoid potential inconsistencies
+        return rules.should_dealer_hit(self.current_hand)
 
     def reset(self):
         """Resets dealer's state."""
