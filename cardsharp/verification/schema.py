@@ -120,6 +120,17 @@ CREATE TABLE IF NOT EXISTS statistical_analysis (
     FOREIGN KEY (session_id) REFERENCES sessions(session_id)
 );
 
+-- Raw event storage for detailed event analysis and replay
+CREATE TABLE IF NOT EXISTS events (
+    event_id INTEGER PRIMARY KEY,
+    session_id TEXT,
+    round_id TEXT,
+    event_type TEXT,
+    event_data TEXT,  -- JSON data for the event
+    timestamp REAL,
+    recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Performance tracking
 CREATE TABLE IF NOT EXISTS performance_metrics (
     metric_id INTEGER PRIMARY KEY,
@@ -131,12 +142,45 @@ CREATE TABLE IF NOT EXISTS performance_metrics (
     FOREIGN KEY (session_id) REFERENCES sessions(session_id)
 );
 
+-- Session ID mapping (external UUID to internal ID)
+CREATE TABLE IF NOT EXISTS session_mapping (
+    mapping_id INTEGER PRIMARY KEY,
+    external_id TEXT UNIQUE NOT NULL,  -- UUID or other external identifier
+    internal_id INTEGER NOT NULL,      -- Database session_id
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (internal_id) REFERENCES sessions(session_id)
+);
+
+-- Round ID mapping (external UUID to internal ID)
+CREATE TABLE IF NOT EXISTS round_mapping (
+    mapping_id INTEGER PRIMARY KEY,
+    external_id TEXT UNIQUE NOT NULL,  -- UUID or other external identifier
+    internal_id INTEGER NOT NULL,      -- Database round_id
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (internal_id) REFERENCES rounds(round_id)
+);
+
+-- Player hand ID mapping (external UUID to internal ID)
+CREATE TABLE IF NOT EXISTS hand_mapping (
+    mapping_id INTEGER PRIMARY KEY,
+    external_id TEXT UNIQUE NOT NULL,  -- UUID or other external identifier
+    internal_id INTEGER NOT NULL,      -- Database hand_id
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (internal_id) REFERENCES player_hands(hand_id)
+);
+
 -- Create indexes for faster queries
 CREATE INDEX IF NOT EXISTS idx_rounds_session ON rounds(session_id);
 CREATE INDEX IF NOT EXISTS idx_hands_round ON player_hands(round_id);
 CREATE INDEX IF NOT EXISTS idx_actions_hand ON actions(hand_id);
 CREATE INDEX IF NOT EXISTS idx_actions_round ON actions(round_id);
 CREATE INDEX IF NOT EXISTS idx_count_round ON count_tracking(round_id);
+CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
+CREATE INDEX IF NOT EXISTS idx_events_round ON events(round_id);
+CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
+CREATE INDEX IF NOT EXISTS idx_session_mapping_external ON session_mapping(external_id);
+CREATE INDEX IF NOT EXISTS idx_round_mapping_external ON round_mapping(external_id);
+CREATE INDEX IF NOT EXISTS idx_hand_mapping_external ON hand_mapping(external_id);
 """
 
 

@@ -46,9 +46,7 @@ def test_console_io_interface_methods(mocker):
     )  # Pass the player object and assert that the method correctly gets the valid action
 
     # Test check_numeric_response method
-    assert (
-        interface.check_numeric_response("Enter a number between 5 and 10: ") == 5
-    )
+    assert interface.check_numeric_response("Enter a number between 5 and 10: ") == 5
 
 
 def test_test_io_interface_methods():

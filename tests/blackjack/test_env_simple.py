@@ -30,10 +30,7 @@ class TestEnvironmentSimple(unittest.TestCase):
     def test_casino_creation(self):
         """Test simple casino creation."""
         casino = CasinoEnvironment(
-            casino_type="standard",
-            time_of_day="evening",
-            weekday=True,
-            table_count=1
+            casino_type="standard", time_of_day="evening", weekday=True, table_count=1
         )
         self.assertEqual(len(casino.tables), 1)
         self.assertEqual(len(casino.dealers), 1)
@@ -43,11 +40,7 @@ class TestEnvironmentSimple(unittest.TestCase):
         # Create bankroll manager
         bankroll = BasicBankrollManager(
             initial_bankroll=1000.0,
-            params=BankrollParameters(
-                risk_tolerance=0.5,
-                stop_loss=0.5,
-                stop_win=1.0
-            )
+            params=BankrollParameters(risk_tolerance=0.5, stop_loss=0.5, stop_win=1.0),
         )
 
         # Test basic operations

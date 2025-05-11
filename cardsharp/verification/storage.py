@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import time
 import datetime
 from pathlib import Path
+from enum import Enum
 
 from cardsharp.verification.events import EventType, GameEvent
 from cardsharp.verification.schema import initialize_database
@@ -30,13 +31,57 @@ class SQLiteEventStore:
         Args:
             db_path: Optional path to the database file. If None, uses the default path.
         """
-        self.conn = initialize_database(db_path)
+        self.db_path = db_path
+        self.conn = sqlite3.connect(db_path if db_path else ":memory:")
         self.conn.row_factory = sqlite3.Row
+
+    def initialize_database(self):
+        """
+        Initialize the database schema.
+
+        Creates all necessary tables for storing game events, sessions, rounds,
+        hands, and verification results if they don't already exist.
+        """
+        from cardsharp.verification.schema import SCHEMA_SQL
+
+        cursor = self.conn.cursor()
+        cursor.executescript(SCHEMA_SQL)
+        self.conn.commit()
 
     def close(self) -> None:
         """Close the database connection."""
         if self.conn:
             self.conn.close()
+
+    def store_event(self, event: GameEvent) -> int:
+        """
+        Store a game event in the database.
+
+        Args:
+            event: The game event to store
+
+        Returns:
+            The ID of the stored event
+        """
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO events (
+                session_id, round_id, event_type, event_data, timestamp
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                event.game_id,
+                event.round_id,
+                event.event_type.name
+                if isinstance(event.event_type, Enum)
+                else event.event_type,
+                json.dumps(event.data),
+                event.timestamp,
+            ),
+        )
+        self.conn.commit()
+        return cursor.lastrowid
 
     def _serialize_card(self, card) -> str:
         """
@@ -72,12 +117,65 @@ class SQLiteEventStore:
         Returns:
             A JSON string representation of the actions
         """
+        from enum import Enum
+
         return json.dumps(
             [
                 action.name if isinstance(action, Enum) else str(action)
                 for action in actions
             ]
         )
+
+    def record_session(self, session_id: str, info: Dict[str, Any]) -> int:
+        """
+        Record a new game session.
+
+        Args:
+            session_id: Unique identifier for the session
+            info: Dictionary with session information
+
+        Returns:
+            The database ID of the created session
+        """
+        cursor = self.conn.cursor()
+
+        # Extract relevant information from the info dictionary
+        rules_config = info.get("rules", {})
+        if isinstance(rules_config, dict):
+            rules_config = json.dumps(rules_config)
+
+        num_decks = info.get("num_decks", 6)
+        penetration = info.get("penetration", 0.75)
+        use_csm = info.get("use_csm", False)
+        player_count = info.get("players", 1)
+        seed = info.get("seed")
+        notes = info.get("notes", "")
+
+        cursor.execute(
+            """
+            INSERT INTO sessions (
+                rules_config, num_decks, penetration, use_csm,
+                player_count, seed, notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (rules_config, num_decks, penetration, use_csm, player_count, seed, notes),
+        )
+
+        db_session_id = cursor.lastrowid
+        self.conn.commit()
+
+        # Create mapping between external session ID and database ID
+        cursor.execute(
+            """
+            INSERT INTO session_mapping (
+                external_id, internal_id
+            ) VALUES (?, ?)
+            """,
+            (session_id, db_session_id),
+        )
+        self.conn.commit()
+
+        return db_session_id
 
     def create_session(
         self,
@@ -106,25 +204,262 @@ class SQLiteEventStore:
         """
         cursor = self.conn.cursor()
 
+        # Convert rules_config to JSON if it's a dictionary
+        if isinstance(rules_config, dict):
+            rules_config = json.dumps(rules_config)
+
         cursor.execute(
             """
-            INSERT INTO sessions 
-            (rules_config, num_decks, penetration, use_csm, player_count, seed, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO sessions (
+                rules_config, num_decks, penetration, use_csm,
+                player_count, seed, notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                json.dumps(rules_config),
+                rules_config,
                 num_decks,
                 penetration,
                 use_csm,
                 player_count,
                 seed,
-                notes,
+                notes or "",
             ),
         )
 
+        session_id = cursor.lastrowid
         self.conn.commit()
-        return cursor.lastrowid
+        return session_id
+
+    def record_round(
+        self, round_id: str, session_id: str, details: Dict[str, Any]
+    ) -> int:
+        """
+        Record a new round in a session.
+
+        Args:
+            round_id: Unique identifier for the round
+            session_id: Identifier for the session
+            details: Dictionary with round details
+
+        Returns:
+            The database ID of the created round
+        """
+        cursor = self.conn.cursor()
+
+        # Get the internal session ID from mapping
+        cursor.execute(
+            "SELECT internal_id FROM session_mapping WHERE external_id = ?",
+            (session_id,),
+        )
+        result = cursor.fetchone()
+        if result:
+            internal_session_id = result[0]
+        else:
+            # If no mapping exists, create one with session_id as both external and internal ID
+            cursor.execute(
+                """
+                INSERT INTO sessions (rules_config, num_decks, penetration, use_csm, player_count, notes)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                ("{}", 6, 0.75, False, 1, "Auto-created session"),
+            )
+            internal_session_id = cursor.lastrowid
+
+            cursor.execute(
+                """
+                INSERT INTO session_mapping (external_id, internal_id)
+                VALUES (?, ?)
+                """,
+                (session_id, internal_session_id),
+            )
+            self.conn.commit()
+
+        # Extract round details
+        round_number = details.get("round_number", 0)
+        dealer_up_card = details.get("dealer_up_card", "")
+        dealer_hole_card = details.get("dealer_hole_card", "")
+        dealer_final_hand = details.get("dealer_final_hand", [])
+        if isinstance(dealer_final_hand, list):
+            dealer_final_hand = json.dumps(dealer_final_hand)
+        dealer_final_value = details.get("dealer_final_value", 0)
+        shuffle_occurred = details.get("shuffle_occurred", False)
+
+        cursor.execute(
+            """
+            INSERT INTO rounds (
+                session_id, round_number, dealer_up_card,
+                dealer_hole_card, dealer_final_hand, dealer_final_value,
+                shuffle_occurred
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                internal_session_id,
+                round_number,
+                dealer_up_card,
+                dealer_hole_card,
+                dealer_final_hand,
+                dealer_final_value,
+                shuffle_occurred,
+            ),
+        )
+
+        db_round_id = cursor.lastrowid
+        self.conn.commit()
+
+        # Create mapping between external round_id and database id
+        cursor.execute(
+            """
+            INSERT INTO round_mapping (
+                external_id, internal_id
+            ) VALUES (?, ?)
+            """,
+            (round_id, db_round_id),
+        )
+        self.conn.commit()
+
+        return db_round_id
+
+    def get_events(
+        self,
+        round_id: str = None,
+        session_id: str = None,
+        event_type: str = None,
+        limit: int = 1000,
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve events from the database with optional filtering.
+
+        Args:
+            round_id: Optional round ID to filter by
+            session_id: Optional session ID to filter by
+            event_type: Optional event type to filter by
+            limit: Maximum number of events to return
+
+        Returns:
+            A list of event dictionaries
+        """
+        cursor = self.conn.cursor()
+        query = "SELECT * FROM events WHERE 1=1"
+        params = []
+
+        # If round_id is provided, check if it's an external ID and get internal ID
+        if round_id:
+            cursor.execute(
+                "SELECT internal_id FROM round_mapping WHERE external_id = ?",
+                (round_id,),
+            )
+            mapped_id = cursor.fetchone()
+            if mapped_id:
+                # If we found a mapping, use the internal ID for the query
+                query += " AND round_id = ?"
+                params.append(str(mapped_id[0]))
+            else:
+                # If no mapping exists, just use the original ID as is
+                query += " AND round_id = ?"
+                params.append(round_id)
+
+        # If session_id is provided, check if it's an external ID and get internal ID
+        if session_id:
+            cursor.execute(
+                "SELECT internal_id FROM session_mapping WHERE external_id = ?",
+                (session_id,),
+            )
+            mapped_id = cursor.fetchone()
+            if mapped_id:
+                # If we found a mapping, use the internal ID for the query
+                query += " AND session_id = ?"
+                params.append(str(mapped_id[0]))
+            else:
+                # If no mapping exists, just use the original ID as is
+                query += " AND session_id = ?"
+                params.append(session_id)
+
+        if event_type:
+            query += " AND event_type = ?"
+            params.append(event_type)
+
+        query += " ORDER BY timestamp LIMIT ?"
+        params.append(limit)
+
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+
+        # Convert rows to dictionaries
+        events = []
+        for row in rows:
+            event = dict(row)
+            # Parse the event data back to a dictionary
+            if "event_data" in event and event["event_data"]:
+                try:
+                    event["event_data"] = json.loads(event["event_data"])
+                except json.JSONDecodeError:
+                    pass
+            events.append(event)
+
+        return events
+
+    def record_statistical_analysis(
+        self,
+        session_id: str,
+        analysis_type: str,
+        params: Dict[str, Any],
+        result: Dict[str, Any],
+        confidence_interval: Dict[str, Any] = None,
+        passed: bool = True,
+    ) -> int:
+        """
+        Record the results of a statistical analysis.
+
+        Args:
+            session_id: The session ID
+            analysis_type: The type of analysis performed
+            params: Parameters for the analysis
+            result: The analysis results
+            confidence_interval: Optional confidence interval data
+            passed: Whether the analysis passed validation
+
+        Returns:
+            The ID of the recorded analysis
+        """
+        cursor = self.conn.cursor()
+
+        # Get internal session ID from mapping if it exists
+        cursor.execute(
+            "SELECT internal_id FROM session_mapping WHERE external_id = ?",
+            (session_id,),
+        )
+        result_map = cursor.fetchone()
+        if result_map:
+            internal_session_id = result_map[0]
+        else:
+            # If no mapping exists, use the session_id directly
+            internal_session_id = session_id
+
+        # Convert dictionaries to JSON strings
+        params_json = json.dumps(params)
+        result_json = json.dumps(result)
+        ci_json = json.dumps(confidence_interval) if confidence_interval else "{}"
+
+        cursor.execute(
+            """
+            INSERT INTO statistical_analysis (
+                session_id, analysis_type, params, result,
+                confidence_interval, passed
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                internal_session_id,
+                analysis_type,
+                params_json,
+                result_json,
+                ci_json,
+                passed,
+            ),
+        )
+
+        analysis_id = cursor.lastrowid
+        self.conn.commit()
+        return analysis_id
 
     def create_round(
         self,

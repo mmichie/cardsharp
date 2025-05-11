@@ -235,18 +235,24 @@ class EnvironmentIntegrator:
 
             # Record error event if we have a recorder and event store
             if self.event_recorder and self.event_store and self.current_round_id:
-                # Create a GameEvent manually
+                # Create a GameEvent using EventType enum
+                from cardsharp.verification.events import EventType, GameEvent
+
                 event = GameEvent(
-                    event_type="dealer_error",
+                    event_type=EventType.DEALER_ACTION,  # Using the proper event type from enum
                     game_id=self.session_id,
                     round_id=self.current_round_id,
-                    data={"error_type": error_type, "dealer": self.dealer_profile.name},
+                    data={
+                        "error_type": error_type,
+                        "dealer": self.dealer_profile.name,
+                        "has_error": True,
+                        "dealer_profile": self.dealer_profile.__dict__,
+                    },
                 )
                 # Record the event in our recorder
                 self.event_recorder.record_event(event)
                 # Store it using the event store
-                if hasattr(self.event_store, "store_event"):
-                    self.event_store.store_event(event)
+                self.event_store.store_event(event)
 
             # TODO: Actually implement the error effects in the game
             # This would require modifying game state to simulate dealer errors
@@ -275,16 +281,34 @@ class EnvironmentIntegrator:
 
         # Record error event if we have a recorder
         if self.event_recorder and self.current_round_id:
-            self.event_recorder.record_event(
-                event_type="strategy_error",
+            from cardsharp.verification.events import EventType, GameEvent
+
+            # Create a proper GameEvent
+            event = GameEvent(
+                event_type=EventType.PLAYER_ACTION,
+                game_id=self.session_id,
                 round_id=self.current_round_id,
-                details={
+                data={
                     "player_decision": decision,
                     "optimal_decision": optimal_decision,
                     "player_hand": str(state.current_player_hand),
                     "dealer_upcard": str(state.dealer_hand.cards[0]),
+                    "is_error": True,
+                    "player": self.player_actor.name
+                    if self.player_actor
+                    else "Unknown",
+                    "fatigue": self.fatigue,
+                    "distraction": self.distraction_level,
+                    "time_pressure": self.time_pressure,
                 },
             )
+
+            # Record the event
+            self.event_recorder.record_event(event)
+
+            # Store it in the database if we have an event store
+            if self.event_store and hasattr(self.event_store, "store_event"):
+                self.event_store.store_event(event)
 
         return False
 
@@ -337,8 +361,36 @@ class EnvironmentIntegrator:
 
             # Verify current round if available
             if self.current_round_id:
-                results = verifier.verify_round(self.current_round_id)
-                return results
+                try:
+                    results = verifier.verify_round(self.current_round_id)
+
+                    # Record verification result if it failed
+                    if not results.get("verified", True) and self.event_store:
+                        self.event_store.record_verification_result(
+                            session_id=self.session_id,
+                            round_id=self.current_round_id,
+                            verification_type="game_state",
+                            passed=False,
+                            error_detail=results.get(
+                                "reason", "Unknown verification error"
+                            ),
+                        )
+
+                    return results
+                except Exception as e:
+                    error_message = f"Verification error: {str(e)}"
+
+                    # Record the error if we have an event store
+                    if self.event_store:
+                        self.event_store.record_verification_result(
+                            session_id=self.session_id,
+                            round_id=self.current_round_id,
+                            verification_type="game_state",
+                            passed=False,
+                            error_detail=error_message,
+                        )
+
+                    return {"verified": False, "reason": error_message}
 
         return {"verified": True, "reason": "No verification performed"}
 
