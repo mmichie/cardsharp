@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cardsharp"
-version = "0.4.0"
+version = "0.5.0"
 description = "Card Playing Simulator focused on Blackjack"
 authors = ["Matt Michie <mmichie@gmail.com>"]
 license = "MIT"

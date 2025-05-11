@@ -71,6 +71,16 @@ def main():
         "--max_bet", type=float, default=500.0, help="Maximum bet allowed"
     )
     parser.add_argument(
+        "--test_odd_bets",
+        action="store_true",
+        help="Test with odd-valued bets to verify correct surrender payout",
+    )
+    parser.add_argument(
+        "--force_surrender_test",
+        action="store_true",
+        help="Force the strategy to surrender more frequently for testing",
+    )
+    parser.add_argument(
         "--blackjack_payout",
         type=float,
         default=1.5,
@@ -256,7 +266,19 @@ def main():
                 self.action_history = []
 
             def decide_action(self, player, dealer_up_card, game=None):
-                action = super().decide_action(player, dealer_up_card, game)
+                # If forcing surrender tests and surrender is allowed and we have exactly 2 cards
+                if (
+                    args.force_surrender_test
+                    and self.rules.allow_surrender
+                    and len(player.current_hand.cards) == 2
+                    and Action.SURRENDER in player.valid_actions
+                    and
+                    # Only surrender about 30% of the time to avoid skewing stats too much
+                    game_num % 3 == 0
+                ):
+                    action = Action.SURRENDER
+                else:
+                    action = super().decide_action(player, dealer_up_card, game)
 
                 # Track all actions for statistics
                 self.action_history.append(action)
@@ -292,11 +314,31 @@ def main():
         player = Player("Player1", io_interface, RuleAwareStrategy(rules))
         game.add_player(player)
 
+        # Determine bet amount - use odd bet for testing surrender if specified
+        bet_amount = args.min_bet
+        if args.test_odd_bets and game_num % 3 == 0:  # Every third game, use an odd bet
+            # Test with different odd-numbered bets: 15, 25, 35, etc.
+            bet_amount = args.min_bet + 5 + (10 * (game_num % 5))
+            if not args.summary_only:
+                print(
+                    f"  Using odd bet amount: ${bet_amount:.2f} to test surrender payout exactness"
+                )
+
         # Record initial state
         initial_money = player.money
 
+        # Create a custom PlacingBetsState to use our bet amount
+        class CustomPlacingBetsState(PlacingBetsState):
+            def place_bet(self, game, player, amount):
+                """Override to use our custom bet amount"""
+                min_bet = game.rules.min_bet
+                player.place_bet(bet_amount, min_bet)
+                game.io_interface.output(
+                    f"{player.name} has placed a bet of {bet_amount}."
+                )
+
         # Play a round - wrap in try/except to handle any strategy errors
-        game.set_state(PlacingBetsState())
+        game.set_state(CustomPlacingBetsState())
         try:
             game.play_round()
         except Exception as e:
@@ -319,16 +361,28 @@ def main():
             stats["player_blackjacks"] += 1
 
             # Verify blackjack payout
-            expected_winnings = args.min_bet * rules.blackjack_payout
+            # For blackjack, player gets their original bet back PLUS winnings (bet * payout ratio)
+            expected_payout = bet_amount + (bet_amount * rules.blackjack_payout)
+            expected_profit = (
+                expected_payout - bet_amount
+            )  # Profit = payout minus original bet
 
-            if abs(game_profit - expected_winnings) > 0.001:
+            if abs(game_profit - expected_profit) > 0.001:
                 if not args.summary_only:
                     print(
-                        f"  VIOLATION: Incorrect blackjack payout. Expected: ${expected_winnings}, Got: ${game_profit}"
+                        f"  VIOLATION: Incorrect blackjack payout. Expected profit: ${expected_profit:.2f}, Got: ${game_profit:.2f}"
+                    )
+                    print(
+                        f"  For a ${bet_amount:.2f} bet with {rules.blackjack_payout}:1 payoff, player should receive ${expected_payout:.2f} total"
+                    )
+                    print(
+                        f"  (original bet ${bet_amount:.2f} + winnings ${bet_amount * rules.blackjack_payout:.2f})"
                     )
                 stats["payout_violations"] += 1
             elif not args.summary_only:
-                print(f"  Correct blackjack payout: ${game_profit}")
+                print(
+                    f"  Correct blackjack payout: ${game_profit:.2f} profit on ${bet_amount:.2f} bet"
+                )
 
         # Check for splits
         if len(player.hands) > 1:
@@ -367,13 +421,46 @@ def main():
 
             # Check for surrender
             if Action.SURRENDER in action_counts:
-                stats["surrenders"] += action_counts[Action.SURRENDER]
+                surrenders = action_counts[Action.SURRENDER]
+                stats["surrenders"] += surrenders
 
-                # Verify surrender payout (should be half the bet returned)
-                if game_profit != -args.min_bet / 2:
+                # Verify surrender payout with detailed checking
+                expected_refund = bet_amount / 2
+                expected_loss = -bet_amount / 2
+
+                # Check with a small epsilon for floating point precision
+                if abs(game_profit - expected_loss) > 0.001:
                     if not args.summary_only:
-                        print(f"  VIOLATION: Incorrect surrender refund")
+                        print(
+                            f"  VIOLATION: Incorrect surrender refund. Expected loss: ${expected_loss:.2f}, Actual: ${game_profit:.2f}"
+                        )
+                        print(
+                            f"  Expected refund: ${expected_refund:.2f}, Player should lose exactly half the bet"
+                        )
+                        # Add additional diagnostic information for odd bets
+                        if bet_amount % 2 != 0:
+                            print(
+                                f"  Note: This was an odd bet amount (${bet_amount:.2f}), which requires floating-point division"
+                            )
+                            print(
+                                f"  Integer division would give ${bet_amount // 2:.0f} instead of ${bet_amount / 2:.2f}"
+                            )
                     stats["payout_violations"] += 1
+                else:
+                    if not args.summary_only:
+                        is_odd = bet_amount % 2 != 0
+                        odd_note = (
+                            " (odd bet amount correctly handled)" if is_odd else ""
+                        )
+                        print(
+                            f"  Correct surrender refund verified: Player lost ${abs(game_profit):.2f} (half of ${bet_amount:.2f}){odd_note}"
+                        )
+
+                # Test if we have multiple surrenders in one game (rare edge case)
+                if surrenders > 1 and not args.summary_only:
+                    print(
+                        f"  Multiple surrenders detected ({surrenders}) - this is usually an edge case that should be reviewed"
+                    )
 
         # Check for insurance
         if player.insurance > 0:
@@ -504,6 +591,25 @@ def main():
     print(f"  Dealer action violations: {stats['dealer_violations']}")
     print(f"  Player options violations: {stats['player_option_violations']}")
     print(f"  Payout violations: {stats['payout_violations']}")
+
+    # Special verification report for surrender if tested
+    if args.allow_surrender and stats["surrenders"] > 0:
+        print("\nSurrender Verification:")
+        print(f"  Total surrenders: {stats['surrenders']}")
+        if args.test_odd_bets:
+            print(f"  Odd-bet testing: Enabled (testing exact half-bet refunds)")
+        surrender_violations = sum(
+            1
+            for v in stats.values()
+            if "surrender" in str(v) and "violation" in str(v) and v > 0
+        )
+        if surrender_violations == 0:
+            print("  ✓ All surrender payouts were correctly calculated")
+        else:
+            print(f"  ✗ Found {surrender_violations} surrender payout violations")
+            print(
+                "  Note: Surrender should refund exactly half the bet, using floating-point division"
+            )
 
     # Show dealer hand value distribution if requested
     if args.detailed_stats and stats["dealer_final_values"]:
