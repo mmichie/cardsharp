@@ -173,7 +173,9 @@ class Player(SimplePlayer):
             raise InvalidActionError(f"{self.name} can only surrender with two cards.")
 
         bet_for_current_hand = self.bets[self.current_hand_index]
-        surrender_amount = bet_for_current_hand // 2
+        surrender_amount = (
+            bet_for_current_hand / 2
+        )  # Use floating-point division for exact half
         self.money += surrender_amount
         self.total_winnings -= bet_for_current_hand - surrender_amount
         self.bets[self.current_hand_index] = 0

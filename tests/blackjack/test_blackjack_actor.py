@@ -431,6 +431,41 @@ def test_surrender(player):
     assert player.money == 850
     assert player.bets == [100]
 
+
+def test_surrender_with_odd_bet(player):
+    """Test surrender with an odd bet amount to ensure correct refund."""
+    player.place_bet(15, min_bet=10)  # Odd amount bet
+    assert player.money == 985
+    assert player.bets == [15]
+
+    player.add_card(Card(Suit.HEARTS, Rank.EIGHT))
+    player.add_card(Card(Suit.DIAMONDS, Rank.SEVEN))
+
+    player.surrender()
+
+    # Player should get exactly half the bet back (7.5)
+    assert player.money == 992.5
+    assert player.bets[0] == 0
+    assert player.hand_done[0] is True
+    assert player.total_winnings == -7.5  # Lost half the bet
+
+    # Test with another odd amount
+    player.reset()
+    player.money = 1000
+    player.place_bet(25, min_bet=10)  # Another odd amount
+    assert player.money == 975
+
+    player.add_card(Card(Suit.HEARTS, Rank.EIGHT))
+    player.add_card(Card(Suit.DIAMONDS, Rank.SEVEN))
+
+    player.surrender()
+
+    # Player should get exactly half the bet back (12.5)
+    assert player.money == 987.5
+    assert player.bets[0] == 0
+    assert player.hand_done[0] is True
+    assert player.total_winnings == -12.5  # Lost half the bet
+
     stats = SimulationStats()
 
     mock_game = Mock()
