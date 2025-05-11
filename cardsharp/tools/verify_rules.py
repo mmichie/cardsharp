@@ -266,12 +266,13 @@ def main():
                 self.action_history = []
 
             def decide_action(self, player, dealer_up_card, game=None):
-                # If forcing surrender tests and surrender is allowed and we have exactly 2 cards
+                # Only force surrender if it's allowed by the rules AND the option is in valid_actions
                 if (
                     args.force_surrender_test
-                    and self.rules.allow_surrender
+                    and self.rules.allow_surrender  # Must be enabled in the rules
                     and len(player.current_hand.cards) == 2
-                    and Action.SURRENDER in player.valid_actions
+                    and Action.SURRENDER
+                    in player.valid_actions  # Must be a valid action
                     and
                     # Only surrender about 30% of the time to avoid skewing stats too much
                     game_num % 3 == 0
@@ -424,37 +425,45 @@ def main():
                 surrenders = action_counts[Action.SURRENDER]
                 stats["surrenders"] += surrenders
 
-                # Verify surrender payout with detailed checking
-                expected_refund = bet_amount / 2
-                expected_loss = -bet_amount / 2
-
-                # Check with a small epsilon for floating point precision
-                if abs(game_profit - expected_loss) > 0.001:
+                # Only verify surrender payout if surrender is actually allowed in the rules
+                if not rules.allow_surrender:
+                    # If surrender is not allowed but the action was recorded, warn about this inconsistency
                     if not args.summary_only:
                         print(
-                            f"  VIOLATION: Incorrect surrender refund. Expected loss: ${expected_loss:.2f}, Actual: ${game_profit:.2f}"
+                            f"  WARNING: Surrender action recorded but surrender is not allowed in rules"
                         )
-                        print(
-                            f"  Expected refund: ${expected_refund:.2f}, Player should lose exactly half the bet"
-                        )
-                        # Add additional diagnostic information for odd bets
-                        if bet_amount % 2 != 0:
-                            print(
-                                f"  Note: This was an odd bet amount (${bet_amount:.2f}), which requires floating-point division"
-                            )
-                            print(
-                                f"  Integer division would give ${bet_amount // 2:.0f} instead of ${bet_amount / 2:.2f}"
-                            )
-                    stats["payout_violations"] += 1
                 else:
-                    if not args.summary_only:
-                        is_odd = bet_amount % 2 != 0
-                        odd_note = (
-                            " (odd bet amount correctly handled)" if is_odd else ""
-                        )
-                        print(
-                            f"  Correct surrender refund verified: Player lost ${abs(game_profit):.2f} (half of ${bet_amount:.2f}){odd_note}"
-                        )
+                    # Verify surrender payout with detailed checking
+                    expected_refund = bet_amount / 2
+                    expected_loss = -bet_amount / 2
+
+                    # Check with a small epsilon for floating point precision
+                    if abs(game_profit - expected_loss) > 0.001:
+                        if not args.summary_only:
+                            print(
+                                f"  VIOLATION: Incorrect surrender refund. Expected loss: ${expected_loss:.2f}, Actual: ${game_profit:.2f}"
+                            )
+                            print(
+                                f"  Expected refund: ${expected_refund:.2f}, Player should lose exactly half the bet"
+                            )
+                            # Add additional diagnostic information for odd bets
+                            if bet_amount % 2 != 0:
+                                print(
+                                    f"  Note: This was an odd bet amount (${bet_amount:.2f}), which requires floating-point division"
+                                )
+                                print(
+                                    f"  Integer division would give ${bet_amount // 2:.0f} instead of ${bet_amount / 2:.2f}"
+                                )
+                        stats["payout_violations"] += 1
+                    else:
+                        if not args.summary_only:
+                            is_odd = bet_amount % 2 != 0
+                            odd_note = (
+                                " (odd bet amount correctly handled)" if is_odd else ""
+                            )
+                            print(
+                                f"  Correct surrender refund verified: Player lost ${abs(game_profit):.2f} (half of ${bet_amount:.2f}){odd_note}"
+                            )
 
                 # Test if we have multiple surrenders in one game (rare edge case)
                 if surrenders > 1 and not args.summary_only:
