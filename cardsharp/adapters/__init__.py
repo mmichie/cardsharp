@@ -8,5 +8,6 @@ and various platforms (CLI, web, Discord, etc.).
 from cardsharp.adapters.base import PlatformAdapter
 from cardsharp.adapters.cli import CLIAdapter
 from cardsharp.adapters.dummy import DummyAdapter
+from cardsharp.adapters.web import WebAdapter
 
-__all__ = ["PlatformAdapter", "CLIAdapter", "DummyAdapter"]
+__all__ = ["PlatformAdapter", "CLIAdapter", "DummyAdapter", "WebAdapter"]
