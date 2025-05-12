@@ -244,18 +244,108 @@ The implementation is designed to be backward compatible with the current codeba
    - CLI adapter uses the existing IOInterface for I/O operations
    - Game components can be gradually migrated to use adapters
 
+## Phase 2: Immutable State and Transition Functions (Completed)
+
+Phase 2 has now been completed, implementing immutable state management and pure transition functions. This phase includes:
+
+### 1. Immutable State Classes
+
+We've created a set of immutable dataclasses that represent the game state:
+
+- **GameState**: Overall game state container
+- **PlayerState**: Individual player state
+- **DealerState**: Dealer state
+- **HandState**: Individual hand state
+
+These classes are created using frozen dataclasses to ensure immutability:
+
+```python
+from cardsharp.state import GameState, PlayerState, DealerState, HandState, GameStage
+
+# Create a new game state
+game_state = GameState(
+    rules={
+        'blackjack_pays': 1.5,
+        'deck_count': 6,
+        'dealer_hit_soft_17': False
+    }
+)
+
+# States cannot be modified directly - this would raise an error:
+# game_state.players.append(new_player)  # Error!
+```
+
+### 2. State Transition Functions
+
+We've implemented a `StateTransitionEngine` with pure functions for all state transitions:
+
+```python
+from cardsharp.state import StateTransitionEngine
+
+# Add a player - returns a new state
+new_state = StateTransitionEngine.add_player(
+    state,
+    name="Alice",
+    balance=1000.0
+)
+
+# Place a bet - returns a new state
+new_state = StateTransitionEngine.place_bet(
+    new_state,
+    player_id=player_id,
+    amount=25.0
+)
+
+# Deal a card - returns a new state
+new_state = StateTransitionEngine.deal_card(
+    new_state,
+    card=card,
+    player_id=player_id
+)
+```
+
+### 3. Engine Implementation
+
+We've created a core engine implementation that uses the immutable state system:
+
+- **CardsharpEngine**: Abstract base class for all game engines
+- **BlackjackEngine**: Concrete implementation for blackjack
+
+The engine connects the state system with the platform adapters:
+
+```python
+from cardsharp.adapters import CLIAdapter
+from cardsharp.engine import BlackjackEngine
+
+# Create an adapter and engine
+adapter = CLIAdapter()
+engine = BlackjackEngine(adapter)
+
+# Initialize the engine
+await engine.initialize()
+
+# Start a game
+await engine.start_game()
+
+# Add a player
+player_id = await engine.add_player("Alice", 1000.0)
+
+# Place a bet
+await engine.place_bet(player_id, 25.0)
+```
+
 ## Next Steps
 
-With Phase 1 completed, we're ready to move on to Phase 2 of the architecture modernization plan:
+With Phase 2 completed, we're ready to move on to Phase 3 of the architecture modernization plan:
 
-1. **Implement Immutable State Classes**:
-   - Create dataclasses for player, dealer, and game state
-   - Ensure they are immutable (frozen)
-   
-2. **Develop State Transition Functions**:
-   - Pure functions that transform one state to another
-   - Functions for each game action (bet, hit, stand, etc.)
-   
-3. **Begin Engine Implementation**:
-   - Start building the core engine class
-   - Connect with events and adapters
+1. **Enhanced Async Support**:
+   - Improve async functionality throughout the engine
+   - Add support for event-driven flow control
+
+2. **Platform Integration**:
+   - Create more platform adapters (Web, Discord, etc.)
+   - Demonstrate multi-platform capabilities
+
+3. **Documentation and Examples**:
+   - Create comprehensive guides for the new architecture
+   - Provide examples for common use cases

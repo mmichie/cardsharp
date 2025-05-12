@@ -83,6 +83,42 @@ Experience the platform adapter system:
 python examples/adapter_demo.py
 ```
 
+### Immutable State Demo
+
+See how immutable state transitions work:
+
+```bash
+python examples/immutable_state_demo.py
+```
+
+### BlackjackEngine Demo
+
+Experience the new engine with immutable state:
+
+```bash
+python examples/blackjack_engine_demo.py
+```
+
+### Full CLI Blackjack Game
+
+Play the complete blackjack game using the new architecture:
+
+```bash
+python examples/cli_blackjack.py
+```
+
+You can customize your game experience with these options:
+```bash
+# Play with 3 players
+python examples/cli_blackjack.py --players 3
+
+# Start with a custom bankroll
+python examples/cli_blackjack.py --bankroll 500
+
+# Play a fixed number of rounds
+python examples/cli_blackjack.py --rounds 5
+```
+
 ## 📁 Project Structure
 
 - `cardsharp/`
@@ -90,6 +126,8 @@ python examples/adapter_demo.py
   - `common/`: Shared utilities and base classes
   - `events/`: Event system for event-driven architecture
   - `adapters/`: Platform adapters for different environments
+  - `state/`: Immutable state models and transition functions
+  - `engine/`: Core game engine implementation
   - `war/`: War card game implementation
   - `high_card/`: High Card game implementation
   - `roulette/`: Roulette game implementation (in progress)

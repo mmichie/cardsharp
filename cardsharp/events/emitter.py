@@ -412,6 +412,7 @@ class EngineEventType(Enum):
     STRATEGY_DECISION = "strategy_decision"
     STRATEGY_DEVIATION = "strategy_deviation"
     COUNT_UPDATED = "count_updated"
+    SHUFFLE = "shuffle"
 
     # Error events
     ERROR = "error"
