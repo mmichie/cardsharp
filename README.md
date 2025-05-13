@@ -99,6 +99,20 @@ Experience the new engine with immutable state:
 python examples/blackjack_engine_demo.py
 ```
 
+### Asynchronous API Demo
+
+See the new Phase 3 asynchronous API in action:
+
+```bash
+python examples/async_api_demo.py
+```
+
+This demo showcases:
+- High-level BlackjackGame interface
+- Event-driven flow control
+- Synchronous and asynchronous operation modes
+- Auto-play capabilities
+
 ### Full CLI Blackjack Game
 
 Play the complete blackjack game using the new architecture:
@@ -135,12 +149,18 @@ python examples/cli_blackjack.py --rounds 5
 
 ## 🏗️ Architecture
 
-CardSharp is undergoing a phased modernization to an event-driven, adapter-based architecture:
+CardSharp has undergone a phased modernization to an event-driven, adapter-based architecture:
 
 - **Event System**: Core components communicate through a robust event system
 - **Adapters**: Platform-specific code is isolated in adapters
-- **Immutable State**: Game state transitions via pure functions (coming soon)
-- **Async Support**: Built-in support for async operations (coming soon)
+- **Immutable State**: Game state transitions via pure functions
+- **Asynchronous API**: Clean, platform-agnostic API with rich event-driven flow control
+- **Dual Mode**: Support for both synchronous and asynchronous operation
+
+The architecture modernization plan has completed three phases:
+1. ✅ Phase 1: Event System and Adapters
+2. ✅ Phase 2: Immutable State
+3. ✅ Phase 3: Asynchronous API
 
 Check out the [architecture documentation](docs/architecture_modernization.md) for details.
 

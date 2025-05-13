@@ -95,21 +95,114 @@ The API layer:
    - Create pure functions for state transitions
    - Each function returns a new state without modifying the input
 
-### Phase 3: Asynchronous API (Planned)
+### Phase 3: Asynchronous API (Completed)
 
 **Goal**: Create a clean, platform-agnostic API that supports asynchronous operation.
 
-1. **CardsharpEngine**:
-   - Core engine class that encapsulates game mechanics
+1. **CardsharpGame**:
+   - Abstract base class for all game interfaces
    - Provides both sync and async interfaces
+   - Includes rich event handling capabilities
 
 2. **BlackjackGame**:
    - High-level game interface
    - Uses the engine and exposes a simpler API
+   - Supports automatic play and strategy configuration
 
-### Phase 4: Integration (Planned)
+3. **Enhanced Event-Driven Flow Control**:
+   - `EventWaiter` for waiting for specific events
+   - `EventSequence` for creating and executing sequences of actions and events
+   - `EventFilter` for routing events to specific handlers
+   - `EventDrivenContext` for temporary event handling
+   - Event-driven function decorators
+
+### Phase 3: Implementation Details
+
+Phase 3 has been successfully implemented, adding a clean, platform-agnostic API that supports both synchronous and asynchronous operation:
+
+#### 1. High-Level Game API Abstractions
+
+We've created a set of high-level API classes that wrap the engine components:
+
+```python
+from cardsharp.api import BlackjackGame
+
+# Async usage
+async def play_game():
+    game = BlackjackGame()
+    await game.initialize()
+    await game.start_game()
+    player_id = await game.add_player("Alice", 1000.0)
+    await game.place_bet(player_id, 25.0)
+    
+    # Let the round play out automatically
+    round_results = await game.auto_play_round()
+    
+    await game.shutdown()
+
+# Sync usage is also supported
+game = BlackjackGame(use_async=False)
+game.initialize_sync()
+game.start_game_sync()
+player_id = game.add_player_sync("Bob", 500.0)
+```
+
+#### 2. Event-Driven Flow Control
+
+We've implemented sophisticated event-driven flow control mechanisms:
+
+```python
+# Wait for a specific event
+event, data = await game.wait_for_event(
+    EngineEventType.PLAYER_ACTION,
+    lambda evt, data: data.get("player_id") == player_id
+)
+
+# Create and execute an event sequence
+sequence = game.create_event_sequence()
+sequence.add_step(
+    "hit",
+    lambda g: g.execute_action(player_id, "HIT"),
+    EngineEventType.PLAYER_ACTION,
+    lambda evt, data: data.get("action") == "HIT"
+)
+results = await sequence.execute(game)
+
+# Use context manager for temporary event handling
+async with game.with_event_context() as ctx:
+    ctx.on(EngineEventType.CARD_DEALT, deal_handler)
+    ctx.on(EngineEventType.HAND_RESULT, result_handler)
+    await game.execute_action(player_id, "HIT")
+```
+
+#### 3. Auto-Play Capabilities
+
+The API includes support for automatic gameplay with configurable strategies:
+
+```python
+# Set up auto-play with a custom strategy
+def my_strategy(player_id, valid_actions):
+    # Always double if available, otherwise stand
+    if Action.DOUBLE in valid_actions:
+        return Action.DOUBLE
+    return Action.STAND
+
+game.set_auto_action(player_id, my_strategy)
+
+# Use a sequence of actions
+game.set_auto_action(player_id, [Action.HIT, Action.HIT, Action.STAND])
+
+# Play a complete round automatically
+results = await game.auto_play_round(default_bet=25.0)
+```
+
+A comprehensive demo showcasing all these features is available at `examples/async_api_demo.py`.
+
+### Phase 4: Integration (In Progress)
 
 **Goal**: Connect all components into a cohesive system that maintains backward compatibility.
+
+The engine component, immutable state system, and asynchronous API have been successfully implemented and demonstrated with the blackjack game. However, integration across the entire codebase is incomplete.
 
 ## Phase 1 Implementation Details
 

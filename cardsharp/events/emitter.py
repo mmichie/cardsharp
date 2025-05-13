@@ -426,3 +426,6 @@ class EngineEventType(Enum):
     UI_UPDATE_NEEDED = "ui_update_needed"
     USER_INTERACTION_NEEDED = "user_interaction_needed"
     USER_INTERACTION_RECEIVED = "user_interaction_received"
+
+    # Custom events
+    CUSTOM_EVENT = "custom_event"
