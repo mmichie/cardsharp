@@ -106,12 +106,13 @@ class WarGame(CardsharpGame):
         """
         Shut down the War game and clean up resources.
         """
-        # Clear event handlers
-        for event_type, handlers in self.event_handlers.items():
-            for handler in handlers:
-                # Each handler is actually the unsubscribe function returned by event_bus.on()
-                if callable(handler):
-                    handler()  # Call the unsubscribe function
+        # Clear event handlers by calling the unsubscribe functions
+        for event_type, unsubscribe_funcs in self.event_handlers.items():
+            for unsubscribe in unsubscribe_funcs:
+                unsubscribe()
+
+        # Clear the handlers dictionary
+        self.event_handlers.clear()
 
         # Shutdown the engine and adapter
         await self.engine.shutdown()

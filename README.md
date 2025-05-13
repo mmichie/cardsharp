@@ -113,6 +113,30 @@ This demo showcases:
 - Synchronous and asynchronous operation modes
 - Auto-play capabilities
 
+### Event Cleanup Test
+
+Verify proper cleanup of event handlers when games are shut down:
+
+```bash
+python examples/event_cleanup_test.py
+```
+
+### Modern UI Demo
+
+Experience the Streamlit-based web UI for Blackjack:
+
+```bash
+python examples/modern_blackjack_ui.py
+```
+
+### Verification System Demo
+
+See the immutable state verification system in action:
+
+```bash
+python examples/verification_demo.py
+```
+
 ### Full CLI Blackjack Game
 
 Play the complete blackjack game using the new architecture:
@@ -157,10 +181,11 @@ CardSharp has undergone a phased modernization to an event-driven, adapter-based
 - **Asynchronous API**: Clean, platform-agnostic API with rich event-driven flow control
 - **Dual Mode**: Support for both synchronous and asynchronous operation
 
-The architecture modernization plan has completed three phases:
+The architecture modernization plan has been completed:
 1. ✅ Phase 1: Event System and Adapters
 2. ✅ Phase 2: Immutable State
 3. ✅ Phase 3: Asynchronous API
+4. ✅ Phase 4: Integration & Component Architecture
 
 Check out the [architecture documentation](docs/architecture_modernization.md) for details.
 
