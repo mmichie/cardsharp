@@ -147,10 +147,13 @@ class BlackjackGame(CardsharpGame):
         """
         Shut down the Blackjack game and clean up resources.
         """
-        # Clear event handlers
-        for event_type, handlers in self.event_handlers.items():
-            for handler in handlers:
-                self.event_bus.off(event_type, handler)
+        # Clear event handlers by calling the unsubscribe functions
+        for event_type, unsubscribe_funcs in self.event_handlers.items():
+            for unsubscribe in unsubscribe_funcs:
+                unsubscribe()
+
+        # Clear the handlers dictionary
+        self.event_handlers.clear()
 
         # Shutdown the engine and adapter
         await self.engine.shutdown()
@@ -393,7 +396,7 @@ class BlackjackGame(CardsharpGame):
         for player_id in self._players.keys():
             if player_id not in self._auto_actions:
                 # Use basic strategy
-                self.set_auto_action_sync(player_id, self._basic_strategy)
+                await self.set_auto_action(player_id, self._basic_strategy)
 
         # Wait for the round to complete
         await self._round_complete_event.wait()

@@ -138,6 +138,21 @@ class BlackjackEngine(CardsharpEngine):
             self.state, name=name, balance=balance
         )
 
+        # Get the player ID that was just added
+        player_id = self.state.players[-1].id
+
+        # Emit player joined event
+        self.event_bus.emit(
+            EngineEventType.PLAYER_JOINED,
+            {
+                "game_id": self.state.id,
+                "player_id": player_id,
+                "player_name": name,
+                "balance": balance,
+                "timestamp": time.time(),
+            },
+        )
+
         # If this is the first player, transition to betting stage
         if len(self.state.players) == 1:
             self.state = StateTransitionEngine.change_stage(
@@ -145,7 +160,7 @@ class BlackjackEngine(CardsharpEngine):
             )
 
         # Return the player ID
-        return self.state.players[-1].id
+        return player_id
 
     async def place_bet(self, player_id: str, amount: float) -> None:
         """
@@ -158,9 +173,33 @@ class BlackjackEngine(CardsharpEngine):
         if self.state.stage != GameStage.PLACING_BETS:
             raise ValueError("Cannot place bet at this stage")
 
+        # Get player name for the event
+        player_name = ""
+        player_balance = 0.0
+        for player in self.state.players:
+            if player.id == player_id:
+                player_name = player.name
+                player_balance = player.balance
+                break
+
         # Place the bet
         self.state = StateTransitionEngine.place_bet(
             self.state, player_id=player_id, amount=amount
+        )
+
+        # Emit bet placed event
+        self.event_bus.emit(
+            EngineEventType.PLAYER_BET,
+            {
+                "game_id": self.state.id,
+                "round_id": str(self.state.round_number),
+                "player_id": player_id,
+                "player_name": player_name,
+                "amount": amount,
+                "previous_balance": player_balance,
+                "new_balance": player_balance - amount,
+                "timestamp": time.time(),
+            },
         )
 
         # Check if all players have placed bets
@@ -194,6 +233,19 @@ class BlackjackEngine(CardsharpEngine):
 
         if not player:
             raise ValueError(f"Player {player_id} not found")
+
+        # Emit player action event before execution
+        self.event_bus.emit(
+            EngineEventType.PLAYER_DECISION_NEEDED,
+            {
+                "game_id": self.state.id,
+                "round_id": str(self.state.round_number),
+                "player_id": player_id,
+                "player_name": player.name,
+                "valid_actions": self._get_valid_actions(),
+                "timestamp": time.time(),
+            },
+        )
 
         # Execute the action
         if action.upper() == "HIT":
@@ -258,6 +310,20 @@ class BlackjackEngine(CardsharpEngine):
                 self.state, player_id=player_id, action=action
             )
 
+        # Emit player action completed event
+        self.event_bus.emit(
+            EngineEventType.PLAYER_ACTION,
+            {
+                "game_id": self.state.id,
+                "round_id": str(self.state.round_number),
+                "player_id": player_id,
+                "player_name": player.name,
+                "action": action.upper(),
+                "timestamp": time.time(),
+                "next_stage": self.state.stage.name,
+            },
+        )
+
         # Check if we've moved to dealer's turn
         if self.state.stage == GameStage.DEALER_TURN:
             await self._play_dealer_turn()
@@ -281,6 +347,17 @@ class BlackjackEngine(CardsharpEngine):
         """
         # Transition to dealing stage
         self.state = StateTransitionEngine.change_stage(self.state, GameStage.DEALING)
+
+        # Emit round started event
+        self.event_bus.emit(
+            EngineEventType.ROUND_STARTED,
+            {
+                "game_id": self.state.id,
+                "round_id": str(self.state.round_number),
+                "player_count": len(self.state.players),
+                "timestamp": time.time(),
+            },
+        )
 
         # Deal first card to each player
         for player in self.state.players:
@@ -340,6 +417,26 @@ class BlackjackEngine(CardsharpEngine):
                 # Render the state
                 await self.render_state()
 
+                # Emit round ended event
+                self.event_bus.emit(
+                    EngineEventType.ROUND_ENDED,
+                    {
+                        "game_id": self.state.id,
+                        "round_id": str(self.state.round_number),
+                        "timestamp": time.time(),
+                        "dealer_blackjack": True,
+                        "results": {
+                            player.id: {"name": player.name, "balance": player.balance}
+                            for player in self.state.players
+                        },
+                        "dealer": {
+                            "hand": {
+                                "cards": [str(c) for c in self.state.dealer.hand.cards]
+                            }
+                        },
+                    },
+                )
+
                 # Prepare for next round
                 self.state = StateTransitionEngine.prepare_new_round(self.state)
                 return
@@ -364,6 +461,26 @@ class BlackjackEngine(CardsharpEngine):
 
                 # Render the state
                 await self.render_state()
+
+                # Emit round ended event
+                self.event_bus.emit(
+                    EngineEventType.ROUND_ENDED,
+                    {
+                        "game_id": self.state.id,
+                        "round_id": str(self.state.round_number),
+                        "timestamp": time.time(),
+                        "dealer_blackjack": True,
+                        "results": {
+                            player.id: {"name": player.name, "balance": player.balance}
+                            for player in self.state.players
+                        },
+                        "dealer": {
+                            "hand": {
+                                "cards": [str(c) for c in self.state.dealer.hand.cards]
+                            }
+                        },
+                    },
+                )
 
                 # Prepare for next round
                 self.state = StateTransitionEngine.prepare_new_round(self.state)
@@ -498,6 +615,23 @@ class BlackjackEngine(CardsharpEngine):
 
         # Render the state
         await self.render_state()
+
+        # Emit round ended event
+        self.event_bus.emit(
+            EngineEventType.ROUND_ENDED,
+            {
+                "game_id": self.state.id,
+                "round_id": str(self.state.round_number),
+                "timestamp": time.time(),
+                "results": {
+                    player.id: {"name": player.name, "balance": player.balance}
+                    for player in self.state.players
+                },
+                "dealer": {
+                    "hand": {"cards": [str(c) for c in self.state.dealer.hand.cards]}
+                },
+            },
+        )
 
         # Prepare for next round
         self.state = StateTransitionEngine.prepare_new_round(self.state)
