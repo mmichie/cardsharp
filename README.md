@@ -113,9 +113,25 @@ This demo showcases:
 - Synchronous and asynchronous operation modes
 - Auto-play capabilities
 
-### Event Cleanup Test
+### BlackjackGame Demo
 
-Verify proper cleanup of event handlers when games are shut down:
+Experience the BlackjackGame API with event handling:
+
+```bash
+python examples/blackjack_game_demo.py
+```
+
+### Card Handling Demo
+
+See how different card representations work with the HandState class:
+
+```bash
+python examples/card_handling_demo.py
+```
+
+### Event Cleanup Demo
+
+Demonstrate proper cleanup of event handlers when games are shut down:
 
 ```bash
 python examples/event_cleanup_test.py
@@ -194,8 +210,22 @@ Check out the [architecture documentation](docs/architecture_modernization.md) f
 Run the test suite to ensure everything is working correctly:
 
 ```bash
+# Run all tests
 pytest tests/
+
+# Run tests with coverage report
+pytest tests/ --cov=cardsharp
+
+# Run specific test modules
+pytest tests/api/test_event_cleanup.py -v
 ```
+
+The project includes comprehensive test coverage for:
+- Core components (cards, decks, etc.)
+- Game engines (Blackjack, War, High Card)
+- API interfaces
+- Resource management (event cleanup)
+- Component integration
 
 ## 🤝 Contributing
 

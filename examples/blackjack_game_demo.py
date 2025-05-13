@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Test script for the BlackjackGame implementation.
+Demo script showcasing the BlackjackGame API implementation.
 
-This script verifies that the BlackjackGame API correctly interacts with the BlackjackEngine
-and that event handlers are properly registered and cleaned up.
+This script demonstrates how to use the BlackjackGame API, showing the interaction
+with the BlackjackEngine and event handling system.
 """
 
 import asyncio
@@ -12,14 +12,14 @@ from cardsharp.api import BlackjackGame
 from cardsharp.adapters import DummyAdapter
 from cardsharp.events import EventBus, EngineEventType
 
-# Track events received
+
+# Storage for events received during the demo
 events_received = []
 
 
 def event_handler(data):
     """Handle events from the game."""
-    # In the actual EventEmitter, data is passed directly to the handler
-    # We need to store event type information with the data
+    # Store event data
     current_event = {"event_type": None, "data": data}
     events_received.append(current_event)
 
@@ -38,8 +38,9 @@ def event_handler(data):
         print(f"  Action: {data.get('action', 'unknown')}")
 
 
-async def run_test():
-    print("Starting BlackjackGame test...")
+async def run_demo():
+    """Run the BlackjackGame API demo."""
+    print("Starting BlackjackGame demo...")
 
     # Create a game with a DummyAdapter that doesn't require UI
     adapter = DummyAdapter()
@@ -47,7 +48,6 @@ async def run_test():
 
     # Get the event bus and register a handler for all events
     event_bus = EventBus.get_instance()
-    global_handler = lambda data: event_handler(data)
 
     # Register handlers for specific events
     unsubscribe_funcs = []
@@ -125,27 +125,30 @@ async def run_test():
             )
             print(f"Dealer: {dealer_cards}")
 
-        # Verify events were received
+        # Print event statistics
         print("\nEvents received:")
         event_types = set(e.get("event_type", "unknown") for e in events_received)
         for et in event_types:
             count = sum(1 for e in events_received if e.get("event_type") == et)
             print(f"  {et}: {count}")
 
-        # Shut down the game to test event handler cleanup
+        # Demonstrate event handler cleanup
         print("\nShutting down game...")
         await game.shutdown()
+
+        # Verify that the event_handlers dictionary is empty
+        print(f"Event handlers after shutdown: {len(game.event_handlers)}")
 
         # Test that unsubscribe works by manually unsubscribing the handlers
         for unsubscribe in unsubscribe_funcs:
             unsubscribe()
 
-        print("Test completed successfully!")
+        print("Demo completed successfully!")
 
     except Exception as e:
-        print(f"Error in test: {e}")
+        print(f"Error in demo: {e}")
         raise
 
 
 if __name__ == "__main__":
-    asyncio.run(run_test())
+    asyncio.run(run_demo())

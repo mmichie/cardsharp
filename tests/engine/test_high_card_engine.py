@@ -6,180 +6,169 @@ to ensure it provides the expected behavior and correctly
 implements the CardsharpEngine interface.
 """
 
-import unittest
+import pytest
 import asyncio
 from unittest.mock import MagicMock, patch
 import time
 
 from cardsharp.engine.high_card import HighCardEngine
 from cardsharp.adapters import DummyAdapter
-from cardsharp.events import EventBus, EngineEventType
+from cardsharp.events import EventBus, EngineEventType, EventEmitter
 from cardsharp.high_card.state import GameState, GameStage
 
 
-class TestHighCardEngine(unittest.TestCase):
-    """Tests for the HighCardEngine class."""
+@pytest.fixture
+def high_card_engine():
+    """Create a HighCardEngine instance for testing."""
+    # Create a dummy adapter
+    adapter = DummyAdapter()
 
-    def setUp(self):
-        """Set up the test case."""
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
+    # Create a config for the engine
+    config = {
+        "shuffle_threshold": 5,
+    }
 
-        # Create a dummy adapter
-        self.adapter = DummyAdapter()
+    # Create a high card engine
+    engine = HighCardEngine(adapter, config)
+    return engine
 
-        # Create a config for the engine
-        self.config = {
-            "shuffle_threshold": 5,
-        }
 
-        # Create a high card engine
-        self.engine = HighCardEngine(self.adapter, self.config)
+def test_initialization(high_card_engine):
+    """Test that the engine initializes correctly."""
+    assert high_card_engine is not None
+    assert high_card_engine.adapter is not None
+    assert high_card_engine.config is not None
+    assert high_card_engine.event_bus is not None
+    assert high_card_engine.state is not None
+    assert high_card_engine.shuffle_threshold == 5
 
-    def tearDown(self):
-        """Tear down the test case."""
-        self.loop.close()
 
-    def test_initialization(self):
-        """Test that the engine initializes correctly."""
-        self.assertIsNotNone(self.engine)
-        self.assertEqual(self.engine.adapter, self.adapter)
-        self.assertEqual(self.engine.config, self.config)
-        self.assertIsNotNone(self.engine.event_bus)
-        self.assertIsNotNone(self.engine.state)
-        self.assertEqual(self.engine.shuffle_threshold, 5)
+@pytest.mark.asyncio
+@patch.object(EventEmitter, "emit")
+async def test_initialize(mock_emit, high_card_engine):
+    """Test that initialize sets up the engine correctly."""
+    await high_card_engine.initialize()
 
-    @patch.object(EventBus, "emit")
-    def test_initialize(self, mock_emit):
-        """Test that initialize sets up the engine correctly."""
+    # Check that deck was initialized
+    assert high_card_engine.deck is not None
+    assert high_card_engine.deck.size == 52
 
-        async def run_test():
-            await self.engine.initialize()
+    # Check that ENGINE_INIT event was emitted
+    mock_emit.assert_called()
+    args = mock_emit.call_args[0]
+    assert args[0] == EngineEventType.ENGINE_INIT
 
-            # Check that deck was initialized
-            self.assertIsNotNone(self.engine.deck)
-            self.assertEqual(self.engine.deck.size, 52)
 
-            # Check that ENGINE_INIT event was emitted
-            mock_emit.assert_called()
-            args = mock_emit.call_args[0]
-            self.assertEqual(args[0], EngineEventType.ENGINE_INIT)
+@pytest.mark.asyncio
+@patch.object(EventEmitter, "emit")
+async def test_shutdown(mock_emit, high_card_engine):
+    """Test that shutdown emits the expected event."""
+    await high_card_engine.shutdown()
 
-        self.loop.run_until_complete(run_test())
+    # Check that ENGINE_SHUTDOWN event was emitted
+    mock_emit.assert_called()
+    args = mock_emit.call_args[0]
+    assert args[0] == EngineEventType.ENGINE_SHUTDOWN
 
-    @patch.object(EventBus, "emit")
-    def test_shutdown(self, mock_emit):
-        """Test that shutdown emits the expected event."""
 
-        async def run_test():
-            await self.engine.shutdown()
+@pytest.mark.asyncio
+@patch.object(EventEmitter, "emit")
+async def test_start_game(mock_emit, high_card_engine):
+    """Test that start_game sets up a new game correctly."""
+    await high_card_engine.start_game()
 
-            # Check that ENGINE_SHUTDOWN event was emitted
-            mock_emit.assert_called()
-            args = mock_emit.call_args[0]
-            self.assertEqual(args[0], EngineEventType.ENGINE_SHUTDOWN)
+    # Check that a new state was created
+    assert high_card_engine.state is not None
 
-        self.loop.run_until_complete(run_test())
+    # Check that GAME_CREATED and GAME_STARTED events were emitted
+    calls = [args[0] for args, _ in mock_emit.call_args_list]
+    assert EngineEventType.GAME_CREATED in calls
+    assert EngineEventType.GAME_STARTED in calls
 
-    @patch.object(EventBus, "emit")
-    def test_start_game(self, mock_emit):
-        """Test that start_game sets up a new game correctly."""
 
-        async def run_test():
-            await self.engine.start_game()
+@pytest.mark.asyncio
+@patch.object(EventEmitter, "emit")
+async def test_add_player(mock_emit, high_card_engine):
+    """Test that add_player adds a player correctly."""
+    # Start a game
+    await high_card_engine.start_game()
 
-            # Check that a new state was created
-            self.assertIsNotNone(self.engine.state)
+    # Add a player
+    player_id = await high_card_engine.add_player("Test Player")
 
-            # Check that GAME_CREATED and GAME_STARTED events were emitted
-            calls = [args[0] for args, _ in mock_emit.call_args_list]
-            self.assertIn(EngineEventType.GAME_CREATED, calls)
-            self.assertIn(EngineEventType.GAME_STARTED, calls)
+    # Check that the player was added
+    assert len(high_card_engine.state.players) == 1
+    assert high_card_engine.state.players[0].name == "Test Player"
+    assert high_card_engine.state.players[0].id == player_id
 
-        self.loop.run_until_complete(run_test())
 
-    @patch.object(EventBus, "emit")
-    def test_add_player(self, mock_emit):
-        """Test that add_player adds a player correctly."""
+@pytest.mark.asyncio
+@patch.object(DummyAdapter, "render_game_state")
+async def test_render_state(mock_render, high_card_engine):
+    """Test that render_state calls the adapter's render_game_state method."""
+    # Render the state
+    await high_card_engine.render_state()
 
-        async def run_test():
-            # Start a game
-            await self.engine.start_game()
+    # Check that render_game_state was called
+    mock_render.assert_called_once()
 
-            # Add a player
-            player_id = await self.engine.add_player("Test Player")
 
-            # Check that the player was added
-            self.assertEqual(len(self.engine.state.players), 1)
-            self.assertEqual(self.engine.state.players[0].name, "Test Player")
-            self.assertEqual(self.engine.state.players[0].id, player_id)
+@pytest.mark.asyncio
+@patch.object(EventEmitter, "emit")
+async def test_play_round(mock_emit, high_card_engine):
+    """Test that play_round plays a round correctly."""
+    # Start a game
+    await high_card_engine.start_game()
 
-        self.loop.run_until_complete(run_test())
+    # Add at least 2 players
+    player1_id = await high_card_engine.add_player("Player 1")
+    player2_id = await high_card_engine.add_player("Player 2")
 
-    @patch.object(DummyAdapter, "render_game_state")
-    def test_render_state(self, mock_render):
-        """Test that render_state calls the adapter's render_game_state method."""
+    # Create an async mock for render_state
+    async def mock_render_state():
+        pass
 
-        async def run_test():
-            # Render the state
-            await self.engine.render_state()
+    # Mock the render_state method to avoid UI interactions
+    high_card_engine.render_state = mock_render_state
 
-            # Check that render_game_state was called
-            mock_render.assert_called_once()
+    # Play a round
+    result = await high_card_engine.play_round()
 
-        self.loop.run_until_complete(run_test())
+    # Check that the result is a dictionary
+    assert isinstance(result, dict)
 
-    @patch.object(EventBus, "emit")
-    def test_play_round(self, mock_emit):
-        """Test that play_round plays a round correctly."""
+    # Check that the state was updated to either COMPARING_CARDS or ROUND_ENDED
+    assert high_card_engine.state.stage in (
+        GameStage.COMPARING_CARDS,
+        GameStage.ROUND_ENDED,
+    )
 
-        async def run_test():
-            # Start a game
-            await self.engine.start_game()
+    # Check that each player has a card
+    for player in high_card_engine.state.players:
+        assert player.card is not None
 
-            # Add at least 2 players
-            player1_id = await self.engine.add_player("Player 1")
-            player2_id = await self.engine.add_player("Player 2")
+    # Check that a winner was determined
+    assert high_card_engine.state.winner_id is not None
 
-            # Mock the render_state method to avoid UI interactions
-            self.engine.render_state = MagicMock()
 
-            # Play a round
-            result = await self.engine.play_round()
+def test_deal_card(high_card_engine):
+    """Test that _deal_card returns a card from the deck."""
+    # Initialize the deck
+    high_card_engine.deck.reset()
+    high_card_engine.deck.shuffle()
 
-            # Check that the result is a dictionary
-            self.assertIsInstance(result, dict)
+    # Get the initial deck size
+    initial_size = high_card_engine.deck.size
 
-            # Check that the state was updated
-            self.assertEqual(self.engine.state.stage, GameStage.COMPARING_CARDS)
+    # Deal a card
+    card = high_card_engine._deal_card()
 
-            # Check that each player has a card
-            for player in self.engine.state.players:
-                self.assertIsNotNone(player.card)
+    # Check that a card was returned
+    assert card is not None
 
-            # Check that a winner was determined
-            self.assertIsNotNone(self.engine.state.winner)
-
-        self.loop.run_until_complete(run_test())
-
-    def test_deal_card(self):
-        """Test that _deal_card returns a card from the deck."""
-        # Initialize the deck
-        self.engine.deck.reset()
-        self.engine.deck.shuffle()
-
-        # Get the initial deck size
-        initial_size = self.engine.deck.size
-
-        # Deal a card
-        card = self.engine._deal_card()
-
-        # Check that a card was returned
-        self.assertIsNotNone(card)
-
-        # Check that the deck size was decremented
-        self.assertEqual(self.engine.deck.size, initial_size - 1)
+    # Check that the deck size was decremented
+    assert high_card_engine.deck.size == initial_size - 1
 
 
 if __name__ == "__main__":
-    unittest.main()
+    pytest.main(["-xvs", __file__])

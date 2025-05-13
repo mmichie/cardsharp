@@ -5,14 +5,14 @@ This module contains tests for the CardsharpEngine base class
 to ensure it provides the expected interface and behavior.
 """
 
-import unittest
+import pytest
 import asyncio
 from unittest.mock import MagicMock, patch
 import time
 
 from cardsharp.engine.base import CardsharpEngine
 from cardsharp.adapters import DummyAdapter
-from cardsharp.events import EventBus, EngineEventType
+from cardsharp.events import EventEmitter, EngineEventType
 
 
 class MockEngine(CardsharpEngine):
@@ -50,86 +50,72 @@ class MockEngine(CardsharpEngine):
         pass
 
 
-class TestCardsharpEngine(unittest.TestCase):
-    """Tests for the CardsharpEngine base class."""
+@pytest.fixture
+def engine():
+    """Create a MockEngine instance for testing."""
+    # Create a dummy adapter
+    adapter = DummyAdapter()
 
-    def setUp(self):
-        """Set up the test case."""
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
+    # Create a mock engine
+    return MockEngine(adapter)
 
-        # Create a dummy adapter
-        self.adapter = DummyAdapter()
 
-        # Create a mock engine
-        self.engine = MockEngine(self.adapter)
+def test_initialization(engine):
+    """Test that the engine initializes correctly."""
+    assert engine is not None
+    assert isinstance(engine.adapter, DummyAdapter)
+    assert engine.config == {}
+    assert engine.event_bus is not None
 
-    def tearDown(self):
-        """Tear down the test case."""
-        self.loop.close()
 
-    def test_initialization(self):
-        """Test that the engine initializes correctly."""
-        self.assertIsNotNone(self.engine)
-        self.assertEqual(self.engine.adapter, self.adapter)
-        self.assertEqual(self.engine.config, {})
-        self.assertIsNotNone(self.engine.event_bus)
+def test_config():
+    """Test that the engine uses the provided config."""
+    adapter = DummyAdapter()
+    config = {"test_key": "test_value"}
+    engine = MockEngine(adapter, config)
+    assert engine.config == config
 
-    def test_config(self):
-        """Test that the engine uses the provided config."""
-        config = {"test_key": "test_value"}
-        engine = MockEngine(self.adapter, config)
-        self.assertEqual(engine.config, config)
 
-    @patch.object(DummyAdapter, "initialize")
-    def test_initialize(self, mock_initialize):
-        """Test that initialize calls the adapter's initialize method."""
+@pytest.mark.asyncio
+@patch.object(DummyAdapter, "initialize")
+async def test_initialize(mock_initialize, engine):
+    """Test that initialize calls the adapter's initialize method."""
+    await engine.initialize()
+    mock_initialize.assert_called_once()
 
-        async def run_test():
-            await self.engine.initialize()
-            mock_initialize.assert_called_once()
 
-        self.loop.run_until_complete(run_test())
+@pytest.mark.asyncio
+@patch.object(DummyAdapter, "shutdown")
+async def test_shutdown(mock_shutdown, engine):
+    """Test that shutdown calls the adapter's shutdown method."""
+    await engine.shutdown()
+    mock_shutdown.assert_called_once()
 
-    @patch.object(DummyAdapter, "shutdown")
-    def test_shutdown(self, mock_shutdown):
-        """Test that shutdown calls the adapter's shutdown method."""
 
-        async def run_test():
-            await self.engine.shutdown()
-            mock_shutdown.assert_called_once()
+@pytest.mark.asyncio
+@patch.object(EventEmitter, "emit")
+async def test_start_game(mock_emit, engine):
+    """Test that start_game emits the expected event."""
+    await engine.start_game()
 
-        self.loop.run_until_complete(run_test())
+    # Check that emit was called with the correct event type
+    mock_emit.assert_called()
+    args = mock_emit.call_args[0]
+    assert args[0] == EngineEventType.GAME_CREATED
 
-    @patch.object(EventBus, "emit")
-    def test_start_game(self, mock_emit):
-        """Test that start_game emits the expected event."""
 
-        async def run_test():
-            await self.engine.start_game()
-
-            # Check that emit was called with the correct event type
-            mock_emit.assert_called()
-            args = mock_emit.call_args[0]
-            self.assertEqual(args[0], EngineEventType.GAME_CREATED)
-
-        self.loop.run_until_complete(run_test())
-
-    def test_abstract_methods(self):
-        """Test that the abstract methods are implemented by the mock engine."""
-
-        async def run_test():
-            # These should not raise NotImplementedError
-            await self.engine.initialize()
-            await self.engine.shutdown()
-            await self.engine.start_game()
-            await self.engine.add_player("Test Player")
-            await self.engine.place_bet("test_player_id", 10.0)
-            await self.engine.execute_player_action("test_player_id", "test_action")
-            await self.engine.render_state()
-
-        self.loop.run_until_complete(run_test())
+@pytest.mark.asyncio
+async def test_abstract_methods(engine):
+    """Test that the abstract methods are implemented by the mock engine."""
+    # These should not raise NotImplementedError
+    await engine.initialize()
+    await engine.shutdown()
+    await engine.start_game()
+    await engine.add_player("Test Player")
+    await engine.place_bet("test_player_id", 10.0)
+    await engine.execute_player_action("test_player_id", "test_action")
+    await engine.render_state()
 
 
 if __name__ == "__main__":
-    unittest.main()
+    pytest.main(["-xvs", __file__])

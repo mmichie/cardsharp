@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Test script that verifies proper event handler cleanup in game shutdown methods.
+Example script demonstrating proper event handler cleanup in game shutdown methods.
 
-This script tests that all game types (Blackjack, War, High Card) properly clean up
-their event handlers when the shutdown method is called.
+This script shows how to test that all game types (Blackjack, War, High Card) properly 
+clean up their event handlers when the shutdown method is called. For automated testing,
+see tests/api/test_event_cleanup.py.
 """
 
 import asyncio

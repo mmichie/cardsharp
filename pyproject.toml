@@ -21,6 +21,7 @@ matplotlib = "^3.9.2"
 streamlit = "^1.38.0"
 scipy = "^1.15.3"
 numpy = "^2.2.5"
+pytest-xdist = "^3.6.1"
 
 [tool.poetry.group.dev.dependencies]
 black = ">=24.10,<26.0"

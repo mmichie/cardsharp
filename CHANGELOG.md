@@ -1,8 +1,13 @@
 # 0.5.0
 
 * Fix event handler cleanup in WarGame and HighCardGame to match BlackjackGame implementation
-* Add event_cleanup_test.py example to verify proper event handler cleanup
+* Add standalone test script for API tests that doesn't rely on pytest
+* Add proper pytest tests for event handler cleanup and BlackjackGame functionality
+* Reorganize test files to follow proper structure
+* Rename example scripts to clarify they are demos, not tests
+* Add new BlackjackGame API demo
 * Update architecture documentation to highlight resource management benefits
+* Migrate UI implementation to use modern architecture (renamed blackjack_ui_new.py to blackjack_ui.py)
 
 # 0.4.0
 
