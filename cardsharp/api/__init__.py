@@ -9,6 +9,7 @@ from cardsharp.api.base import CardsharpGame
 from cardsharp.api.blackjack import BlackjackGame
 from cardsharp.api.high_card import HighCardGame
 from cardsharp.api.war import WarGame
+from cardsharp.api.durak import DurakGame
 from cardsharp.api.flow import (
     EventWaiter,
     EventSequence,
@@ -23,6 +24,7 @@ __all__ = [
     "BlackjackGame",
     "HighCardGame",
     "WarGame",
+    "DurakGame",
     # Flow control utilities
     "EventWaiter",
     "EventSequence",
