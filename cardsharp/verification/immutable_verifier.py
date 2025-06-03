@@ -5,13 +5,11 @@ This module provides an enhanced verification system that leverages
 the immutable state pattern to verify game integrity and rule adherence.
 """
 
-from typing import Any, Dict, List, Optional, Set, Tuple, Union, Sequence
-import json
+from typing import Any, Dict, List, Optional, Set
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
 
-from cardsharp.state import StateTransitionEngine, GameState, GameStage
+from cardsharp.state import GameState, GameStage
 from cardsharp.events import EventBus, EngineEventType
 from cardsharp.blackjack.action import Action
 from cardsharp.blackjack.rules import Rules

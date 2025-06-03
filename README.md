@@ -205,6 +205,10 @@ The architecture modernization plan has been completed:
 
 Check out the [architecture documentation](docs/architecture_modernization.md) for details.
 
+### 📊 Performance Optimization
+
+When optimizing CardSharp simulations, it's critical to maintain accuracy. See our [optimization principles](docs/optimization_principles.md) for guidelines on proper performance improvements without compromising simulation fidelity.
+
 ## 🧪 Testing
 
 Run the test suite to ensure everything is working correctly:

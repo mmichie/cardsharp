@@ -5,7 +5,7 @@ This module enhances the state classes with event emission capabilities
 for game state verification and analysis.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import List
 import uuid
 import time
 
@@ -20,7 +20,10 @@ from cardsharp.blackjack.state import (
     DealersTurnState,
     EndRoundState,
 )
-from cardsharp.verification.events import EventType, EventEmitter, GameEvent
+from cardsharp.verification.events import EventType, EventEmitter
+from cardsharp.blackjack.constants import get_blackjack_value
+from cardsharp.common.io_interface import DummyIOInterface
+from cardsharp.common.card import Rank
 
 
 class EventEmittingGameState(GameState, EventEmitter):
@@ -175,7 +178,7 @@ class EventEmittingDealingState(DealingState, EventEmittingGameState):
                     "is_dealer": player == game.dealer,
                     "hand_id": id(player.current_hand),
                     "hand_value_before": player.current_hand.value()
-                    - card.rank.rank_value,
+                    - get_blackjack_value(card.rank),
                     "hand_value_after": player.current_hand.value(),
                     "timestamp": time.time(),
                 },
@@ -201,7 +204,7 @@ class EventEmittingDealingState(DealingState, EventEmittingGameState):
                     "is_dealer": player == game.dealer,
                     "hand_id": id(player.current_hand),
                     "hand_value_before": player.current_hand.value()
-                    - card.rank.rank_value,
+                    - get_blackjack_value(card.rank),
                     "hand_value_after": player.current_hand.value(),
                     "timestamp": time.time(),
                 },

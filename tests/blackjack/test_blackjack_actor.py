@@ -33,6 +33,7 @@ def rules():
     rules.can_double_down = Mock(return_value=True)
     rules.can_insure = Mock(return_value=True)
     rules.get_max_splits = Mock(return_value=3)
+
     # Set up the should_dealer_hit mock to handle different cases correctly
     def should_dealer_hit_side_effect(hand):
         if not hand.cards:

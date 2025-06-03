@@ -6,10 +6,9 @@ including expected value calculations, variance, and confidence intervals.
 """
 
 import math
-import json
 import numpy as np
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List
 from dataclasses import dataclass
 import scipy.stats as stats
 

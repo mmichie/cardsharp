@@ -5,17 +5,13 @@ This module provides classes and functions for realistic bankroll management
 strategies, including risk-based betting, win/loss goals, and session management.
 """
 
-import random
 import time
-import math
-import numpy as np
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Callable, Union
+from typing import Dict, Tuple
 
 from cardsharp.blackjack.casino import TableConditions
 
 # Import weighted_choice from casino.py
-from cardsharp.blackjack.casino import weighted_choice
 
 
 @dataclass
@@ -233,9 +229,9 @@ class BasicBankrollManager:
         return {
             "hands_played": self.hands_played,
             "elapsed_hours": elapsed_hours,
-            "hands_per_hour": self.hands_played / elapsed_hours
-            if elapsed_hours > 0
-            else 0,
+            "hands_per_hour": (
+                self.hands_played / elapsed_hours if elapsed_hours > 0 else 0
+            ),
             "starting_bankroll": self.session_start_bankroll,
             "current_bankroll": self.current_bankroll,
             "net_result": net_result,
@@ -243,11 +239,11 @@ class BasicBankrollManager:
             "total_wagered": self.total_wagered,
             "session_high": self.session_high,
             "session_low": self.session_low,
-            "drawdown_percentage": (self.session_high - self.session_low)
-            / self.session_high
-            * 100
-            if self.session_high > 0
-            else 0,
+            "drawdown_percentage": (
+                (self.session_high - self.session_low) / self.session_high * 100
+                if self.session_high > 0
+                else 0
+            ),
             "rebuy_count": self.rebuy_count,
             "total_rebuy_amount": self.total_rebuy_amount,
         }
@@ -645,7 +641,7 @@ class RiskOfRuinCalculator:
             "risk_of_not_reaching_target": risk_of_not_reaching_target,
             "expected_hands_to_ruin": expected_hands_to_ruin,
             "edge_per_hand": edge,
-            "bankroll_to_bet_ratio": bankroll / bet_size
-            if bet_size > 0
-            else float("inf"),
+            "bankroll_to_bet_ratio": (
+                bankroll / bet_size if bet_size > 0 else float("inf")
+            ),
         }

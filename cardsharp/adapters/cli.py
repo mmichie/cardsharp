@@ -1,7 +1,7 @@
 """
 Command-line interface adapter for the Cardsharp engine.
 
-This module provides an adapter for console-based interactions with the 
+This module provides an adapter for console-based interactions with the
 Cardsharp engine, enabling backward compatibility with the current interface.
 """
 
@@ -9,7 +9,6 @@ import asyncio
 import sys
 from typing import List, Dict, Any, Optional, Union, Awaitable
 from enum import Enum
-import time
 
 from cardsharp.adapters.base import PlatformAdapter
 
@@ -284,12 +283,12 @@ class CLIAdapter(PlatformAdapter):
             result = data.get("result", "unknown")
             if data.get("is_blackjack", False):
                 if data.get("is_dealer", False):
-                    return f"Dealer has Blackjack!"
+                    return "Dealer has Blackjack!"
                 else:
                     return f"{player_name} has Blackjack!"
             elif data.get("is_busted", False):
                 if data.get("is_dealer", False):
-                    return f"Dealer busts!"
+                    return "Dealer busts!"
                 else:
                     return f"{player_name} busts!"
             else:

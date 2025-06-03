@@ -29,11 +29,9 @@ Examples:
 """
 
 import argparse
-import os
 import statistics
 import time
-from collections import defaultdict, Counter
-from typing import Dict, List, Tuple, Any
+from collections import Counter
 
 from cardsharp.blackjack.rules import Rules
 from cardsharp.blackjack.blackjack import BlackjackGame
@@ -43,7 +41,6 @@ from cardsharp.blackjack.actor import Player
 from cardsharp.blackjack.strategy import BasicStrategy
 from cardsharp.blackjack.action import Action
 from cardsharp.blackjack.state import PlacingBetsState
-from cardsharp.common.card import Rank, Suit
 
 
 def main():
@@ -399,13 +396,13 @@ def main():
                     if not rules.allow_double_after_split:
                         if not args.summary_only:
                             print(
-                                f"  VIOLATION: Double after split allowed but shouldn't be"
+                                "  VIOLATION: Double after split allowed but shouldn't be"
                             )
                         stats["player_option_violations"] += 1
                     else:
                         stats["doubles"] += 1
                         if not args.summary_only:
-                            print(f"  Player doubled down on split hand")
+                            print("  Player doubled down on split hand")
 
         # Get action counts if available
         if hasattr(player.strategy, "get_action_counts"):
@@ -418,7 +415,7 @@ def main():
 
             # Check for regular doubling down (first hand only)
             if Action.DOUBLE in player.action_history[0] and not args.summary_only:
-                print(f"  Player doubled down")
+                print("  Player doubled down")
 
             # Check for surrender
             if Action.SURRENDER in action_counts:
@@ -430,7 +427,7 @@ def main():
                     # If surrender is not allowed but the action was recorded, warn about this inconsistency
                     if not args.summary_only:
                         print(
-                            f"  WARNING: Surrender action recorded but surrender is not allowed in rules"
+                            "  WARNING: Surrender action recorded but surrender is not allowed in rules"
                         )
                 else:
                     # Verify surrender payout with detailed checking
@@ -502,7 +499,7 @@ def main():
             stats["dealer_violations"] += 1
         elif dealer_final_value == 17 and dealer_soft and rules.dealer_hit_soft_17:
             if not args.summary_only:
-                print(f"  VIOLATION: Dealer stopped at soft 17 but should hit")
+                print("  VIOLATION: Dealer stopped at soft 17 but should hit")
             stats["dealer_violations"] += 1
 
         # Report dealer outcome
@@ -520,15 +517,15 @@ def main():
             if winner == "dealer":
                 stats["dealer_wins"] += 1
                 if not args.summary_only:
-                    print(f"  Dealer won")
+                    print("  Dealer won")
             elif winner == "player":
                 stats["player_wins"] += 1
                 if not args.summary_only:
-                    print(f"  Player won")
+                    print("  Player won")
             elif winner == "draw":
                 stats["pushes"] += 1
                 if not args.summary_only:
-                    print(f"  Push (tie)")
+                    print("  Push (tie)")
 
         # Use the same shoe for the next game
         shoe = game.shoe
@@ -606,7 +603,7 @@ def main():
         print("\nSurrender Verification:")
         print(f"  Total surrenders: {stats['surrenders']}")
         if args.test_odd_bets:
-            print(f"  Odd-bet testing: Enabled (testing exact half-bet refunds)")
+            print("  Odd-bet testing: Enabled (testing exact half-bet refunds)")
         surrender_violations = sum(
             1
             for v in stats.values()
@@ -651,7 +648,7 @@ def main():
     if args.output_file:
         try:
             with open(args.output_file, "w") as f:
-                f.write(f"Blackjack Rule Verification Report\n")
+                f.write("Blackjack Rule Verification Report\n")
                 f.write(f"Rules tested: {vars(args)}\n")
                 f.write(f"Games played: {total_games}\n")
                 f.write(f"House edge: {house_edge:.2f}%\n")

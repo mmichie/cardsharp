@@ -1,7 +1,7 @@
 """
 Simplified integration tests for the Cardsharp system.
 
-This module contains targeted integration tests focusing only on essential 
+This module contains targeted integration tests focusing only on essential
 interactions between the API, engine, and adapters, with strict cleanup.
 """
 

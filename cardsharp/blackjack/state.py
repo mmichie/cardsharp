@@ -29,6 +29,7 @@ from abc import abstractmethod
 from cardsharp.common.card import Rank
 from cardsharp.blackjack.action import Action
 from cardsharp.common.io_interface import DummyIOInterface
+from cardsharp.blackjack.constants import get_blackjack_value
 
 
 class InsufficientFundsError(Exception):
@@ -216,7 +217,10 @@ class OfferInsuranceState(GameState):
         dealer_has_blackjack = False
         # Check for dealer blackjack if dealer peeking is allowed
         if game.rules.should_dealer_peek():
-            if dealer_up_card.rank == Rank.ACE or dealer_up_card.rank.rank_value == 10:
+            if (
+                dealer_up_card.rank == Rank.ACE
+                or get_blackjack_value(dealer_up_card.rank) == 10
+            ):
                 if game.dealer.current_hand.is_blackjack:
                     dealer_has_blackjack = True
                     self.handle_dealer_blackjack(game)
@@ -598,12 +602,14 @@ class EndRoundState(GameState):
         # Example: Check for suited 6-7-8
         if len(hand.cards) == 3:
             # Sort cards by rank
-            sorted_cards = sorted(hand.cards, key=lambda card: card.rank.rank_value)
+            sorted_cards = sorted(
+                hand.cards, key=lambda card: get_blackjack_value(card.rank)
+            )
 
             # Check for consecutive ranks (like 6-7-8)
             is_consecutive = all(
-                sorted_cards[i + 1].rank.rank_value
-                == sorted_cards[i].rank.rank_value + 1
+                get_blackjack_value(sorted_cards[i + 1].rank)
+                == get_blackjack_value(sorted_cards[i].rank) + 1
                 for i in range(len(sorted_cards) - 1)
             )
 

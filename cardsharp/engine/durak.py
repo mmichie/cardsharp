@@ -5,21 +5,14 @@ This module provides the DurakEngine class, which implements the CardsharpEngine
 interface for the game of Durak.
 """
 
-from typing import Dict, Any, List, Optional, Union, Tuple
-import asyncio
+from typing import Dict, Any, List, Optional, Union
 import time
-import random
-from dataclasses import replace
 
 from cardsharp.adapters import PlatformAdapter
 from cardsharp.engine.base import CardsharpEngine
-from cardsharp.events import EventBus, EngineEventType
-from cardsharp.common.card import Card, Rank, Suit
-from cardsharp.common.deck import Deck
+from cardsharp.events import EngineEventType
 from cardsharp.durak.state import (
     GameState,
-    PlayerState,
-    TableState,
     GameStage,
     DurakRules,
 )

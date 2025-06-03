@@ -2,7 +2,7 @@
 """
 Example script for running the modern Blackjack UI.
 
-This script demonstrates how to run the modern Blackjack UI using 
+This script demonstrates how to run the modern Blackjack UI using
 the new engine pattern.
 """
 

@@ -8,9 +8,8 @@ existing ones.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Tuple, Union
+from typing import List, Dict, Any, Optional
 from enum import Enum, auto
-import copy
 import uuid
 
 
@@ -234,7 +233,6 @@ class DealerState:
     def visible_value(self) -> int:
         """Calculate the value of the visible cards."""
         # Create a temporary hand with just the visible cards
-        from copy import deepcopy
 
         visible_hand = HandState(cards=self.visible_cards)
         return visible_hand.value

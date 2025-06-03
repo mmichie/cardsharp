@@ -2,7 +2,7 @@
 """
 WebSocket Client Example
 
-This script demonstrates how to create a WebSocket client that connects to 
+This script demonstrates how to create a WebSocket client that connects to
 the Cardsharp engine's WebSocket server. It provides a simple command-line
 interface for playing blackjack.
 """

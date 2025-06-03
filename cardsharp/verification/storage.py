@@ -6,14 +6,10 @@ This module provides classes for storing game events and verification data in SQ
 
 import sqlite3
 import json
-from typing import Any, Dict, List, Optional, Tuple, Union
-import time
-import datetime
-from pathlib import Path
+from typing import Any, Dict, List, Optional
 from enum import Enum
 
 from cardsharp.verification.events import EventType, GameEvent
-from cardsharp.verification.schema import initialize_database
 
 
 class SQLiteEventStore:
@@ -73,9 +69,11 @@ class SQLiteEventStore:
             (
                 event.game_id,
                 event.round_id,
-                event.event_type.name
-                if isinstance(event.event_type, Enum)
-                else event.event_type,
+                (
+                    event.event_type.name
+                    if isinstance(event.event_type, Enum)
+                    else event.event_type
+                ),
                 json.dumps(event.data),
                 event.timestamp,
             ),

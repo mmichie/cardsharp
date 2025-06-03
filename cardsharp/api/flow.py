@@ -6,7 +6,6 @@ allowing for more complex interactions with the event system.
 """
 
 import asyncio
-import time
 from typing import (
     Dict,
     Any,
@@ -16,10 +15,7 @@ from typing import (
     Tuple,
     Callable,
     TypeVar,
-    Generic,
-    Set,
 )
-from enum import Enum
 import uuid
 import functools
 import inspect

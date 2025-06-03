@@ -7,7 +7,6 @@ testing, simulations, and benchmarks where no user interaction is needed.
 
 from typing import List, Dict, Any, Optional, Union, Awaitable
 from enum import Enum
-import asyncio
 import random
 
 from cardsharp.adapters.base import PlatformAdapter

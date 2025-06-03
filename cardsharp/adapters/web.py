@@ -9,9 +9,8 @@ It also includes WebSocket support for real-time communication.
 import asyncio
 import time
 import logging
-from typing import List, Dict, Any, Optional, Union, Awaitable, Callable
+from typing import List, Dict, Any, Optional, Union
 from enum import Enum
-import threading
 import queue
 import uuid
 

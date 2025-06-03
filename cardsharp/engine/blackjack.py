@@ -5,19 +5,16 @@ This module provides the BlackjackEngine class, which implements the CardsharpEn
 interface for the game of blackjack.
 """
 
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List
 import asyncio
 import time
 from dataclasses import replace
 
 from cardsharp.adapters import PlatformAdapter
 from cardsharp.engine.base import CardsharpEngine
-from cardsharp.events import EventBus, EngineEventType
+from cardsharp.events import EngineEventType
 from cardsharp.state import (
     GameState,
-    PlayerState,
-    DealerState,
-    HandState,
     GameStage,
     StateTransitionEngine,
 )

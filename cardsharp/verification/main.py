@@ -6,12 +6,9 @@ connecting event emission to database storage, and running verifications.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple, Union
-import os
-from pathlib import Path
+from typing import Any, Dict, Optional
 
 from cardsharp.verification.events import EventType, EventEmitter, EventRecorder
-from cardsharp.verification.schema import initialize_database, DatabaseInitializer
 from cardsharp.verification.storage import SQLiteEventStore
 from cardsharp.verification.verifier import BlackjackVerifier
 from cardsharp.verification.statistics import StatisticalValidator

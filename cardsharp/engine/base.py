@@ -7,7 +7,7 @@ must implement.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any
 
 from cardsharp.adapters import PlatformAdapter
 from cardsharp.events import EventBus

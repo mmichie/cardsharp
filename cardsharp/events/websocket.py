@@ -6,17 +6,15 @@ communication between the Cardsharp engine and web clients.
 """
 
 import asyncio
-import json
 import logging
 import threading
 import time
 import uuid
-from typing import Any, Dict, List, Set, Optional, Union, Callable
+from typing import Any, Dict, Set, Optional, Union, Callable
 from enum import Enum
 
 from cardsharp.events.emitter import (
     EventBus,
-    EventEmitter,
     EventPriority,
     EngineEventType,
 )

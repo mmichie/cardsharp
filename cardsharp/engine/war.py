@@ -5,18 +5,16 @@ This module provides the WarEngine class, which implements the CardsharpEngine
 interface for the game of War.
 """
 
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any
 import asyncio
 import time
-import random
-from dataclasses import replace
 
 from cardsharp.adapters import PlatformAdapter
 from cardsharp.engine.base import CardsharpEngine
-from cardsharp.events import EventBus, EngineEventType
-from cardsharp.common.card import Card, Rank, Suit
+from cardsharp.events import EngineEventType
+from cardsharp.common.card import Card
 from cardsharp.common.deck import Deck
-from cardsharp.war.state import GameState, PlayerState, WarState, GameStage, RoundResult
+from cardsharp.war.state import GameState, GameStage, RoundResult
 from cardsharp.war.transitions import StateTransitionEngine
 
 

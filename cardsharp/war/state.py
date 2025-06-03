@@ -8,11 +8,10 @@ existing ones.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Set, Tuple
+from typing import List, Dict, Any, Optional, Tuple
 from enum import Enum, auto
 import uuid
 import time
-import copy
 
 from cardsharp.common.card import Card
 

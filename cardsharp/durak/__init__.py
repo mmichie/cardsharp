@@ -1,7 +1,7 @@
 """
 Durak card game module.
 
-This module provides the implementation for the Durak card game, 
+This module provides the implementation for the Durak card game,
 including state models, state transitions, and game logic.
 """
 

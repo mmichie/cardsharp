@@ -5,11 +5,11 @@ This module provides pure functions for transitioning between game states,
 without modifying the original state objects.
 """
 
-from typing import List, Dict, Any, Optional, Tuple, Union
+from typing import Optional
 from dataclasses import replace
 import random
 
-from cardsharp.common.card import Card, Suit, Rank
+from cardsharp.common.card import Suit, Rank
 from cardsharp.common.deck import Deck
 from cardsharp.events import EventBus, EngineEventType
 from cardsharp.durak.state import (
@@ -19,6 +19,7 @@ from cardsharp.durak.state import (
     GameStage,
     DurakRules,
 )
+from cardsharp.durak.constants import get_durak_value
 
 
 class StateTransitionEngine:
@@ -233,14 +234,14 @@ class StateTransitionEngine:
                 for card in player.hand:
                     # Check for trump card
                     if card.suit == state.trump_suit:
-                        if card.rank.rank_value < lowest_trump_value:
-                            lowest_trump_value = card.rank.rank_value
+                        if get_durak_value(card.rank) < lowest_trump_value:
+                            lowest_trump_value = get_durak_value(card.rank)
                             first_attacker_idx = i
                     elif (
                         lowest_trump_value == float("inf")
-                        and card.rank.rank_value < lowest_card_value
+                        and get_durak_value(card.rank) < lowest_card_value
                     ):
-                        lowest_card_value = card.rank.rank_value
+                        lowest_card_value = get_durak_value(card.rank)
                         first_attacker_idx = i
 
         # Determine the defender (next player after attacker)
@@ -320,10 +321,10 @@ class StateTransitionEngine:
         if state.table.attack_cards:
             # Can only play cards of ranks already on the table
             valid_ranks = set(
-                c.rank.rank_value
+                get_durak_value(c.rank)
                 for c in state.table.attack_cards + state.table.defense_cards
             )
-            if card.rank.rank_value not in valid_ranks:
+            if get_durak_value(card.rank) not in valid_ranks:
                 return state  # Invalid card rank
 
         # Check attack limits
@@ -425,10 +426,9 @@ class StateTransitionEngine:
         is_valid_defense = False
 
         # Same suit, higher rank
-        if (
-            card.suit == undefended_card.suit
-            and card.rank.rank_value > undefended_card.rank.rank_value
-        ):
+        if card.suit == undefended_card.suit and get_durak_value(
+            card.rank
+        ) > get_durak_value(undefended_card.rank):
             is_valid_defense = True
         # Trump card vs non-trump
         elif card.suit == state.trump_suit and undefended_card.suit != state.trump_suit:
@@ -529,10 +529,10 @@ class StateTransitionEngine:
 
         # Validate that this is a valid throw-in card (must match existing ranks)
         valid_ranks = set(
-            c.rank.rank_value
+            get_durak_value(c.rank)
             for c in state.table.attack_cards + state.table.defense_cards
         )
-        if card.rank.rank_value not in valid_ranks:
+        if get_durak_value(card.rank) not in valid_ranks:
             return state  # Invalid card rank
 
         # Check attack limits
@@ -845,7 +845,7 @@ class StateTransitionEngine:
 
         # Check if the target player has a card of the same rank
         has_matching_rank = any(
-            card.rank.rank_value == last_defense_card.rank.rank_value
+            get_durak_value(card.rank) == last_defense_get_durak_value(card.rank)
             for card in target_player.hand
         )
 

@@ -8,11 +8,11 @@ rule variations and conditions.
 
 import random
 import time
-import numpy as np
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Callable, Union
+from typing import Dict, Optional, Tuple
 
 from cardsharp.blackjack.rules import Rules
+
 
 # Custom weighted choice function
 def weighted_choice(weights_dict):
@@ -803,9 +803,9 @@ class EnvironmentAwareBankrollManager:
         return {
             "hands_played": self.hands_played,
             "elapsed_hours": elapsed_hours,
-            "hands_per_hour": self.hands_played / elapsed_hours
-            if elapsed_hours > 0
-            else 0,
+            "hands_per_hour": (
+                self.hands_played / elapsed_hours if elapsed_hours > 0 else 0
+            ),
             "starting_bankroll": self.session_start_bankroll,
             "current_bankroll": self.current_bankroll,
             "net_result": net_result,
@@ -813,9 +813,9 @@ class EnvironmentAwareBankrollManager:
             "total_wagered": self.total_wagered,
             "session_high": self.session_high,
             "session_low": self.session_low,
-            "drawdown_percentage": (self.session_high - self.session_low)
-            / self.session_high
-            * 100
-            if self.session_high > 0
-            else 0,
+            "drawdown_percentage": (
+                (self.session_high - self.session_low) / self.session_high * 100
+                if self.session_high > 0
+                else 0
+            ),
         }

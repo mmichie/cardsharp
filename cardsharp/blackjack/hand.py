@@ -5,6 +5,7 @@ Optimized BlackjackHand implementation with improved cache handling.
 from typing import Any, Dict
 from cardsharp.common.card import Card, Rank
 from cardsharp.common.hand import Hand
+from cardsharp.blackjack.constants import get_blackjack_value
 
 
 class BlackjackHand(Hand):
@@ -48,7 +49,7 @@ class BlackjackHand(Hand):
                 self._cache["num_aces"] += 1
             else:
                 if self._cache["non_ace_value"] is not None:
-                    self._cache["non_ace_value"] += card.rank.rank_value
+                    self._cache["non_ace_value"] += get_blackjack_value(card.rank)
 
         # Invalidate computed values that depend on the entire hand
         self._invalidate_cache()
@@ -80,7 +81,7 @@ class BlackjackHand(Hand):
             total = 0
             for card in self._cards:
                 if card.rank != Rank.ACE:
-                    total += card.rank.rank_value
+                    total += get_blackjack_value(card.rank)
             self._cache["non_ace_value"] = total
         return self._cache["non_ace_value"]
 
@@ -133,7 +134,7 @@ class BlackjackHand(Hand):
 
         ranks = {card.rank for card in self._cards}
         has_ace = Rank.ACE in ranks
-        has_ten_value = any(rank.rank_value == 10 for rank in ranks)
+        has_ten_value = any(get_blackjack_value(rank) == 10 for rank in ranks)
 
         self._cache["is_blackjack"] = has_ace and has_ten_value
         return self._cache["is_blackjack"]

@@ -5,9 +5,8 @@ This module defines the SQLite schema used to store detailed information about
 blackjack games for verification and statistical analysis.
 """
 
-from typing import List, Optional
+from typing import Optional
 import sqlite3
-import json
 import os
 from pathlib import Path
 
@@ -257,5 +256,5 @@ def initialize_database(db_path: Optional[str] = None) -> sqlite3.Connection:
 if __name__ == "__main__":
     # If the script is run directly, initialize the database
     db = initialize_database()
-    print(f"Database initialized successfully.")
+    print("Database initialized successfully.")
     db.close()

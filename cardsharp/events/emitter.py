@@ -1,14 +1,13 @@
 """
 Enhanced event system for the Cardsharp engine.
 
-This module provides a robust event system that serves as the foundation for the 
+This module provides a robust event system that serves as the foundation for the
 event-driven architecture. It extends the current event recording capabilities
 to support bidirectional events and subscriptions.
 """
 
 from collections import defaultdict
-from typing import Any, Dict, List, Callable, Optional, Set, Union
-import uuid
+from typing import Any, Dict, Callable, Optional, Union
 import time
 import threading
 import logging

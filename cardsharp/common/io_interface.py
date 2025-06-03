@@ -191,7 +191,7 @@ class ConsoleIOInterface(IOInterface):
 
             except TimeoutError:
                 # Time limit expired
-                print(f"Time limit expired! Defaulting to STAND.")
+                print("Time limit expired! Defaulting to STAND.")
                 return (
                     Action.STAND if Action.STAND in valid_actions else valid_actions[0]
                 )

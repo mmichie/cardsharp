@@ -73,8 +73,8 @@ class TestDurakState:
         player = PlayerState(hand=cards)
 
         assert player.has_card(6)  # Player has a Six
-        assert player.has_card(10)  # Player has a King (value 10)
-        assert player.has_card(11)  # Player has an Ace (value 11)
+        assert player.has_card(13)  # Player has a King (value 13 in durak)
+        assert player.has_card(14)  # Player has an Ace (value 14 in durak)
         assert not player.has_card(7)  # Player doesn't have a Seven
 
     def test_table_state_methods(self):

@@ -13,7 +13,7 @@ import inspect
 import time
 import uuid
 
-from cardsharp.adapters import PlatformAdapter, CLIAdapter, DummyAdapter
+from cardsharp.adapters import PlatformAdapter, CLIAdapter
 from cardsharp.events import EventBus, EngineEventType, EventPriority
 from cardsharp.api.flow import (
     EventWaiter,

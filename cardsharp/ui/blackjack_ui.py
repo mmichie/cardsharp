@@ -7,18 +7,14 @@ the new engine and API pattern.
 
 import streamlit as st
 import matplotlib.pyplot as plt
-import pandas as pd
 import time
 import asyncio
 import threading
-from typing import Dict, Any, List, Optional
 import uuid
 
 from cardsharp.api import BlackjackGame
 from cardsharp.adapters import DummyAdapter, WebAdapter
-from cardsharp.blackjack.action import Action
-from cardsharp.events import EventBus, EngineEventType
-from cardsharp.blackjack.state import GameStage
+from cardsharp.events import EventBus
 
 
 class BlackjackUI:

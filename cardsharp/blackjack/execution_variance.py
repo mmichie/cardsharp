@@ -8,9 +8,8 @@ and decision timing effects.
 
 import random
 import time
-import math
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Dict, List, Optional
 
 from cardsharp.blackjack.action import Action
 from cardsharp.blackjack.strategy import Strategy, CountingStrategy

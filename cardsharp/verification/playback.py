@@ -5,11 +5,9 @@ This module provides tools for visualizing and replaying blackjack game sessions
 from the event database, allowing for detailed analysis and inspection.
 """
 
-import json
 import time
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
-from enum import Enum, auto
-import sqlite3
+from typing import Any, Dict, List, Optional, Tuple
+from enum import Enum
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd

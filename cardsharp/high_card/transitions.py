@@ -5,12 +5,12 @@ This module provides pure functions for transitioning between game states,
 without modifying the original state objects.
 """
 
-from typing import List, Dict, Any, Optional, Tuple, Union
 from dataclasses import replace
 
 from cardsharp.common.card import Card
 from cardsharp.events import EventBus, EngineEventType
 from cardsharp.high_card.state import GameState, PlayerState, GameStage
+from cardsharp.high_card.constants import get_high_card_value
 
 
 class StateTransitionEngine:
@@ -174,7 +174,8 @@ class StateTransitionEngine:
         for player in state.players:
             if player.card and (
                 not highest_card
-                or player.card.rank.rank_value > highest_card.rank.rank_value
+                or get_high_card_value(player.card.rank)
+                > get_high_card_value(highest_card.rank)
             ):
                 highest_card = player.card
                 winner = player

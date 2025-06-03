@@ -6,6 +6,7 @@ from typing import Optional
 
 from cardsharp.blackjack.action import Action
 from cardsharp.common.card import Card, Rank
+from cardsharp.blackjack.constants import get_blackjack_value
 
 
 class Strategy(ABC):
@@ -100,10 +101,10 @@ class BasicStrategy(Strategy):
             rank = hand.cards[0].rank
             if rank == Rank.ACE:
                 return "PairA"
-            elif rank.rank_value == 10:
+            elif get_blackjack_value(rank) == 10:
                 return "Pair10"
             else:
-                return f"Pair{rank.rank_value}"
+                return f"Pair{get_blackjack_value(rank)}"
         elif hand.is_soft:
             value = hand.value()
             return f"Soft{value}"
@@ -113,12 +114,12 @@ class BasicStrategy(Strategy):
 
     def _get_dealer_card(self, dealer_up_card):
         rank = dealer_up_card.rank
-        if rank.rank_value >= 10:
+        if get_blackjack_value(rank) >= 10:
             return "10"
         elif rank == Rank.ACE:
             return "A"
         else:
-            return str(rank.rank_value)
+            return str(get_blackjack_value(rank))
 
     def _get_action_from_strategy(self, hand_type, dealer_card):
         dealer_index = self.dealer_indexes[dealer_card]
@@ -403,7 +404,7 @@ class AggressiveStrategy(BasicStrategy):
             return None
 
         player_rank = current_hand.cards[0].rank
-        dealer_rank = dealer_up_card.rank.rank_value
+        dealer_rank = get_blackjack_value(dealer_up_card.rank)
 
         # Always split Aces and 8s
         if player_rank in [Rank.ACE, Rank.EIGHT]:
@@ -427,7 +428,7 @@ class AggressiveStrategy(BasicStrategy):
             return None
 
         hand_value = current_hand.value()
-        dealer_rank = dealer_up_card.rank.rank_value
+        dealer_rank = get_blackjack_value(dealer_up_card.rank)
 
         # Double down on hard 9-11 against dealer 2-9
         if 9 <= hand_value <= 11 and dealer_rank <= 9:
@@ -447,7 +448,7 @@ class AggressiveStrategy(BasicStrategy):
 
     def _decide_on_stand_or_hit(self, current_hand, dealer_up_card: Card) -> Action:
         hand_value = current_hand.value()
-        dealer_rank = dealer_up_card.rank.rank_value
+        dealer_rank = get_blackjack_value(dealer_up_card.rank)
 
         if current_hand.is_soft:
             # Always hit soft 17 or lower

@@ -1,7 +1,7 @@
 """
 Tests for the BlackjackGame API implementation.
 
-This module tests that the BlackjackGame API correctly interacts with the 
+This module tests that the BlackjackGame API correctly interacts with the
 BlackjackEngine and that event handlers are properly registered and cleaned up.
 """
 

@@ -6,14 +6,12 @@ Cardsharp War engine, supporting both synchronous and asynchronous operation.
 """
 
 import asyncio
-import time
-import uuid
-from typing import Dict, Any, List, Optional, Union, Tuple, Callable
+from typing import Dict, Any, List, Optional
 
-from cardsharp.adapters import PlatformAdapter, CLIAdapter, DummyAdapter
+from cardsharp.adapters import PlatformAdapter
 from cardsharp.engine.war import WarEngine
-from cardsharp.events import EventBus, EngineEventType, EventPriority
-from cardsharp.war.state import GameState, GameStage
+from cardsharp.events import EngineEventType
+from cardsharp.war.state import GameState
 from cardsharp.api.base import CardsharpGame
 
 

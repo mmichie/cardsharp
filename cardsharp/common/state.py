@@ -2,6 +2,7 @@
 This module contains the GameState class, which is an abstract base class
 representing the state of a game.
 """
+
 from abc import ABC, abstractmethod
 
 

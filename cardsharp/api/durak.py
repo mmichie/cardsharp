@@ -6,14 +6,12 @@ Cardsharp Durak engine, supporting both synchronous and asynchronous operation.
 """
 
 import asyncio
-import time
-import uuid
-from typing import Dict, Any, List, Optional, Union, Tuple, Callable
+from typing import Dict, Any, List, Optional, Union
 
-from cardsharp.adapters import PlatformAdapter, CLIAdapter, DummyAdapter
+from cardsharp.adapters import PlatformAdapter
 from cardsharp.engine import DurakEngine
-from cardsharp.events import EventBus, EngineEventType, EventPriority
-from cardsharp.durak.state import GameState, GameStage, DurakRules
+from cardsharp.events import EngineEventType
+from cardsharp.durak.state import GameState
 from cardsharp.api.base import CardsharpGame
 
 

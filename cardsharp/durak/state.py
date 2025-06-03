@@ -8,13 +8,13 @@ existing ones.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Set, Tuple
+from typing import List, Dict, Any, Optional, Tuple
 from enum import Enum, auto
 import uuid
 import time
-import copy
 
 from cardsharp.common.card import Card, Suit
+from cardsharp.durak.constants import get_durak_value
 
 
 class GameStage(Enum):
@@ -92,7 +92,7 @@ class PlayerState:
 
     def has_card(self, card_rank: int) -> bool:
         """Check if player has a card of specific rank."""
-        return any(card.rank.rank_value == card_rank for card in self.hand)
+        return any(get_durak_value(card.rank) == card_rank for card in self.hand)
 
 
 @dataclass(frozen=True)

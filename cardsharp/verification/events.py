@@ -6,7 +6,7 @@ and provides classes for capturing and processing these events.
 """
 
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 import time
 import json
 import uuid

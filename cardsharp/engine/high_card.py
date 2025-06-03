@@ -5,18 +5,17 @@ This module provides the HighCardEngine class, which implements the CardsharpEng
 interface for the game of High Card.
 """
 
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any
 import asyncio
 import time
 import random
-from dataclasses import replace
 
 from cardsharp.adapters import PlatformAdapter
 from cardsharp.engine.base import CardsharpEngine
-from cardsharp.events import EventBus, EngineEventType
-from cardsharp.common.card import Card, Rank, Suit
+from cardsharp.events import EngineEventType
+from cardsharp.common.card import Card
 from cardsharp.common.deck import Deck
-from cardsharp.high_card.state import GameState, PlayerState, GameStage
+from cardsharp.high_card.state import GameState, GameStage
 from cardsharp.high_card.transitions import StateTransitionEngine
 
 

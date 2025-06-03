@@ -6,14 +6,12 @@ Cardsharp High Card engine, supporting both synchronous and asynchronous operati
 """
 
 import asyncio
-import time
-import uuid
-from typing import Dict, Any, List, Optional, Union, Tuple, Callable
+from typing import Dict, Any, List, Optional
 
-from cardsharp.adapters import PlatformAdapter, CLIAdapter, DummyAdapter
+from cardsharp.adapters import PlatformAdapter
 from cardsharp.engine import HighCardEngine
-from cardsharp.events import EventBus, EngineEventType, EventPriority
-from cardsharp.high_card.state import GameState, GameStage
+from cardsharp.events import EngineEventType
+from cardsharp.high_card.state import GameState
 from cardsharp.api.base import CardsharpGame
 
 

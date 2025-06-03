@@ -17,16 +17,15 @@ to the simulation, affecting player advantages and game outcomes.
 import random
 import time
 import threading
-from typing import Dict, List, Optional, Tuple, Callable, Any
+from typing import Dict, Optional, Tuple
 
-from cardsharp.blackjack.casino import CasinoEnvironment, TableConditions, DealerProfile
-from cardsharp.blackjack.bankroll import BasicBankrollManager, KellyBankrollManager
+from cardsharp.blackjack.casino import CasinoEnvironment
+from cardsharp.blackjack.bankroll import BasicBankrollManager
 from cardsharp.blackjack.execution_variance import ExecutionVarianceWrapper
 from cardsharp.blackjack.strategy import Strategy
 from cardsharp.blackjack.blackjack import BlackjackGame
 from cardsharp.blackjack.actor import Player
 from cardsharp.blackjack.realistic_strategy import RealisticPlayerStrategy, SkillLevel
-from cardsharp.blackjack.state import GameState
 from cardsharp.verification.events import EventEmitter, EventRecorder
 from cardsharp.verification.storage import SQLiteEventStore
 from cardsharp.verification.verifier import BlackjackVerifier
@@ -624,9 +623,9 @@ class EnvironmentIntegrator:
                     "player_hand": str(state.current_player_hand),
                     "dealer_upcard": str(state.dealer_hand.cards[0]),
                     "is_error": True,
-                    "player": self.player_actor.name
-                    if self.player_actor
-                    else "Unknown",
+                    "player": (
+                        self.player_actor.name if self.player_actor else "Unknown"
+                    ),
                     "fatigue": self.fatigue,
                     "distraction": self.distraction_level,
                     "time_pressure": self.time_pressure,
