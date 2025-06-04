@@ -5,9 +5,7 @@ This module tests that the BlackjackGame API correctly interacts with the
 BlackjackEngine and that event handlers are properly registered and cleaned up.
 """
 
-import asyncio
 import pytest
-from typing import Dict, Any, List
 
 from cardsharp.api import BlackjackGame
 from cardsharp.adapters import DummyAdapter
@@ -75,8 +73,8 @@ async def test_blackjack_game_lifecycle(event_data):
         await game.start_game()
 
         # Add players
-        player1 = await game.add_player("Alice", 1000.0)
-        player2 = await game.add_player("Bob", 1000.0)
+        await game.add_player("Alice", 1000.0)
+        await game.add_player("Bob", 1000.0)
 
         # Play a round
         result = await game.auto_play_round(default_bet=10.0)
@@ -111,14 +109,14 @@ async def test_blackjack_game_lifecycle(event_data):
         for unsubscribe in unsubscribe_funcs:
             try:
                 unsubscribe()
-            except:
+            except Exception:
                 pass
 
         # Ensure game is shut down even if test fails
         if game is not None:
             try:
                 await game.shutdown()
-            except:
+            except Exception:
                 pass
 
 
@@ -182,7 +180,6 @@ async def test_blackjack_betting():
                 break
 
         assert player is not None
-        initial_balance = player.balance
 
         # Place a bet
         success = await game.place_bet(player_id, 50.0)

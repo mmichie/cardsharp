@@ -3,9 +3,7 @@ Tests for casino environment modeling.
 """
 
 import unittest
-import random
-import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from cardsharp.blackjack.casino import (
     CasinoEnvironment,
@@ -18,7 +16,6 @@ from cardsharp.blackjack.bankroll import (
     BasicBankrollManager,
     KellyBankrollManager,
 )
-from cardsharp.blackjack.rules import Rules
 
 
 class TestDealerProfile(unittest.TestCase):
@@ -210,7 +207,7 @@ class TestCasinoEnvironment(unittest.TestCase):
     def test_advance_time(self):
         """Test time advancement and events."""
         casino = CasinoEnvironment(table_count=1)
-        table_id = list(casino.tables.keys())[0]
+        list(casino.tables.keys())[0]
 
         # Advance time by 1 hour (60 minutes)
         casino.advance_time(60)

@@ -6,8 +6,7 @@ to ensure it provides the expected interface and behavior.
 """
 
 import pytest
-import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import time
 
 from cardsharp.engine.base import CardsharpEngine

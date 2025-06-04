@@ -8,7 +8,7 @@ to ensure they provide the expected behavior for event handling.
 import pytest
 import threading
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from cardsharp.events import EventEmitter, EventBus, EngineEventType, EventPriority
 
@@ -69,7 +69,7 @@ def test_on_with_enum_event_type():
     callback = MagicMock()
 
     # Subscribe to the event using enum
-    unsubscribe = emitter.on(EngineEventType.CARD_DEALT, callback)
+    emitter.on(EngineEventType.CARD_DEALT, callback)
 
     # Emit the event with the enum
     test_data = {"card": "A♠"}

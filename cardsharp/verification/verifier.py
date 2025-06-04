@@ -153,7 +153,7 @@ class BlackjackVerifier:
             )
 
         # Parse dealer's final hand and value
-        dealer_final_hand = (
+        (
             json.loads(round_data["dealer_final_hand"])
             if round_data["dealer_final_hand"]
             else []

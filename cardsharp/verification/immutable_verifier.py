@@ -220,7 +220,6 @@ class ImmutableStateVerifier:
         for transition in dealer_action_transitions:
             prev_state = transition.prev_state
             next_state = transition.next_state
-            details = transition.details
 
             # Extract dealer state from before and after
             prev_dealer = prev_state.dealer

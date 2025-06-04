@@ -6,16 +6,13 @@ This script demonstrates how dealer errors are implemented and how they affect g
 including card exposure, miscounting, payout errors, and procedural errors.
 """
 
-import random
 import time
 from cardsharp.blackjack.blackjack import BlackjackGame
 from cardsharp.blackjack.rules import Rules
 from cardsharp.common.io_interface import ConsoleIOInterface
 from cardsharp.common.shoe import Shoe
-from cardsharp.blackjack.actor import Player, Dealer
-from cardsharp.blackjack.strategy import BasicStrategy, CountingStrategy
-from cardsharp.blackjack.state import PlacingBetsState
-from cardsharp.blackjack.casino import DealerProfile
+from cardsharp.blackjack.actor import Player
+from cardsharp.blackjack.strategy import CountingStrategy
 
 
 def simulate_dealer_error(game, error_type, **kwargs):

@@ -9,7 +9,6 @@ the new engine pattern.
 import os
 import subprocess
 import sys
-from pathlib import Path
 
 
 def run_streamlit_app():

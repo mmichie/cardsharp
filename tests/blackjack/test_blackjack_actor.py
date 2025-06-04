@@ -11,7 +11,6 @@ from cardsharp.blackjack.actor import (
 from cardsharp.blackjack.hand import BlackjackHand
 from cardsharp.blackjack.strategy import DealerStrategy
 from cardsharp.blackjack.stats import SimulationStats
-from cardsharp.blackjack.state import DealingState
 from cardsharp.blackjack.blackjack import BlackjackGame
 from cardsharp.common.card import Card, Rank, Suit
 from cardsharp.common.io_interface import TestIOInterface

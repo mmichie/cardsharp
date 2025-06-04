@@ -5,7 +5,6 @@ This module tests that all game types (Blackjack, War, High Card) properly
 clean up their event handlers when shutdown is called.
 """
 
-import asyncio
 import gc
 import weakref
 import pytest
@@ -142,5 +141,5 @@ async def _test_game_cleanup(game_type, event_handler_refs):
         if game is not None:
             try:
                 await game.shutdown()
-            except:
+            except Exception:
                 pass

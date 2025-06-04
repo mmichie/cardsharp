@@ -7,13 +7,11 @@ implements the CardsharpEngine interface.
 """
 
 import pytest
-import asyncio
 from unittest.mock import MagicMock, patch
-import time
 
 from cardsharp.engine.war import WarEngine
 from cardsharp.adapters import DummyAdapter
-from cardsharp.events import EventBus, EngineEventType, EventEmitter
+from cardsharp.events import EngineEventType, EventEmitter
 from cardsharp.war.state import GameState, GameStage, RoundResult
 from cardsharp.common.card import Card, Rank, Suit
 
@@ -132,8 +130,8 @@ async def test_play_round_with_clear_winner(mock_render, mock_deal, war_engine):
     await war_engine.start_game()
 
     # Add two players
-    player1_id = await war_engine.add_player("Player 1")
-    player2_id = await war_engine.add_player("Player 2")
+    await war_engine.add_player("Player 1")
+    await war_engine.add_player("Player 2")
 
     # Play a round
     result = await war_engine.play_round()
@@ -162,8 +160,8 @@ async def test_play_round_with_war(mock_render, mock_deal, war_engine):
     await war_engine.start_game()
 
     # Add two players
-    player1_id = await war_engine.add_player("Player 1")
-    player2_id = await war_engine.add_player("Player 2")
+    await war_engine.add_player("Player 1")
+    await war_engine.add_player("Player 2")
 
     # Patch both compare_cards and resolve_war methods
     with patch(
@@ -179,7 +177,7 @@ async def test_play_round_with_war(mock_render, mock_deal, war_engine):
         mock_resolve_war.return_value = war_engine.state
 
         # Play a round
-        result = await war_engine.play_round()
+        await war_engine.play_round()
 
         # Verify compare_cards was called and returned WAR
         mock_compare.assert_called_once()

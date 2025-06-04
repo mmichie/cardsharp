@@ -6,11 +6,10 @@ import os
 import sqlite3
 import tempfile
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from cardsharp.blackjack.environment import EnvironmentIntegrator
-from cardsharp.blackjack.casino import CasinoEnvironment, TableConditions, DealerProfile
-from cardsharp.common.io_interface import IOInterface
+from cardsharp.blackjack.casino import CasinoEnvironment, DealerProfile
 from cardsharp.blackjack.bankroll import BasicBankrollManager, BankrollParameters
 from cardsharp.blackjack.strategy import BasicStrategy
 from cardsharp.blackjack.realistic_strategy import SkillLevel
@@ -18,7 +17,6 @@ from cardsharp.verification.storage import SQLiteEventStore
 
 # Skip all tests in this file until full verification integration is complete
 pytestmark = pytest.mark.skip(reason="Verification integration not yet complete")
-from cardsharp.verification.events import EventRecorder
 
 
 @pytest.fixture
@@ -142,7 +140,7 @@ def test_simulate_session(mock_time, environment_setup):
     )
 
     # Add player
-    player = integrator.add_player(strategy=strategy, bankroll_manager=bankroll)
+    integrator.add_player(strategy=strategy, bankroll_manager=bankroll)
 
     # Simulate a short session
     results = integrator.simulate_session(
@@ -188,7 +186,7 @@ def test_environmental_factors(environment_setup):
     bankroll = BasicBankrollManager(initial_bankroll=1000.0)
 
     # Add player
-    player = integrator.add_player(strategy=strategy, bankroll_manager=bankroll)
+    integrator.add_player(strategy=strategy, bankroll_manager=bankroll)
 
     # Set up environment with high distraction
     integrator.distraction_level = 0.9
@@ -251,7 +249,7 @@ def test_hand_timing(environment_setup):
     bankroll = BasicBankrollManager(initial_bankroll=1000.0)
 
     # Add player
-    player = integrator.add_player(strategy=strategy, bankroll_manager=bankroll)
+    integrator.add_player(strategy=strategy, bankroll_manager=bankroll)
 
     # Get timing with normal dealer
     normal_timing = integrator._simulate_hand_timing()

@@ -794,7 +794,7 @@ class SQLiteEventStore:
         self.conn.commit()
         return cursor.lastrowid
 
-    def record_statistical_analysis(
+    def record_statistical_analysis_internal(
         self,
         session_id: int,
         analysis_type: str,
@@ -804,7 +804,7 @@ class SQLiteEventStore:
         passed: bool,
     ) -> int:
         """
-        Record the result of a statistical analysis.
+        Record the result of a statistical analysis (internal version).
 
         Args:
             session_id: The ID of the session

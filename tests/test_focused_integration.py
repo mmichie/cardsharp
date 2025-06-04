@@ -5,14 +5,11 @@ This module contains targeted integration tests focusing only on essential
 interactions between the API, engine, and adapters, with strict cleanup.
 """
 
-import asyncio
 import pytest
-from typing import Dict, Any
 
 from cardsharp.api import BlackjackGame, HighCardGame
 from cardsharp.adapters import DummyAdapter
-from cardsharp.events import EventBus, EngineEventType
-from cardsharp.blackjack.action import Action
+from cardsharp.events import EventBus
 
 
 @pytest.fixture(autouse=True)
@@ -69,8 +66,8 @@ async def test_highcard_focused_integration():
         await game.start_game()
 
         # Add players
-        player1 = await game.add_player("Player1")
-        player2 = await game.add_player("Player2")
+        await game.add_player("Player1")
+        await game.add_player("Player2")
 
         # Get state before playing
         state_before = await game.get_state()

@@ -23,7 +23,6 @@ from cardsharp.adapters.base import Action
 # Import WebSocket handler if available
 try:
     from cardsharp.events.websocket import (
-        WebSocketEventHandler,
         ServerMessage,
         get_websocket_handler,
     )

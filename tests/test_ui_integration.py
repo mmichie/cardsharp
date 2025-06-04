@@ -6,9 +6,7 @@ work correctly with the engine pattern.
 """
 
 import pytest
-import asyncio
-import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from cardsharp.api import BlackjackGame
 from cardsharp.adapters import DummyAdapter
@@ -118,8 +116,8 @@ async def test_game_flow(dummy_adapter):
         handlers[EngineEventType.GAME_STARTED].assert_called()
 
         # Add players
-        player1 = await game.add_player("Alice", 1000.0)
-        player2 = await game.add_player("Bob", 1000.0)
+        await game.add_player("Alice", 1000.0)
+        await game.add_player("Bob", 1000.0)
 
         # Verify PLAYER_JOINED events were emitted
         # Note: The event might be emitted multiple times due to internal operations

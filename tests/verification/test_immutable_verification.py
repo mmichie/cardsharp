@@ -5,23 +5,17 @@ This module contains tests to verify that the immutable state verification
 system works correctly.
 """
 
-import asyncio
 import pytest
 from unittest.mock import MagicMock, patch
-from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional
 
 from cardsharp.api import BlackjackGame
 from cardsharp.adapters import DummyAdapter
 from cardsharp.events import EventBus, EngineEventType
 from cardsharp.blackjack.rules import Rules
-from cardsharp.state import GameState, GameStage
 from cardsharp.verification.immutable_verifier import (
-    StateTransition,
     StateTransitionRecorder,
     ImmutableStateVerifier,
 )
-from cardsharp.verification.verifier import VerificationType
 
 
 @pytest.fixture
@@ -237,11 +231,11 @@ async def test_game_verification(integration_recorder, integration_verifier, rul
         await game.start_game()
 
         # Add players
-        player1 = await game.add_player("Alice", 1000.0)
-        player2 = await game.add_player("Bob", 1000.0)
+        await game.add_player("Alice", 1000.0)
+        await game.add_player("Bob", 1000.0)
 
         # Play a round
-        result = await game.auto_play_round(default_bet=10.0)
+        await game.auto_play_round(default_bet=10.0)
 
         # Run verification
         verification_results = integration_verifier.verify_all()

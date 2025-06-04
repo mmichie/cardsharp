@@ -413,7 +413,7 @@ class EnvironmentIntegrator:
         if dealer.current_hand and len(dealer.current_hand.cards) >= 2:
             # Temporarily save the correct dealer hand value
             correct_value = dealer.current_hand.value()
-            is_soft = dealer.current_hand.is_soft
+            # is_soft = dealer.current_hand.is_soft  # Not used currently
 
             # Determine error direction (counting too high or too low)
             error_direction = 1 if random.random() < 0.5 else -1

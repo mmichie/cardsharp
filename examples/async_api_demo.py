@@ -12,10 +12,7 @@ of the architecture modernization plan. It showcases:
 """
 
 import asyncio
-import time
-import random
 import sys
-from typing import Dict, Any, List, Optional
 
 # Check if cardsharp is installed properly
 try:

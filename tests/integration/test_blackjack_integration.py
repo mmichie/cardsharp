@@ -7,14 +7,13 @@ correctly, from adapters through the engine to state management.
 
 import pytest
 import asyncio
-from unittest.mock import MagicMock, patch
-import uuid
 
 from cardsharp.adapters import DummyAdapter
 from cardsharp.engine.blackjack import BlackjackEngine
 from cardsharp.events import EventBus, EngineEventType
 from cardsharp.blackjack.action import Action
-from cardsharp.state import GameState, GameStage
+from cardsharp.state import GameStage
+from cardsharp.state.transitions import StateTransitionEngine
 
 
 @pytest.fixture

@@ -204,7 +204,7 @@ class WebSocketClient:
 
             if is_dealer:
                 if is_hole_card:
-                    print(f"Dealer gets a hole card")
+                    print("Dealer gets a hole card")
                 else:
                     self.dealer_hand.append(card)
                     print(f"Dealer gets {card}")
@@ -342,7 +342,7 @@ class WebSocketClient:
                 else:
                     print(f"Invalid action. Valid actions: {', '.join(valid_actions)}")
             else:
-                print(f"Invalid input. Please enter a number or action name.")
+                print("Invalid input. Please enter a number or action name.")
 
     async def get_input(self):
         """Get user input asynchronously."""

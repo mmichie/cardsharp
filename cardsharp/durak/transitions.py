@@ -840,12 +840,12 @@ class StateTransitionEngine:
         if not state.table.defense_cards:
             return state  # No defense cards played yet
 
-        last_defense_card = state.table.defense_cards[-1]
         target_player = state.players[target_idx]
 
         # Check if the target player has a card of the same rank
         has_matching_rank = any(
-            get_durak_value(card.rank) == last_defense_get_durak_value(card.rank)
+            get_durak_value(card.rank)
+            == get_durak_value(state.table.defense_cards[-1].rank)
             for card in target_player.hand
         )
 

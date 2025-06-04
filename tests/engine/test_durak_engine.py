@@ -6,13 +6,10 @@ engine, and API components.
 """
 
 import pytest
-import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from dataclasses import replace
-import random
 
 from cardsharp.common.card import Card, Rank, Suit
-from cardsharp.common.deck import Deck
 from cardsharp.adapters import DummyAdapter
 from cardsharp.durak.state import (
     GameState,

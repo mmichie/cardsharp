@@ -219,7 +219,8 @@ class WebSocketEventHandler:
 
         if send_callback is None:
             # Default callback that does nothing
-            send_callback = lambda msg: None
+            def send_callback(msg):
+                pass
 
         # Create a new client
         client = WebSocketClient(client_id, send_callback)

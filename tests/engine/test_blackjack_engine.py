@@ -7,14 +7,12 @@ implements the CardsharpEngine interface.
 """
 
 import pytest
-import asyncio
 from unittest.mock import MagicMock, patch
 import time
 
 from cardsharp.engine.blackjack import BlackjackEngine
 from cardsharp.adapters import DummyAdapter
-from cardsharp.events import EventBus, EngineEventType, EventEmitter
-from cardsharp.state import GameState, GameStage, StateTransitionEngine
+from cardsharp.events import EngineEventType, EventEmitter
 from cardsharp.blackjack.action import Action
 
 

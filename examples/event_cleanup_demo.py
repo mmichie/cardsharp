@@ -10,7 +10,7 @@ see tests/api/test_event_cleanup.py.
 import asyncio
 import gc
 import weakref
-from typing import List, Dict, Any
+from typing import List
 
 # Import the game API classes
 try:

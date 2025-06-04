@@ -230,18 +230,6 @@ def main():
     io_interface = DummyIOInterface()
 
     # Track rule violation stats
-    rule_violations = {
-        "dealer_actions": 0,
-        "player_options": 0,
-        "payouts": 0,
-        "total_games": 0,
-        "blackjacks": 0,
-        "splits": 0,
-        "doubles": 0,
-        "surrenders": 0,
-        "insurance": 0,
-        "busts": 0,
-    }
 
     # Start timing and initialize the shoe
     start_time = time.time()

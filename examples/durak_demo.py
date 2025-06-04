@@ -12,7 +12,7 @@ from typing import Dict, Any, List
 
 from cardsharp.adapters import CLIAdapter
 from cardsharp.api.durak import DurakGame
-from cardsharp.durak.state import GameState, PlayerState, GameStage
+from cardsharp.durak.state import GameState
 
 
 class DurakDemo:

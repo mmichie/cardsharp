@@ -7,7 +7,6 @@ with the BlackjackEngine and event handling system.
 """
 
 import asyncio
-import time
 from cardsharp.api import BlackjackGame
 from cardsharp.adapters import DummyAdapter
 from cardsharp.events import EventBus, EngineEventType

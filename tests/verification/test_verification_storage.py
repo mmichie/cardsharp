@@ -10,7 +10,6 @@ import tempfile
 import os
 import time
 import json
-from pathlib import Path
 
 from cardsharp.verification.events import EventType, GameEvent
 from cardsharp.verification.storage import SQLiteEventStore

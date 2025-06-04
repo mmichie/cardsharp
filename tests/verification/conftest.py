@@ -4,7 +4,6 @@ Pytest configuration for verification tests.
 This module contains pytest fixtures and configuration for testing verification components.
 """
 
-import asyncio
 import pytest
 import time
 from cardsharp.events import EventBus

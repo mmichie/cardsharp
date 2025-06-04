@@ -8,9 +8,8 @@ import pytest
 import tempfile
 import os
 import sqlite3
-from pathlib import Path
 
-from cardsharp.verification.schema import initialize_database, SCHEMA_SQL
+from cardsharp.verification.schema import SCHEMA_SQL
 
 
 @pytest.fixture

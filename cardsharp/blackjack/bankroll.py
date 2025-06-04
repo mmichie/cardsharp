@@ -602,7 +602,7 @@ class RiskOfRuinCalculator:
         Returns:
             Dictionary with risk statistics
         """
-        variance = std_dev**2
+        # variance = std_dev**2  # Not used currently
 
         # Gambler's Ruin formula: q^n where q = (1-edge)/(1+edge), n = bankroll/bet
         if edge <= 0:

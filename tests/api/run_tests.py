@@ -11,7 +11,6 @@ import gc
 import weakref
 import sys
 import time
-from typing import Dict, Any, List
 
 from cardsharp.api import BlackjackGame, WarGame, HighCardGame
 from cardsharp.adapters import DummyAdapter
@@ -179,8 +178,8 @@ async def test_blackjack_game_lifecycle():
         await game.start_game()
 
         # Add players
-        player1 = await game.add_player("Alice", 1000.0)
-        player2 = await game.add_player("Bob", 1000.0)
+        await game.add_player("Alice", 1000.0)
+        await game.add_player("Bob", 1000.0)
 
         # Play a round
         result = await game.auto_play_round(default_bet=10.0)

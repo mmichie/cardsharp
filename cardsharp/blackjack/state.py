@@ -214,7 +214,6 @@ class OfferInsuranceState(GameState):
             for player in game.players:
                 self.offer_insurance(game, player)
 
-        dealer_has_blackjack = False
         # Check for dealer blackjack if dealer peeking is allowed
         if game.rules.should_dealer_peek():
             if (
@@ -222,7 +221,6 @@ class OfferInsuranceState(GameState):
                 or get_blackjack_value(dealer_up_card.rank) == 10
             ):
                 if game.dealer.current_hand.is_blackjack:
-                    dealer_has_blackjack = True
                     self.handle_dealer_blackjack(game)
                     game.set_state(EndRoundState())
                     return

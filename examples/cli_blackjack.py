@@ -15,8 +15,7 @@ import asyncio
 import argparse
 import os
 import sys
-import time
-from typing import Dict, Any, List, Optional
+from typing import Optional
 
 try:
     from cardsharp.adapters import CLIAdapter

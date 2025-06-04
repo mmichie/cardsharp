@@ -7,14 +7,12 @@ implements the CardsharpEngine interface.
 """
 
 import pytest
-import asyncio
-from unittest.mock import MagicMock, patch
-import time
+from unittest.mock import patch
 
 from cardsharp.engine.high_card import HighCardEngine
 from cardsharp.adapters import DummyAdapter
-from cardsharp.events import EventBus, EngineEventType, EventEmitter
-from cardsharp.high_card.state import GameState, GameStage
+from cardsharp.events import EngineEventType, EventEmitter
+from cardsharp.high_card.state import GameStage
 
 
 @pytest.fixture
@@ -121,8 +119,8 @@ async def test_play_round(mock_emit, high_card_engine):
     await high_card_engine.start_game()
 
     # Add at least 2 players
-    player1_id = await high_card_engine.add_player("Player 1")
-    player2_id = await high_card_engine.add_player("Player 2")
+    await high_card_engine.add_player("Player 1")
+    await high_card_engine.add_player("Player 2")
 
     # Create an async mock for render_state
     async def mock_render_state():

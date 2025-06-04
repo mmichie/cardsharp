@@ -7,7 +7,6 @@ to model a game of blackjack without modifying any state objects.
 """
 
 import asyncio
-import time
 
 # Check if cardsharp is installed properly
 try:

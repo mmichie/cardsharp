@@ -5,7 +5,7 @@ Card Handling Test Script
 This script tests the card handling in the HandState class with different card representations.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
 import sys
 

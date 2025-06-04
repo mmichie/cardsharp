@@ -7,7 +7,6 @@ to create a complete blackjack game.
 """
 
 import asyncio
-import time
 
 # Check if cardsharp is installed properly
 try:
@@ -45,7 +44,7 @@ async def main():
         recipient = data.get("player_name", "Dealer")
         if data.get("is_dealer", False):
             if data.get("is_hole_card", False):
-                print(f"Dealer's hole card is dealt (hidden)")
+                print("Dealer's hole card is dealt (hidden)")
             else:
                 print(f"Dealer is dealt: {data['card']}")
         else:

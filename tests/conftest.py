@@ -4,7 +4,6 @@ Pytest configuration for tests at the root level.
 This module contains pytest fixtures and configuration for testing components.
 """
 
-import asyncio
 import time
 import pytest
 from cardsharp.events import EventBus

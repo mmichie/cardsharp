@@ -8,7 +8,6 @@ to create a complete War card game.
 
 import asyncio
 import argparse
-import time
 
 # Check if cardsharp is installed properly
 try:

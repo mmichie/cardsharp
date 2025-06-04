@@ -5,13 +5,10 @@ This module contains integration tests for the entire Cardsharp system,
 testing the interaction between the API, engine, and adapters.
 """
 
-import asyncio
 import pytest
-from typing import Dict, Any, List
 
 from cardsharp.api import BlackjackGame, HighCardGame
 from cardsharp.adapters import DummyAdapter
-from cardsharp.events import EventBus, EngineEventType
 from cardsharp.blackjack.action import Action
 
 
@@ -83,7 +80,7 @@ async def test_blackjack_game_lifecycle(blackjack_game):
     """Test the complete lifecycle of a blackjack game."""
     # Add players
     player1_id = await blackjack_game.add_player("Alice", 1000.0)
-    player2_id = await blackjack_game.add_player("Bob", 1000.0)
+    await blackjack_game.add_player("Bob", 1000.0)
 
     # Get the initial state
     initial_state = await blackjack_game.get_state()
@@ -140,7 +137,7 @@ async def test_highcard_game_lifecycle(highcard_game):
     """Test the complete lifecycle of a high card game."""
     # Add players
     player1_id = await highcard_game.add_player("Alice")
-    player2_id = await highcard_game.add_player("Bob")
+    await highcard_game.add_player("Bob")
 
     # Get the initial state
     initial_state = await highcard_game.get_state()
@@ -169,7 +166,7 @@ async def test_highcard_game_lifecycle(highcard_game):
     assert len(state_after_remove.players) == 1
 
     # Add another player so we can keep playing
-    player3_id = await highcard_game.add_player("Charlie")
+    await highcard_game.add_player("Charlie")
 
     # Verify we're back to two players
     state_after_add = await highcard_game.get_state()
@@ -197,7 +194,7 @@ async def test_single_game_simplified():
         await game.start_game()
 
         # Add player
-        player_id = await game.add_player("Alice", 1000.0)
+        await game.add_player("Alice", 1000.0)
 
         # Play a round
         result = await game.auto_play_round(default_bet=10.0)

@@ -7,13 +7,11 @@ the immutable state pattern to verify game integrity and rule adherence.
 """
 
 import asyncio
-import time
 import logging
-from typing import Dict, Any, List
 
 from cardsharp.api import BlackjackGame
 from cardsharp.adapters import DummyAdapter
-from cardsharp.events import EventBus, EngineEventType
+from cardsharp.events import EventBus
 from cardsharp.blackjack.rules import Rules
 from cardsharp.verification.immutable_verifier import (
     StateTransitionRecorder,

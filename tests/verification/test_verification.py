@@ -15,20 +15,15 @@ from cardsharp.verification.schema import initialize_database
 from cardsharp.verification.events import EventType, GameEvent, EventEmitter
 from cardsharp.verification.storage import SQLiteEventStore
 from cardsharp.verification.verifier import (
-    VerificationType,
-    VerificationResult,
     BlackjackVerifier,
 )
 from cardsharp.verification.statistics import StatisticalValidator
 from cardsharp.verification.main import (
-    VerificationSystem,
     init_verification,
-    get_verification_system,
 )
 from cardsharp.blackjack.rules import Rules
 from cardsharp.blackjack.state_events import (
     patch_game_states,
-    EventEmittingGameState,
     EventEmittingPlacingBetsState,
 )
 
@@ -184,7 +179,7 @@ def test_create_session(sqlite_event_store):
     assert json.loads(session["rules_config"]) == {"test": "config"}
     assert session["num_decks"] == 6
     assert session["penetration"] == 0.75
-    assert session["use_csm"] == False
+    assert not session["use_csm"]
     assert session["player_count"] == 1
 
 
@@ -223,7 +218,7 @@ def test_create_round(sqlite_event_store):
     assert round_data["round_number"] == 1
     assert round_data["dealer_up_card"] == "A of ♥"
     assert round_data["dealer_hole_card"] == "10 of ♠"
-    assert round_data["shuffle_occurred"] == True
+    assert round_data["shuffle_occurred"]
 
 
 @pytest.fixture
@@ -268,7 +263,7 @@ def test_verify_dealer_actions(blackjack_verifier):
     verifier, event_store, session_id, round_id, rules = blackjack_verifier
 
     # Create a player hand
-    hand_id = event_store.create_player_hand(
+    event_store.create_player_hand(
         round_id=round_id, player_id=1, seat_position=1, initial_bet=10.0
     )
 
@@ -278,7 +273,7 @@ def test_verify_dealer_actions(blackjack_verifier):
     )
 
     # Record a dealer action
-    action_id = event_store.record_action(
+    event_store.record_action(
         round_id=round_id,
         hand_id=None,
         actor="dealer",

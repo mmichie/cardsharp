@@ -271,7 +271,7 @@ class PlaybackController:
             """,
             (self.current_round_id,),
         )
-        hands = [dict(row) for row in cursor.fetchall()]
+        [dict(row) for row in cursor.fetchall()]
 
         # Get all actions up to the current index
         actions_so_far = self.actions[: self.current_index]
