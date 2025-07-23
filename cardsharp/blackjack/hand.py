@@ -44,12 +44,12 @@ class BlackjackHand(Hand):
         super().add_card(card)
 
         # Update cached values for 'num_aces' and 'non_ace_value'
-        if self._cache["num_aces"] is not None:
-            if card.rank == Rank.ACE:
+        if card.rank == Rank.ACE:
+            if self._cache["num_aces"] is not None:
                 self._cache["num_aces"] += 1
-            else:
-                if self._cache["non_ace_value"] is not None:
-                    self._cache["non_ace_value"] += get_blackjack_value(card.rank)
+        else:
+            if self._cache["non_ace_value"] is not None:
+                self._cache["non_ace_value"] += get_blackjack_value(card.rank)
 
         # Invalidate computed values that depend on the entire hand
         self._invalidate_cache()

@@ -153,9 +153,14 @@ class Player(SimplePlayer):
         self.money -= bet_for_current_hand
         self.total_bets += bet_for_current_hand
 
-        card_to_move = self.current_hand.cards.pop()
+        # Use remove_card to properly invalidate cache
+        card_to_move = self.current_hand.cards[-1]  # Get last card
+        self.current_hand.remove_card(card_to_move)  # This invalidates cache
         new_hand = BlackjackHand(is_split=True)
         new_hand.add_card(card_to_move)
+        
+        # Mark the original hand as split too
+        self.current_hand._is_split = True
 
         self.hands.append(new_hand)
         self.hand_done.append(False)

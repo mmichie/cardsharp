@@ -25,11 +25,13 @@ import time
 
 from abc import ABC
 from abc import abstractmethod
+from datetime import datetime
 
 from cardsharp.common.card import Rank
 from cardsharp.blackjack.action import Action
 from cardsharp.common.io_interface import DummyIOInterface
 from cardsharp.blackjack.constants import get_blackjack_value
+from cardsharp.blackjack.decision_logger import decision_logger, DecisionContext
 
 
 class InsufficientFundsError(Exception):
@@ -306,6 +308,9 @@ class PlayersTurnState(GameState):
     def handle(self, game):
         """Handles the players' actions and changes the game state to DealersTurnState."""
         dealer_up_card = game.dealer.current_hand.cards[0]
+        
+        decision_logger.log_rule_evaluation("dealer_up_card", True, f"Dealer shows {dealer_up_card}")
+        
         for player in game.players:
             if player.done:
                 continue  # Skip this player
@@ -316,14 +321,36 @@ class PlayersTurnState(GameState):
                 if player.hand_done[hand_index]:
                     continue  # Skip hands that are already done
                 game.io_interface.output(f"Playing hand {hand_index + 1}")
+                
                 while not player.hand_done[hand_index]:
                     valid_actions = self.get_valid_actions(game, player, hand_index)
+                    
+                    # Create decision context
+                    context = DecisionContext(
+                        timestamp=datetime.now(),
+                        player_name=player.name,
+                        hand_index=hand_index,
+                        hand_cards=hand.cards.copy(),
+                        hand_value=hand.value(),
+                        is_soft=hand.is_soft,
+                        is_pair=hand.can_split,
+                        is_split_hand=hand.is_split,
+                        dealer_upcard=dealer_up_card,
+                        valid_actions=valid_actions
+                    )
+                    
                     action = player.decide_action(dealer_up_card=dealer_up_card)
+                    context.chosen_action = action
+                    
                     if action in valid_actions:
+                        decision_logger.log_decision_point(context)
                         self.player_action(game, player, action)
                     else:
                         game.io_interface.output(
                             f"Invalid action {action}. Standing instead."
+                        )
+                        decision_logger.logger.warning(
+                            f"Invalid action {action} for {player.name}, forcing stand"
                         )
                         player.stand()
                         player.hand_done[hand_index] = True
@@ -353,11 +380,18 @@ class PlayersTurnState(GameState):
                     valid_actions.append(Action.DOUBLE)
 
             # Check split
-            if (
-                game.rules.can_split(hand)
-                and game.rules.can_split_more(len(player.hands))
-                and player.can_afford(player.bets[hand_index])
-            ):
+            can_split_hand = game.rules.can_split(hand)
+            can_split_more = game.rules.can_split_more(len(player.hands))
+            can_afford_split = player.can_afford(player.bets[hand_index])
+            
+            decision_logger.log_split_decision(
+                player.name, hand,
+                can_split_hand and can_split_more and can_afford_split,
+                f"hand_splittable={can_split_hand}, more_splits_allowed={can_split_more}, "
+                f"can_afford={can_afford_split}, current_hands={len(player.hands)}"
+            )
+            
+            if can_split_hand and can_split_more and can_afford_split:
                 valid_actions.append(Action.SPLIT)
 
             is_first_action = len(player.action_history[hand_index]) == 0
@@ -405,24 +439,40 @@ class PlayersTurnState(GameState):
         elif action == Action.SPLIT:
             curr_index = player.current_hand_index
             is_splitting_aces = player.current_hand.cards[0].rank == Rank.ACE
+            
+            decision_logger.log_hand_transition(
+                player.name, curr_index, 
+                f"Pair of {player.current_hand.cards[0].rank}",
+                "Split into two hands",
+                f"Splitting at index {curr_index}"
+            )
 
             # Process the split using the player's split method
             player.split()
 
             game.io_interface.output(f"{player.name} splits.")
 
-            # Deal one card to each hand
-            for i in range(curr_index, curr_index + 2):
+            # Deal one card to each of the split hands
+            # The new hand is always appended to the end of the hands list
+            new_hand_index = len(player.hands) - 1
+            for i in [curr_index, new_hand_index]:
                 card = game.shoe.deal()
                 player.hands[i].add_card(card)
                 game.add_visible_card(card)
                 game.io_interface.output(f"{player.name}'s hand {i + 1} gets {card}.")
+                
+                decision_logger.logger.debug(
+                    f"Split hand {i} now has: {[str(c) for c in player.hands[i].cards]}"
+                )
 
                 # If splitting aces, automatically stand after dealing one card
                 if is_splitting_aces:
                     player.hand_done[i] = True
                     game.io_interface.output(
                         f"Split ace hand {i + 1} stands automatically."
+                    )
+                    decision_logger.logger.info(
+                        f"Split ace restriction: Hand {i} forced to stand"
                     )
 
         elif action == Action.DOUBLE:

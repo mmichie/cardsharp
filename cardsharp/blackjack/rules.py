@@ -139,11 +139,13 @@ class Rules:
         if not self.allow_double_down or len(hand.cards) != 2:
             return False
 
-        hand_value = hand.value()
-        # Allow doubling on hard 9, 10, or 11
-        if not hand.is_soft and hand_value in [9, 10, 11]:
-            return True
-        return False
+        # Check if this is a split hand and if double after split is allowed
+        if hand.is_split and not self.allow_double_after_split:
+            return False
+
+        # Most casinos allow doubling on any two-card hand
+        # This matches basic strategy which includes soft hand doubles
+        return True
 
     def can_insure(self, dealer_hand: Hand, player_hand: Hand) -> bool:
         """
@@ -181,11 +183,20 @@ class Rules:
         if len(hand.cards) != 2:
             return False
 
+        # Split hands cannot surrender
+        if hand.is_split:
+            return False
+
         if self.allow_early_surrender:
             return True  # Early surrender allowed before dealer checks for blackjack
 
-        if self.allow_late_surrender and not hand.is_split:
+        if self.allow_late_surrender:
             return True  # Late surrender allowed on first action and not on split hands
+
+        # If allow_surrender is True but neither early nor late surrender is specified,
+        # default to allowing late surrender
+        if self.allow_surrender:
+            return True
 
         return False
 

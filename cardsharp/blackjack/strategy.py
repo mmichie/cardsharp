@@ -7,6 +7,7 @@ from typing import Optional
 from cardsharp.blackjack.action import Action
 from cardsharp.common.card import Card, Rank
 from cardsharp.blackjack.constants import get_blackjack_value
+from cardsharp.blackjack.decision_logger import decision_logger
 
 
 class Strategy(ABC):
@@ -114,10 +115,10 @@ class BasicStrategy(Strategy):
 
     def _get_dealer_card(self, dealer_up_card):
         rank = dealer_up_card.rank
-        if get_blackjack_value(rank) >= 10:
-            return "10"
-        elif rank == Rank.ACE:
+        if rank == Rank.ACE:
             return "A"
+        elif get_blackjack_value(rank) >= 10:
+            return "10"
         else:
             return str(get_blackjack_value(rank))
 
@@ -149,12 +150,20 @@ class BasicStrategy(Strategy):
         dealer_card = self._get_dealer_card(dealer_up_card)
         action_symbol = self._get_action_from_strategy(hand_type, dealer_card)
 
+        decision_logger.log_strategy_lookup(hand_type, dealer_card, action_symbol)
+
         try:
             action = self._map_action_symbol(action_symbol)
         except KeyError:
+            decision_logger.logger.warning(f"Unknown action symbol: {action_symbol}, defaulting to HIT")
             action = Action.HIT  # Default to HIT if unknown symbol
 
         final_action = self._get_valid_action(player, action, action_symbol)
+        
+        if final_action != action:
+            decision_logger.logger.info(
+                f"Action adjusted from {action.value} to {final_action.value} based on valid actions"
+            )
 
         return final_action
 
