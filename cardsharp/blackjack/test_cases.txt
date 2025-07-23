@@ -1,0 +1,228 @@
+# Comprehensive Blackjack Test Cases
+# Format: @deck lists cards in order they'll be dealt
+# Player gets 1st and 3rd card, Dealer gets 2nd and 4th
+
+# ========== BASIC STRATEGY TESTS ==========
+
+# Test: Hard 16 vs 10 - Should Surrender (or Hit if not allowed)
+@deck: Th,Kh,6s,9d,5c
+@rules: {'dealer_hit_soft_17': True}
+@expect_actions: R
+@expect_outcome: R-L
+@expect_value: 16
+
+# Test: Hard 16 vs 6 - Should Stand  
+@deck: Th,6h,6s,Kd,Kh
+@rules: {'dealer_hit_soft_17': True}
+@expect_actions: S
+@expect_outcome: W
+@expect_value: 16
+
+# Test: Hard 11 - Should Double
+@deck: 7h,8h,4s,Kd,9c
+@rules: {'allow_double_down': True}
+@expect_actions: D
+@expect_outcome: W
+@expect_value: 20
+
+# Test: Soft 18 vs 3 - Should Double (or Stand if not allowed)
+@deck: As,3d,7h,5c,2h,Kh,9h
+@rules: {'allow_double_down': True}
+@expect_actions: D
+@expect_outcome: W
+@expect_value: 20
+
+# Test: Soft 18 vs 10 - Should Hit
+@deck: As,Th,7h,9d,3c
+@rules: {}
+@expect_actions: H,S
+@expect_outcome: W
+@expect_value: 21
+
+# ========== SPLIT TESTS ==========
+
+# Test: Always Split Aces
+@deck: As,Th,Ac,7s,Kh,Qd,9s,8h
+@rules: {'allow_split': True}
+@expect_actions: P
+@expect_outcome: W
+
+# Test: Always Split 8s
+@deck: 8h,Kh,8d,Th,3c,As,2h,9d
+@rules: {'allow_split': True}
+@expect_actions: P,H,H,S
+@expect_outcome: L
+
+# Test: Never Split 5s - Should Double
+@deck: 5h,9h,5d,Kh,Th
+@rules: {'allow_split': True, 'allow_double_down': True}
+@expect_actions: D
+@expect_outcome: W
+@expect_value: 20
+
+# Test: Never Split 10s
+@deck: Th,7h,Td,Kh,8h
+@rules: {'allow_split': True}
+@expect_actions: S
+@expect_outcome: W
+@expect_value: 20
+
+# Test: Split 9s vs 9 - Should Split
+@deck: 9h,9d,9c,Th,Td,8h,As,7h
+@rules: {'allow_split': True}
+@expect_actions: P,S,S
+@expect_outcome: P
+
+# Test: Split 9s vs 7 - Should Stand
+@deck: 9h,7h,9d,Kh,8h
+@rules: {'allow_split': True}
+@expect_actions: S
+@expect_outcome: W
+@expect_value: 18
+
+# ========== SURRENDER TESTS ==========
+
+# Test: 16 vs 10 - Should Surrender
+@deck: Th,As,6s,9d
+@rules: {'allow_surrender': True}
+@expect_actions: R
+@expect_outcome: R-L
+
+# Test: 15 vs 10 - Should Surrender
+@deck: Th,As,5s,9d
+@rules: {'allow_surrender': True}
+@expect_actions: R
+@expect_outcome: R-L
+
+# Test: 16 vs 9 - Should Surrender
+@deck: Th,9s,6s,Kd
+@rules: {'allow_surrender': True}
+@expect_actions: R
+@expect_outcome: R-L
+
+# Test: 16 vs 8 - Should Hit (not surrender)
+@deck: Th,8s,6s,Kd,3h,5h
+@rules: {}  # No surrender allowed to ensure Hit
+@expect_actions: H,S
+@expect_outcome: W
+@expect_value: 19
+
+# ========== BLACKJACK TESTS ==========
+
+# Test: Player Blackjack vs Dealer 21
+@deck: As,7h,Kh,4d,Th
+@rules: {'blackjack_payout': 1.5}
+@expect_actions:
+@expect_outcome: BJ-W
+
+# Test: Player Blackjack vs Dealer Blackjack - Push
+@deck: As,Ah,Kh,Kd
+@rules: {'blackjack_payout': 1.5}
+@expect_actions:
+@expect_outcome: P
+
+# Test: Player 21 vs Dealer Blackjack - Lose
+@deck: 7h,As,4d,Kh,Th
+@rules: {'allow_double_down': True}
+@expect_actions: H,S
+@expect_outcome: L
+@expect_value: 21
+
+# ========== DOUBLE AFTER SPLIT TESTS ==========
+
+# Test: Split then Double (DAS allowed)
+@deck: 8h,7h,8d,Kh,3c,2h,Th,9h
+@rules: {'allow_split': True, 'allow_double_after_split': True}
+@expect_actions: P,D,D
+@expect_outcome: W
+
+# Test: Split then can't Double (no DAS)
+@deck: 8h,7h,8d,Kh,3c,2h,5h,9h,6h,Tc
+@rules: {'allow_split': True, 'allow_double_after_split': False}
+@expect_actions: P,H,H,H,H
+@expect_outcome: L
+
+# ========== DEALER RULES TESTS ==========
+
+# Test: Dealer Stands on Soft 17
+@deck: Th,As,9h,6h,5h
+@rules: {'dealer_hit_soft_17': False}
+@expect_actions: S
+@expect_outcome: W
+@expect_value: 19
+
+# Test: Dealer Hits Soft 17
+@deck: Th,As,9h,6h,4h
+@rules: {'dealer_hit_soft_17': True}
+@expect_actions: S
+@expect_outcome: L
+@expect_value: 19
+
+# ========== EDGE CASES ==========
+
+# Test: 5-card Charlie (not implemented - skip)
+@deck: 2h,Kh,3h,9h,4h,2d,5h,7h,6h,8h
+@rules: {}
+@expect_actions: H,H,H,H
+@expect_outcome: L
+@expect_value: 23
+@skip: Five-card charlie rule not implemented
+
+# Test: Maximum Splits (3 splits = 4 hands)
+@deck: 8h,Kh,8d,9h,8c,8s,2h,3h,4h,5h,Th,As,Kd,Qh,7c,6c,5c,4c,3c,2c
+@rules: {'allow_split': True, 'max_splits': 3, 'allow_resplitting': True}
+@expect_actions: P,P,H,H,S,P,S,H,S,S
+@expect_outcome: W
+
+# Test: Resplit Aces (not allowed)
+@deck: As,Kh,Ah,9h,Th,Td,Tc,Qh,Jh,9d,8h,7h,6h,5h,4h,3h,2h
+@rules: {'allow_split': True}
+@expect_actions: P
+@expect_outcome: W
+@note: Split aces get 21 each but dealer has 19
+
+# Test: Insurance Declined (never take insurance in basic strategy)
+@deck: Th,As,9h,Kh
+@rules: {'allow_insurance': True}
+@expect_actions: S
+@expect_outcome: L
+@expect_value: 19
+
+# ========== PAYOUT TESTS ==========
+
+# Test: 6:5 Blackjack Payout
+@deck: As,7h,Kh,Kd,8h
+@rules: {'blackjack_payout': 1.2}
+@expect_actions:
+@expect_outcome: BJ-W
+@expect_payout: 12  # $10 bet pays $12
+
+# Test: 3:2 Blackjack Payout
+@deck: As,7h,Kh,Kd,8h
+@rules: {'blackjack_payout': 1.5}
+@expect_actions:
+@expect_outcome: BJ-W
+@expect_payout: 15  # $10 bet pays $15
+
+# ========== COMPLEX SCENARIOS ==========
+
+# Test: Split Aces with one getting blackjack
+@deck: As,Kh,Ac,9h,Kd,Th,8h,7h
+@rules: {'allow_split': True}
+@expect_actions: P
+@expect_outcome: W
+@note: Split aces get only one card each
+
+# Test: 10 vs Ace - Should Hit (not double)
+@deck: 6h,As,4h,7h,Kh,Kd
+@rules: {'allow_double_down': True, 'dealer_peek': False}
+@expect_actions: H,S
+@expect_outcome: W
+@expect_value: 20
+
+# Test: Late Surrender Test
+@deck: Th,As,6h,9d
+@rules: {'allow_late_surrender': True, 'dealer_peek': True}
+@expect_actions: R
+@expect_outcome: R-L
+@note: Late surrender allowed after dealer checks for blackjack
