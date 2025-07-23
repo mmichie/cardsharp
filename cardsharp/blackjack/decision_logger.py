@@ -7,6 +7,7 @@ import logging
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
+import os
 from ..common.card import Card
 from .action import Action
 from .hand import BlackjackHand
@@ -53,7 +54,11 @@ class DecisionLogger:
     
     def __init__(self, log_level=logging.DEBUG):
         self.logger = logging.getLogger('blackjack.decisions')
-        self.logger.setLevel(log_level)
+        # Check environment variable to disable logging in simulation mode
+        if os.environ.get('BLACKJACK_DISABLE_LOGGING', '').lower() in ('1', 'true', 'yes'):
+            self.logger.setLevel(logging.ERROR)
+        else:
+            self.logger.setLevel(log_level)
         
         # Add console handler if none exists
         if not self.logger.handlers:
@@ -66,6 +71,10 @@ class DecisionLogger:
         
         self.decision_history: List[DecisionContext] = []
         self.current_round_decisions: List[DecisionContext] = []
+    
+    def set_level(self, level):
+        """Set the logging level."""
+        self.logger.setLevel(level)
     
     def log_decision_point(self, context: DecisionContext):
         """Log a decision point with full context."""

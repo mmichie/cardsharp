@@ -22,6 +22,7 @@ import io
 import matplotlib.pyplot as plt
 import threading
 from copy import deepcopy
+import os
 
 from cardsharp.blackjack.actor import Dealer, Player
 from cardsharp.blackjack.state import (
@@ -349,6 +350,11 @@ def create_io_interface(args):
         io_interface = LoggingIOInterface(args.log_file)
     elif args.simulate:
         io_interface = DummyIOInterface()
+        # Disable decision logging in simulation mode
+        os.environ['BLACKJACK_DISABLE_LOGGING'] = '1'
+        from cardsharp.blackjack.decision_logger import decision_logger
+        import logging
+        decision_logger.set_level(logging.ERROR)
         if args.strat:
             if args.strat == "count":
                 strategy = CountingStrategy()
