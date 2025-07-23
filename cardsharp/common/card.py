@@ -36,8 +36,12 @@ class Suit(Enum):
 class Rank(Enum):
     """
     Enum for ranks in a card deck.
+    Each rank has a unique value for proper enum behavior.
+    Blackjack values should be handled separately.
     """
 
+    JOKER = 0
+    ACE = 1
     TWO = 2
     THREE = 3
     FOUR = 4
@@ -47,11 +51,9 @@ class Rank(Enum):
     EIGHT = 8
     NINE = 9
     TEN = 10
-    JACK = 10
-    QUEEN = 10
-    KING = 10
-    ACE = 1
-    JOKER = 0
+    JACK = 11
+    QUEEN = 12
+    KING = 13
 
     @property
     def rank_value(self):
@@ -63,9 +65,18 @@ class Rank(Enum):
         """A string representation of the rank."""
         if self == self.JOKER:
             return "Joker"
-        if self in (self.JACK, self.QUEEN, self.KING):
-            return self.name[0]
-        return str(self.value)
+        elif self == self.ACE:
+            return "A"
+        elif self == self.JACK:
+            return "J"
+        elif self == self.QUEEN:
+            return "Q"
+        elif self == self.KING:
+            return "K"
+        elif self == self.TEN:
+            return "T"
+        else:
+            return str(self.value)
 
     def __str__(self) -> str:
         return self.rank_str
