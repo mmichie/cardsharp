@@ -26,6 +26,7 @@ class GameOutcome(Enum):
     DEALER_HIGHER = "dealer_higher"
     PUSH = "push"
     SURRENDER = "surrender"
+    FIVE_CARD_CHARLIE = "five_card_charlie"
 
 
 @dataclass
@@ -187,6 +188,11 @@ class TestPlayer(Player):
             is_blackjack = hand.is_blackjack
             is_bust = hand_value > 21
             
+            # Check for Five-card Charlie
+            is_five_card_charlie = False
+            if hasattr(self, 'game') and self.game and hasattr(self.game, 'rules'):
+                is_five_card_charlie = self.game.rules.is_five_card_charlie(hand)
+            
             # Determine outcome
             # Check if this hand was surrendered
             is_surrender = False
@@ -199,6 +205,8 @@ class TestPlayer(Player):
             
             if is_surrender:
                 outcome = GameOutcome.SURRENDER
+            elif is_five_card_charlie and not self.game_record.dealer_blackjack:
+                outcome = GameOutcome.FIVE_CARD_CHARLIE
             elif is_blackjack and self.game_record.dealer_blackjack:
                 outcome = GameOutcome.BOTH_BLACKJACK
             elif is_blackjack and not self.game_record.dealer_blackjack:
@@ -220,7 +228,7 @@ class TestPlayer(Player):
             bet = self.bets[idx] if idx < len(self.bets) else 10
             if outcome == GameOutcome.PLAYER_BLACKJACK:
                 payout = bet * 1.5
-            elif outcome in [GameOutcome.PLAYER_HIGHER, GameOutcome.DEALER_BUST]:
+            elif outcome in [GameOutcome.PLAYER_HIGHER, GameOutcome.DEALER_BUST, GameOutcome.FIVE_CARD_CHARLIE]:
                 payout = bet
             elif outcome == GameOutcome.PUSH:
                 payout = 0

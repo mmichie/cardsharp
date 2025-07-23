@@ -160,13 +160,21 @@
 
 # ========== EDGE CASES ==========
 
-# Test: 5-card Charlie (not implemented - skip)
+# Test: 5-card Charlie
 @deck: 2h,Kh,3h,9h,4h,2d,5h,7h,6h,8h
-@rules: {}
-@expect_actions: H,H,H,H
-@expect_outcome: L
-@expect_value: 23
-@skip: Five-card charlie rule not implemented
+@rules: {'five_card_charlie': True}
+@expect_actions: H,H,H
+@expect_outcome: W
+@expect_value: 16
+@note: Player gets 5 cards totaling 16, should win with Five-card Charlie
+
+# Test: 5-card Charlie with low total
+@deck: 2h,Kh,2s,Th,2d,2c,3h,5h,7h,9h
+@rules: {'five_card_charlie': True}
+@expect_actions: H,H,H
+@expect_outcome: W
+@expect_value: 11
+@note: Player gets 5 cards totaling 11, should win with Five-card Charlie even with low total
 
 # Test: Maximum Splits (3 splits = 4 hands)
 @deck: 8h,Kh,8d,9h,8c,8s,2h,3h,4h,5h,Th,As,Kd,Qh,7c,6c,5c,4c,3c,2c

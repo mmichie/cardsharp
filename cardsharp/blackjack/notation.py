@@ -216,6 +216,7 @@ class TestCase:
     expected_actions: List[Action]  # Expected strategy decisions
     expected_outcome: Outcome
     expected_value: Optional[int] = None
+    skip: str = ""  # Skip reason if test should be skipped
     
     def to_notation(self) -> str:
         """Convert test case to notation."""

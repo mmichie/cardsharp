@@ -63,6 +63,12 @@ class TestCaseParser:
         elif key == 'expect_value':
             if self.current_case:
                 self.current_case['expected_value'] = int(value)
+        elif key == 'note':
+            if self.current_case:
+                self.current_case['note'] = value
+        elif key == 'skip':
+            if self.current_case:
+                self.current_case['skip'] = value
     
     def _start_new_case(self):
         """Start a new test case."""
@@ -73,7 +79,9 @@ class TestCaseParser:
             'rules': {},
             'expected_actions': [],
             'expected_outcome': None,
-            'expected_value': None
+            'expected_value': None,
+            'note': None,
+            'skip': None
         }
     
     def _is_case_complete(self) -> bool:
@@ -96,7 +104,8 @@ class TestCaseParser:
             rules=self.current_case['rules'],
             expected_actions=self.current_case['expected_actions'],
             expected_outcome=self.current_case['expected_outcome'],
-            expected_value=self.current_case.get('expected_value')
+            expected_value=self.current_case.get('expected_value'),
+            skip=self.current_case.get('skip', '') if self.current_case.get('skip') else ''
         )
         
         self.cases.append(test_case)
@@ -105,6 +114,11 @@ class TestCaseParser:
     def _generate_test_name(self) -> str:
         """Generate descriptive test name from case contents."""
         parts = []
+        
+        # Check if note mentions special rules
+        note = self.current_case.get('note', '')
+        if note and 'charlie' in note.lower():
+            parts.append("Five-card Charlie")
         
         # Add hand description if possible
         if len(self.current_case['deck']) >= 4:

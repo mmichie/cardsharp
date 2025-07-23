@@ -422,8 +422,12 @@ class PlayersTurnState(GameState):
             game.add_visible_card(card)
             game.io_interface.output(f"{player.name} hits and gets {card}.")
 
+            # Check for Five-card Charlie
+            if game.rules.is_five_card_charlie(player.current_hand):
+                game.io_interface.output(f"{player.name} has Five-card Charlie!")
+                player.hand_done[player.current_hand_index] = True
             # Force stand on split aces after receiving one card
-            if (
+            elif (
                 player.current_hand.is_split
                 and any(card.rank == Rank.ACE for card in player.current_hand.cards)
                 and len(player.current_hand.cards) == 2
@@ -556,7 +560,10 @@ class EndRoundState(GameState):
             player.winner = []
             for hand in player.hands:
                 player_hand_value = hand.value()
-                if player_hand_value > 21:
+                # Check for Five-card Charlie first (automatic win unless dealer has blackjack)
+                if game.rules.is_five_card_charlie(hand) and not game.dealer.current_hand.is_blackjack:
+                    winner = "player"
+                elif player_hand_value > 21:
                     winner = "dealer"
                 elif dealer_hand_value > 21 or player_hand_value > dealer_hand_value:
                     winner = "player"

@@ -24,6 +24,7 @@ class Rules:
         time_limit: int = 0,
         max_splits: int = 3,
         insurance_payout: float = 2.0,
+        five_card_charlie: bool = False,
     ):
         self.allow_double_after_split = allow_double_after_split
         self.allow_double_down = allow_double_down
@@ -44,6 +45,7 @@ class Rules:
         self.use_csm = use_csm
         self.max_splits = max_splits
         self.insurance_payout = insurance_payout
+        self.five_card_charlie = five_card_charlie
 
     def to_dict(self) -> dict:
         """Convert rules to a dictionary for serialization."""
@@ -66,6 +68,7 @@ class Rules:
             "time_limit": self.time_limit,
             "max_splits": self.max_splits,
             "insurance_payout": self.insurance_payout,
+            "five_card_charlie": self.five_card_charlie,
         }
 
     def should_dealer_hit(self, hand: Hand) -> bool:
@@ -324,3 +327,20 @@ class Rules:
             float: Insurance payout multiplier.
         """
         return self.insurance_payout
+
+    def is_five_card_charlie(self, hand: Hand) -> bool:
+        """
+        Check if a hand qualifies as Five-card Charlie.
+        
+        Five-card Charlie is when a player has 5 cards without busting (total <= 21).
+        
+        Args:
+            hand (Hand): The hand to check.
+            
+        Returns:
+            bool: True if the hand is a Five-card Charlie, False otherwise.
+        """
+        if not self.five_card_charlie:
+            return False
+        
+        return len(hand.cards) >= 5 and hand.value() <= 21

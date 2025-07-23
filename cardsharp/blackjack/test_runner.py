@@ -24,6 +24,7 @@ def map_outcome_to_notation(game_outcome: GameOutcome) -> Outcome:
         GameOutcome.DEALER_HIGHER: Outcome.LOSS,
         GameOutcome.PUSH: Outcome.PUSH,
         GameOutcome.SURRENDER: Outcome.SURRENDER_LOSS,
+        GameOutcome.FIVE_CARD_CHARLIE: Outcome.WIN,
     }
     return mapping.get(game_outcome, Outcome.LOSS)
 
