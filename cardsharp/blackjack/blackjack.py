@@ -161,8 +161,9 @@ class BlackjackGame:
             if shoe
             else Shoe(
                 num_decks=rules.num_decks,
-                penetration=0.75,
+                penetration=rules.penetration,
                 use_csm=rules.is_using_csm(),
+                burn_cards=rules.burn_cards,
             )
         )
         self.current_state = WaitingForPlayersState()
@@ -400,7 +401,10 @@ def play_game(rules, io_interface, player_names, strategy, shoe=None):
 def play_game_batch(rules, io_interface, player_names, num_games, strategy):
     """Function to play a batch of games of Blackjack, to be executed in a separate process."""
     shoe = Shoe(
-        num_decks=rules.num_decks, penetration=0.75, use_csm=rules.is_using_csm()
+        num_decks=rules.num_decks, 
+        penetration=rules.penetration, 
+        use_csm=rules.is_using_csm(),
+        burn_cards=rules.burn_cards
     )
     results = []
     earnings = []
@@ -480,7 +484,10 @@ def run_strategy_analysis(args, rules):
 
     # Initialize shoe once here instead of per game
     initial_shoe = Shoe(
-        num_decks=rules.num_decks, penetration=0.75, use_csm=rules.is_using_csm()
+        num_decks=rules.num_decks, 
+        penetration=rules.penetration, 
+        use_csm=rules.is_using_csm(),
+        burn_cards=rules.burn_cards
     )
 
     graph = (
@@ -589,6 +596,8 @@ def create_rules(args):
         time_limit=args.time_limit,
         max_splits=args.max_splits,
         bonus_payouts=default_bonus_payouts,
+        penetration=args.penetration,
+        burn_cards=args.burn_cards,
     )
 
 
@@ -694,6 +703,18 @@ def main():
     parser.add_argument(
         "--disable_bonus_payouts", action="store_true", help="Disable all bonus payouts"
     )
+    parser.add_argument(
+        "--penetration",
+        type=float,
+        default=0.75,
+        help="Deck penetration before reshuffling (0.0-1.0, default 0.75)",
+    )
+    parser.add_argument(
+        "--burn_cards",
+        type=int,
+        default=0,
+        help="Number of cards to burn after each shuffle (default 0)",
+    )
     args = parser.parse_args()
 
     io_interface, strategy = create_io_interface(args)
@@ -707,7 +728,10 @@ def main():
     if args.console:
         # Initialize shoe once for console mode
         shoe = Shoe(
-            num_decks=rules.num_decks, penetration=0.75, use_csm=rules.is_using_csm()
+            num_decks=rules.num_decks, 
+            penetration=rules.penetration, 
+            use_csm=rules.is_using_csm(),
+            burn_cards=rules.burn_cards
         )
         for _ in range(args.num_games):
             game = BlackjackGame(rules, io_interface, shoe)
@@ -729,8 +753,9 @@ def main():
             # Initialize shoe once for single CPU mode
             shoe = Shoe(
                 num_decks=rules.num_decks,
-                penetration=0.75,
+                penetration=rules.penetration,
                 use_csm=rules.is_using_csm(),
+                burn_cards=rules.burn_cards,
             )
             for i in range(args.num_games):
                 earnings, bets, result, current_shoe = play_game(

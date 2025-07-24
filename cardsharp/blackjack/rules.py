@@ -25,6 +25,8 @@ class Rules:
         max_splits: int = 3,
         insurance_payout: float = 2.0,
         five_card_charlie: bool = False,
+        penetration: float = 0.75,
+        burn_cards: int = 0,
     ):
         self.allow_double_after_split = allow_double_after_split
         self.allow_double_down = allow_double_down
@@ -46,6 +48,8 @@ class Rules:
         self.max_splits = max_splits
         self.insurance_payout = insurance_payout
         self.five_card_charlie = five_card_charlie
+        self.penetration = penetration
+        self.burn_cards = burn_cards
 
     def to_dict(self) -> dict:
         """Convert rules to a dictionary for serialization."""
@@ -69,6 +73,8 @@ class Rules:
             "max_splits": self.max_splits,
             "insurance_payout": self.insurance_payout,
             "five_card_charlie": self.five_card_charlie,
+            "penetration": self.penetration,
+            "burn_cards": self.burn_cards,
         }
 
     def should_dealer_hit(self, hand: Hand) -> bool:

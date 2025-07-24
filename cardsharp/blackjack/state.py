@@ -551,6 +551,12 @@ class EndRoundState(GameState):
         self.handle_payouts(game)
         game.stats.update(game)
         game.visible_cards = []
+        
+        # Check if cut card was reached and we need to reshuffle
+        if game.shoe.is_cut_card_reached():
+            game.io_interface.output("Cut card reached. Shuffling shoe after this round.")
+            # The shoe will automatically reshuffle on the next deal
+        
         game.set_state(PlacingBetsState())
 
     def calculate_winner(self, game):
