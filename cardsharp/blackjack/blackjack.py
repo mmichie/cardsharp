@@ -164,6 +164,7 @@ class BlackjackGame:
                 penetration=rules.penetration,
                 use_csm=rules.is_using_csm(),
                 burn_cards=rules.burn_cards,
+                deck_factory=rules.variant.create_deck if rules.variant else None,
             )
         )
         self.current_state = WaitingForPlayersState()
@@ -404,7 +405,8 @@ def play_game_batch(rules, io_interface, player_names, num_games, strategy):
         num_decks=rules.num_decks, 
         penetration=rules.penetration, 
         use_csm=rules.is_using_csm(),
-        burn_cards=rules.burn_cards
+        burn_cards=rules.burn_cards,
+        deck_factory=rules.variant.create_deck if rules.variant else None,
     )
     results = []
     earnings = []
@@ -487,7 +489,8 @@ def run_strategy_analysis(args, rules):
         num_decks=rules.num_decks, 
         penetration=rules.penetration, 
         use_csm=rules.is_using_csm(),
-        burn_cards=rules.burn_cards
+        burn_cards=rules.burn_cards,
+        deck_factory=rules.variant.create_deck if rules.variant else None,
     )
 
     graph = (
@@ -598,6 +601,7 @@ def create_rules(args):
         bonus_payouts=default_bonus_payouts,
         penetration=args.penetration,
         burn_cards=args.burn_cards,
+        variant=args.variant,
     )
 
 
@@ -715,6 +719,13 @@ def main():
         default=0,
         help="Number of cards to burn after each shuffle (default 0)",
     )
+    parser.add_argument(
+        "--variant",
+        type=str,
+        default="classic",
+        choices=["classic", "spanish21"],
+        help="Blackjack variant to play (default: classic)",
+    )
     args = parser.parse_args()
 
     io_interface, strategy = create_io_interface(args)
@@ -731,7 +742,8 @@ def main():
             num_decks=rules.num_decks, 
             penetration=rules.penetration, 
             use_csm=rules.is_using_csm(),
-            burn_cards=rules.burn_cards
+            burn_cards=rules.burn_cards,
+            deck_factory=rules.variant.create_deck if rules.variant else None,
         )
         for _ in range(args.num_games):
             game = BlackjackGame(rules, io_interface, shoe)
@@ -756,6 +768,7 @@ def main():
                 penetration=rules.penetration,
                 use_csm=rules.is_using_csm(),
                 burn_cards=rules.burn_cards,
+                deck_factory=rules.variant.create_deck if rules.variant else None,
             )
             for i in range(args.num_games):
                 earnings, bets, result, current_shoe = play_game(

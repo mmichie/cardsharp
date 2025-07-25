@@ -1,5 +1,6 @@
 from cardsharp.common.hand import Hand
 from cardsharp.common.card import Rank
+from cardsharp.blackjack.variants import VariantRegistry, BlackjackVariant
 
 
 class Rules:
@@ -27,6 +28,7 @@ class Rules:
         five_card_charlie: bool = False,
         penetration: float = 0.75,
         burn_cards: int = 0,
+        variant: str = "classic",
     ):
         self.allow_double_after_split = allow_double_after_split
         self.allow_double_down = allow_double_down
@@ -50,6 +52,11 @@ class Rules:
         self.five_card_charlie = five_card_charlie
         self.penetration = penetration
         self.burn_cards = burn_cards
+        self.variant_name = variant
+        
+        # Initialize variant
+        variant_class = VariantRegistry.get(variant)
+        self.variant: BlackjackVariant = variant_class(self)
 
     def to_dict(self) -> dict:
         """Convert rules to a dictionary for serialization."""
@@ -75,6 +82,7 @@ class Rules:
             "five_card_charlie": self.five_card_charlie,
             "penetration": self.penetration,
             "burn_cards": self.burn_cards,
+            "variant": self.variant_name,
         }
 
     def should_dealer_hit(self, hand: Hand) -> bool:

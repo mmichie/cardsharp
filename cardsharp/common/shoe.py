@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Union, Optional, Callable
 from cardsharp.common.card import Card
 from cardsharp.common.deck import Deck
 import random
@@ -7,7 +7,7 @@ import random
 class Shoe:
     def __init__(
         self, num_decks: int = 6, penetration: float = 0.75, use_csm: bool = False,
-        burn_cards: int = 0
+        burn_cards: int = 0, deck_factory: Optional[Callable[[], List[Card]]] = None
     ):
         """
         Initialize a Shoe instance.
@@ -17,6 +17,7 @@ class Shoe:
         :param use_csm: Whether to use a Continuous Shuffling Machine (CSM) which
                        returns cards to the shoe immediately after use
         :param burn_cards: Number of cards to burn after each shuffle (default is 0)
+        :param deck_factory: Optional callable that returns a list of cards for one deck
         """
         if num_decks < 1:
             raise ValueError("Number of decks must be at least 1")
@@ -29,9 +30,18 @@ class Shoe:
         self.penetration = penetration
         self.use_csm = use_csm
         self.burn_cards = burn_cards
+        self.deck_factory = deck_factory
         self.cards: List[Card] = []
         self.next_card_index = 0
-        self.total_cards = 52 * num_decks  # Total number of cards
+        
+        # Calculate total cards based on deck factory or assume standard deck
+        if deck_factory:
+            sample_deck = deck_factory()
+            self.cards_per_deck = len(sample_deck)
+        else:
+            self.cards_per_deck = 52
+            
+        self.total_cards = self.cards_per_deck * num_decks
         self.reshuffle_point: int = int(self.total_cards * self.penetration)
         self.discarded_cards: List[Card] = []  # Track discarded cards for CSM
         self.burned_cards: List[Card] = []  # Track burned cards
@@ -44,8 +54,13 @@ class Shoe:
         self.discarded_cards = []
         # Combine all decks into one list
         for _ in range(self.num_decks):
-            deck = Deck()
-            self.cards.extend(deck.cards)
+            if self.deck_factory:
+                # Use custom deck factory
+                self.cards.extend(self.deck_factory())
+            else:
+                # Use standard deck
+                deck = Deck()
+                self.cards.extend(deck.cards)
         self.shuffle()
 
     def shuffle(self):
