@@ -43,6 +43,7 @@ from cardsharp.common.io_interface import (
     LoggingIOInterface,
 )
 from cardsharp.blackjack.rules import Rules
+from typing import Optional
 
 
 class BlackjackGraph:
@@ -151,7 +152,9 @@ class BlackjackGame:
         List of visible cards in the game.
     """
 
-    def __init__(self, rules: Rules, io_interface: IOInterface, shoe: Shoe = None):
+    def __init__(
+        self, rules: Rules, io_interface: IOInterface, shoe: Optional[Shoe] = None
+    ):
         self.players = []
         self.io_interface = io_interface
         self.dealer = Dealer("Dealer", io_interface)
@@ -179,9 +182,9 @@ class BlackjackGame:
             # Store the variant itself, not the bound method
             self.variant = rules.variant
         else:
-            self.win_resolver = None
-            self.payout_calculator = None
-            self.variant = None
+            self.win_resolver = None  # type: ignore
+            self.payout_calculator = None  # type: ignore
+            self.variant = None  # type: ignore
 
     def add_visible_card(self, card):
         """Add a card to the list of visible cards."""
@@ -386,7 +389,7 @@ def create_io_interface(args):
     return io_interface, strategy
 
 
-def play_game(rules, io_interface, player_names, strategy, shoe=None):
+def play_game(rules, io_interface, player_names, strategy, shoe: Optional[Shoe] = None):
     """
     Function to play a single game of Blackjack, to be executed in a separate process.
     Now accepts an optional shoe parameter.
@@ -451,7 +454,9 @@ def play_game_batch(rules, io_interface, player_names, num_games, strategy):
     return results, earnings, total_bets
 
 
-def play_game_and_record(rules, io_interface, player_names, strategy, shoe=None):
+def play_game_and_record(
+    rules, io_interface, player_names, strategy, shoe: Optional[Shoe] = None
+):
     """
     Play a single game of Blackjack and record the card sequence.
     Now accepts an optional shoe parameter.

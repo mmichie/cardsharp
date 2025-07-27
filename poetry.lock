@@ -1460,6 +1460,25 @@ files = [
 diagrams = ["jinja2", "railroad-diagrams"]
 
 [[package]]
+name = "pyrefly"
+version = "0.25.1"
+description = "A fast Python type checker written in Rust"
+optional = false
+python-versions = ">=3.8"
+groups = ["dev"]
+files = [
+    {file = "pyrefly-0.25.1-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:65374450bb590b715b3d5ee5fb1d9053b01cc5843df24b7f9727ce244ba412d7"},
+    {file = "pyrefly-0.25.1-py3-none-macosx_11_0_arm64.whl", hash = "sha256:8127b83f850f7c3b78413bd6626d2496c2af763d68716bf0ada9f0752dc550fb"},
+    {file = "pyrefly-0.25.1-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:c84a7846651067d7d782835ade6eed66e855dbd1c63925cd4490d226d92d4a42"},
+    {file = "pyrefly-0.25.1-py3-none-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:41ca0aff5f74103bf33f8d86725d7dec9ade410721f3071d661e2393220a053c"},
+    {file = "pyrefly-0.25.1-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:9909532b49c591338838078229cb49389c024c29f836f92028fee78ce62db3e2"},
+    {file = "pyrefly-0.25.1-py3-none-win32.whl", hash = "sha256:86a37b106a0f32cf0f0d82af5e49c41e6618c82896f109094c8dad436f17d7d7"},
+    {file = "pyrefly-0.25.1-py3-none-win_amd64.whl", hash = "sha256:8a5a3432a0fabebc8a651cc0ffde22001e39a1e80cd2337b1d6a839b771c4c71"},
+    {file = "pyrefly-0.25.1-py3-none-win_arm64.whl", hash = "sha256:e5093e979b31f10099bc48cc737d36fb69cbb84cd062df4dc122ff55c22712e2"},
+    {file = "pyrefly-0.25.1.tar.gz", hash = "sha256:9525fffb280ff7ffdd3fb5d2658aa1385bb3ef3687e3d0abbe2e48baa2d72fa1"},
+]
+
+[[package]]
 name = "pytest"
 version = "8.3.5"
 description = "pytest: simple powerful testing with Python"
@@ -2037,4 +2056,4 @@ watchmedo = ["PyYAML (>=3.10)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "4ee3f8b70db2c2a346589f2dbfb051d863db8f4fccb88627a67149648ee3d7f0"
+content-hash = "3c62776fa07d0caea8f86dd35d25294ce3a9f665466c85fd0854044e14869d3a"

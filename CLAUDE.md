@@ -117,3 +117,26 @@ When optimizing blackjack simulations:
 - Event cleanup tests to prevent memory leaks
 - Async tests using pytest-asyncio
 - Test isolation: Each test module has its own pytest.ini configuration
+
+### Type Checking with Pyrefly
+
+The project uses Pyrefly for fast type checking:
+
+```bash
+# Type check a specific file
+poetry run pyrefly check cardsharp/blackjack/blackjack.py
+
+# Type check the entire project
+poetry run pyrefly check .
+
+# Check a code snippet
+poetry run pyrefly snippet "def foo(x: int) -> str: return x"
+
+# Initialize pyrefly config (already done)
+poetry run pyrefly init
+
+# Automatically add type annotations
+poetry run pyrefly autotype cardsharp/blackjack/strategy.py
+```
+
+Pyrefly configuration is in `pyrefly.toml` at the project root.

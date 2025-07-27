@@ -1,0 +1,42 @@
+# Pyrefly configuration for CardSharp
+
+# Strict mode enables more aggressive type checking
+strict = true
+
+# Enable type inference for function return types
+infer_return_types = true
+
+# Check untyped function definitions
+check_untyped_defs = true
+
+# Warn about missing type annotations
+warn_missing_annotations = true
+
+# Python version to target
+python_version = "3.12"
+
+# Paths to check
+paths = ["cardsharp"]
+
+# Exclude patterns
+exclude = [
+    "__pycache__",
+    "*.pyc",
+    ".git",
+    "dist",
+    "build",
+    ".venv",
+    "venv",
+]
+
+# Import discovery
+namespace_packages = true
+explicit_package_bases = true
+
+# Error handling
+show_error_codes = true
+pretty = true
+
+# Performance
+parallel = true
+incremental = true
