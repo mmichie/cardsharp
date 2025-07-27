@@ -155,11 +155,13 @@ class BasicStrategy(Strategy):
         try:
             action = self._map_action_symbol(action_symbol)
         except KeyError:
-            decision_logger.logger.warning(f"Unknown action symbol: {action_symbol}, defaulting to HIT")
+            decision_logger.logger.warning(
+                f"Unknown action symbol: {action_symbol}, defaulting to HIT"
+            )
             action = Action.HIT  # Default to HIT if unknown symbol
 
         final_action = self._get_valid_action(player, action, action_symbol)
-        
+
         if final_action != action:
             decision_logger.logger.info(
                 f"Action adjusted from {action.value} to {final_action.value} based on valid actions"

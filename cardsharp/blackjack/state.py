@@ -32,6 +32,7 @@ from cardsharp.blackjack.action import Action
 from cardsharp.common.io_interface import DummyIOInterface
 from cardsharp.blackjack.constants import get_blackjack_value
 from cardsharp.blackjack.decision_logger import decision_logger, DecisionContext
+import logging
 
 
 class InsufficientFundsError(Exception):
@@ -308,9 +309,11 @@ class PlayersTurnState(GameState):
     def handle(self, game):
         """Handles the players' actions and changes the game state to DealersTurnState."""
         dealer_up_card = game.dealer.current_hand.cards[0]
-        
-        decision_logger.log_rule_evaluation("dealer_up_card", True, f"Dealer shows {dealer_up_card}")
-        
+
+        decision_logger.log_rule_evaluation(
+            "dealer_up_card", True, f"Dealer shows {dealer_up_card}"
+        )
+
         for player in game.players:
             if player.done:
                 continue  # Skip this player
@@ -321,29 +324,30 @@ class PlayersTurnState(GameState):
                 if player.hand_done[hand_index]:
                     continue  # Skip hands that are already done
                 game.io_interface.output(f"Playing hand {hand_index + 1}")
-                
+
                 while not player.hand_done[hand_index]:
                     valid_actions = self.get_valid_actions(game, player, hand_index)
-                    
-                    # Create decision context
-                    context = DecisionContext(
-                        timestamp=datetime.now(),
-                        player_name=player.name,
-                        hand_index=hand_index,
-                        hand_cards=hand.cards.copy(),
-                        hand_value=hand.value(),
-                        is_soft=hand.is_soft,
-                        is_pair=hand.can_split,
-                        is_split_hand=hand.is_split,
-                        dealer_upcard=dealer_up_card,
-                        valid_actions=valid_actions
-                    )
-                    
+
                     action = player.decide_action(dealer_up_card=dealer_up_card)
-                    context.chosen_action = action
-                    
+
                     if action in valid_actions:
-                        decision_logger.log_decision_point(context)
+                        # Only create decision context if logging is enabled
+                        if decision_logger.logger.isEnabledFor(logging.DEBUG):
+                            # Create decision context
+                            context = DecisionContext(
+                                timestamp=datetime.now(),
+                                player_name=player.name,
+                                hand_index=hand_index,
+                                hand_cards=hand.cards.copy(),
+                                hand_value=hand.value(),
+                                is_soft=hand.is_soft,
+                                is_pair=hand.can_split,
+                                is_split_hand=hand.is_split,
+                                dealer_upcard=dealer_up_card,
+                                valid_actions=valid_actions,
+                                chosen_action=action,
+                            )
+                            decision_logger.log_decision_point(context)
                         self.player_action(game, player, action)
                     else:
                         game.io_interface.output(
@@ -363,6 +367,10 @@ class PlayersTurnState(GameState):
         valid_actions = [Action.HIT, Action.STAND]
         hand = player.hands[hand_index]
 
+        # Check if this hand has already doubled down
+        hand_actions = player.action_history[hand_index]
+        has_doubled = Action.DOUBLE in hand_actions
+
         # Check if this is a split ace hand that already has two cards
         is_split_ace = (
             hand.is_split
@@ -370,10 +378,20 @@ class PlayersTurnState(GameState):
             and len(hand.cards) >= 2
         )
 
+        # Use variant rules for split aces if available
         if is_split_ace:
-            return [Action.STAND]  # Split aces can only stand after receiving one card
+            if (
+                game.rules._action_validator
+                and not game.rules._action_validator.can_hit_split_aces()
+            ):
+                return [
+                    Action.STAND
+                ]  # Split aces can only stand after receiving one card
+            elif not game.rules._action_validator:
+                return [Action.STAND]  # Classic rules: Split aces can only stand
 
-        if len(hand.cards) == 2:
+        # Only allow double down if haven't already doubled
+        if not has_doubled and len(hand.cards) == 2:
             # Check double down based on game rules and hand value
             if game.rules.can_double_down(hand):
                 if player.can_afford(player.bets[hand_index]):
@@ -383,14 +401,15 @@ class PlayersTurnState(GameState):
             can_split_hand = game.rules.can_split(hand)
             can_split_more = game.rules.can_split_more(len(player.hands))
             can_afford_split = player.can_afford(player.bets[hand_index])
-            
+
             decision_logger.log_split_decision(
-                player.name, hand,
+                player.name,
+                hand,
                 can_split_hand and can_split_more and can_afford_split,
                 f"hand_splittable={can_split_hand}, more_splits_allowed={can_split_more}, "
-                f"can_afford={can_afford_split}, current_hands={len(player.hands)}"
+                f"can_afford={can_afford_split}, current_hands={len(player.hands)}",
             )
-            
+
             if can_split_hand and can_split_more and can_afford_split:
                 valid_actions.append(Action.SPLIT)
 
@@ -443,12 +462,13 @@ class PlayersTurnState(GameState):
         elif action == Action.SPLIT:
             curr_index = player.current_hand_index
             is_splitting_aces = player.current_hand.cards[0].rank == Rank.ACE
-            
+
             decision_logger.log_hand_transition(
-                player.name, curr_index, 
+                player.name,
+                curr_index,
                 f"Pair of {player.current_hand.cards[0].rank}",
                 "Split into two hands",
-                f"Splitting at index {curr_index}"
+                f"Splitting at index {curr_index}",
             )
 
             # Process the split using the player's split method
@@ -464,7 +484,7 @@ class PlayersTurnState(GameState):
                 player.hands[i].add_card(card)
                 game.add_visible_card(card)
                 game.io_interface.output(f"{player.name}'s hand {i + 1} gets {card}.")
-                
+
                 decision_logger.logger.debug(
                     f"Split hand {i} now has: {[str(c) for c in player.hands[i].cards]}"
                 )
@@ -551,32 +571,50 @@ class EndRoundState(GameState):
         self.handle_payouts(game)
         game.stats.update(game)
         game.visible_cards = []
-        
+
         # Check if cut card was reached and we need to reshuffle
         if game.shoe.is_cut_card_reached():
-            game.io_interface.output("Cut card reached. Shuffling shoe after this round.")
+            game.io_interface.output(
+                "Cut card reached. Shuffling shoe after this round."
+            )
             # The shoe will automatically reshuffle on the next deal
-        
+
         game.set_state(PlacingBetsState())
 
     def calculate_winner(self, game):
         """Calculates the winner of the round."""
         dealer_hand_value = game.dealer.current_hand.value()
+        dealer_blackjack = game.dealer.current_hand.is_blackjack
+
         for player in game.players:
             player.winner = []
             for hand in player.hands:
                 player_hand_value = hand.value()
-                # Check for Five-card Charlie first (automatic win unless dealer has blackjack)
-                if game.rules.is_five_card_charlie(hand) and not game.dealer.current_hand.is_blackjack:
-                    winner = "player"
-                elif player_hand_value > 21:
-                    winner = "dealer"
-                elif dealer_hand_value > 21 or player_hand_value > dealer_hand_value:
-                    winner = "player"
-                elif player_hand_value < dealer_hand_value:
-                    winner = "dealer"
+                player_blackjack = hand.is_blackjack
+
+                # Use variant's win resolver if available
+                if game.win_resolver:
+                    winner = game.win_resolver.resolve(
+                        hand,
+                        game.dealer.current_hand,
+                        player_blackjack,
+                        dealer_blackjack,
+                    )
                 else:
-                    winner = "draw"
+                    # Fallback to classic rules
+                    # Check for Five-card Charlie first (automatic win unless dealer has blackjack)
+                    if game.rules.is_five_card_charlie(hand) and not dealer_blackjack:
+                        winner = "player"
+                    elif player_hand_value > 21:
+                        winner = "dealer"
+                    elif (
+                        dealer_hand_value > 21 or player_hand_value > dealer_hand_value
+                    ):
+                        winner = "player"
+                    elif player_hand_value < dealer_hand_value:
+                        winner = "dealer"
+                    else:
+                        winner = "draw"
                 player.winner.append(winner)
 
     def output_results(self, game):
@@ -622,38 +660,58 @@ class EndRoundState(GameState):
                 if bet_for_hand == 0:
                     continue  # Skip hands with no bet
 
-                # Check for bonus payout combinations first
-                bonus_combination = self.check_for_bonus_combination(hand)
-                if (
-                    bonus_combination and winner == "player"
-                ):  # Only apply bonus for winning hands
-                    bonus_multiplier = game.get_bonus_payout(bonus_combination)
-                    if bonus_multiplier > 0:
-                        bonus_amount = bet_for_hand * bonus_multiplier
-                        # Base payout (even money) + bonus amount
-                        total_payout = (bet_for_hand * 2) + bonus_amount
-                        player.payout(hand_index, total_payout)
-                        game.io_interface.output(
-                            f"{player.name} gets a bonus payout of {bonus_amount:.2f} for {bonus_combination}!"
-                        )
-                        continue  # Skip regular payout processing
+                # Use variant's payout system if available
+                if game.payout_calculator and game.variant:
+                    # Check for variant-specific special hands
+                    special_hand = game.variant.evaluate_special_hands(hand)
 
-                # Regular payout processing
-                if winner == "player":
-                    if player.blackjack and not hand.is_split:
-                        payout_multiplier = game.get_blackjack_payout()
-                        payout_amount = bet_for_hand + (
-                            bet_for_hand * payout_multiplier
+                    is_blackjack = player.blackjack and not hand.is_split
+
+                    if winner == "player":
+                        payout_amount = game.payout_calculator.calculate_payout(
+                            bet_for_hand, hand, special_hand, is_blackjack, False
                         )
-                    else:
-                        payout_amount = bet_for_hand * 2  # Regular win pays 1:1
-                    player.payout(hand_index, payout_amount)
-                elif winner == "draw":
-                    payout_amount = bet_for_hand
-                    player.payout(hand_index, payout_amount)
+                        player.payout(hand_index, payout_amount)
+
+                        # Output special hand message
+                        if special_hand:
+                            game.io_interface.output(
+                                f"{player.name} gets {special_hand.description} bonus!"
+                            )
+                    elif winner == "draw":
+                        player.payout(hand_index, bet_for_hand)
+                    # dealer wins = no payout needed
                 else:
-                    # Player loses bet; no payout
-                    player.bets[hand_index] = 0  # Reset bet for this hand
+                    # Fallback to classic payout logic
+                    # Check for bonus payout combinations first
+                    bonus_combination = self.check_for_bonus_combination(hand)
+                    if (
+                        bonus_combination and winner == "player"
+                    ):  # Only apply bonus for winning hands
+                        bonus_multiplier = game.get_bonus_payout(bonus_combination)
+                        if bonus_multiplier > 0:
+                            bonus_amount = bet_for_hand * bonus_multiplier
+                            # Base payout (even money) + bonus amount
+                            total_payout = (bet_for_hand * 2) + bonus_amount
+                            player.payout(hand_index, total_payout)
+                            game.io_interface.output(
+                                f"{player.name} gets a bonus payout of {bonus_amount:.2f} for {bonus_combination}!"
+                            )
+                            continue  # Skip regular payout processing
+
+                    # Regular payout processing
+                    if winner == "player":
+                        if player.blackjack and not hand.is_split:
+                            payout_multiplier = game.get_blackjack_payout()
+                            payout_amount = bet_for_hand + (
+                                bet_for_hand * payout_multiplier
+                            )
+                        else:
+                            payout_amount = bet_for_hand * 2  # Regular win pays 1:1
+                        player.payout(hand_index, payout_amount)
+                    elif winner == "draw":
+                        payout_amount = bet_for_hand
+                        player.payout(hand_index, payout_amount)
 
     def check_for_bonus_combination(self, hand):
         """

@@ -6,8 +6,12 @@ import random
 
 class Shoe:
     def __init__(
-        self, num_decks: int = 6, penetration: float = 0.75, use_csm: bool = False,
-        burn_cards: int = 0, deck_factory: Optional[Callable[[], List[Card]]] = None
+        self,
+        num_decks: int = 6,
+        penetration: float = 0.75,
+        use_csm: bool = False,
+        burn_cards: int = 0,
+        deck_factory: Optional[Callable[[], List[Card]]] = None,
     ):
         """
         Initialize a Shoe instance.
@@ -33,14 +37,14 @@ class Shoe:
         self.deck_factory = deck_factory
         self.cards: List[Card] = []
         self.next_card_index = 0
-        
+
         # Calculate total cards based on deck factory or assume standard deck
         if deck_factory:
             sample_deck = deck_factory()
             self.cards_per_deck = len(sample_deck)
         else:
             self.cards_per_deck = 52
-            
+
         self.total_cards = self.cards_per_deck * num_decks
         self.reshuffle_point: int = int(self.total_cards * self.penetration)
         self.discarded_cards: List[Card] = []  # Track discarded cards for CSM
@@ -73,7 +77,7 @@ class Shoe:
         random.shuffle(self.cards)
         self.next_card_index = 0
         self.cut_card_reached = False
-        
+
         # Burn cards after shuffle if specified
         if self.burn_cards > 0 and not self.use_csm:
             # Ensure we don't burn more cards than available
@@ -106,11 +110,11 @@ class Shoe:
 
             card = self.cards[self.next_card_index]
             self.next_card_index += 1
-            
+
             # Check if we just reached the cut card
             if self.next_card_index >= self.reshuffle_point:
                 self.cut_card_reached = True
-                
+
             return card
 
         # For non-CSM mode with multiple cards
@@ -127,22 +131,22 @@ class Shoe:
             if num_cards == 1:
                 card = self.cards[self.next_card_index]
                 self.next_card_index += 1
-                
+
                 # Check if we just reached the cut card
                 if self.next_card_index >= self.reshuffle_point:
                     self.cut_card_reached = True
-                    
+
                 return card
             else:
                 start = self.next_card_index
                 end = start + num_cards
                 dealt_cards = self.cards[start:end]
                 self.next_card_index = end
-                
+
                 # Check if we just reached the cut card
                 if self.next_card_index >= self.reshuffle_point:
                     self.cut_card_reached = True
-                    
+
                 return dealt_cards
         else:
             # For CSM mode - highly optimized implementation
@@ -226,11 +230,11 @@ class Shoe:
     def is_cut_card_reached(self) -> bool:
         """Return whether the cut card has been reached."""
         return self.cut_card_reached
-    
+
     def get_burned_cards(self) -> List[Card]:
         """Return the list of burned cards from the last shuffle."""
         return self.burned_cards.copy()
-    
+
     def get_penetration_percentage(self) -> float:
         """Return the current penetration percentage (how far through the shoe we are)."""
         if self.use_csm:

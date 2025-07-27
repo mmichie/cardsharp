@@ -172,6 +172,17 @@ class BlackjackGame:
         self.visible_cards = []
         self.minimum_players = 1
 
+        # Cache variant components for performance
+        if hasattr(rules, "variant") and rules.variant:
+            self.win_resolver = rules.variant.get_win_resolver()
+            self.payout_calculator = rules.variant.get_payout_calculator()
+            # Store the variant itself, not the bound method
+            self.variant = rules.variant
+        else:
+            self.win_resolver = None
+            self.payout_calculator = None
+            self.variant = None
+
     def add_visible_card(self, card):
         """Add a card to the list of visible cards."""
         self.visible_cards.append(card)
@@ -353,9 +364,10 @@ def create_io_interface(args):
     elif args.simulate:
         io_interface = DummyIOInterface()
         # Disable decision logging in simulation mode
-        os.environ['BLACKJACK_DISABLE_LOGGING'] = '1'
+        os.environ["BLACKJACK_DISABLE_LOGGING"] = "1"
         from cardsharp.blackjack.decision_logger import decision_logger
         import logging
+
         decision_logger.set_level(logging.ERROR)
         if args.strat:
             if args.strat == "count":
@@ -401,9 +413,24 @@ def play_game(rules, io_interface, player_names, strategy, shoe=None):
 
 def play_game_batch(rules, io_interface, player_names, num_games, strategy):
     """Function to play a batch of games of Blackjack, to be executed in a separate process."""
+    # Ensure logging is disabled in worker processes
+    import os
+
+    os.environ["BLACKJACK_DISABLE_LOGGING"] = "1"
+
+    # Also disable decision logger in worker process
+    from cardsharp.blackjack.decision_logger import decision_logger
+    import logging
+
+    decision_logger.set_level(logging.ERROR)
+
+    # Clear any accumulated state in the decision logger
+    decision_logger.decision_history.clear()
+    decision_logger.current_round_decisions.clear()
+
     shoe = Shoe(
-        num_decks=rules.num_decks, 
-        penetration=rules.penetration, 
+        num_decks=rules.num_decks,
+        penetration=rules.penetration,
         use_csm=rules.is_using_csm(),
         burn_cards=rules.burn_cards,
         deck_factory=rules.variant.create_deck if rules.variant else None,
@@ -486,8 +513,8 @@ def run_strategy_analysis(args, rules):
 
     # Initialize shoe once here instead of per game
     initial_shoe = Shoe(
-        num_decks=rules.num_decks, 
-        penetration=rules.penetration, 
+        num_decks=rules.num_decks,
+        penetration=rules.penetration,
         use_csm=rules.is_using_csm(),
         burn_cards=rules.burn_cards,
         deck_factory=rules.variant.create_deck if rules.variant else None,
@@ -739,8 +766,8 @@ def main():
     if args.console:
         # Initialize shoe once for console mode
         shoe = Shoe(
-            num_decks=rules.num_decks, 
-            penetration=rules.penetration, 
+            num_decks=rules.num_decks,
+            penetration=rules.penetration,
             use_csm=rules.is_using_csm(),
             burn_cards=rules.burn_cards,
             deck_factory=rules.variant.create_deck if rules.variant else None,

@@ -158,7 +158,7 @@ class Player(SimplePlayer):
         self.current_hand.remove_card(card_to_move)  # This invalidates cache
         new_hand = BlackjackHand(is_split=True)
         new_hand.add_card(card_to_move)
-        
+
         # Mark the original hand as split too
         self.current_hand._is_split = True
 
@@ -211,8 +211,7 @@ class Player(SimplePlayer):
                 f"{self.name} can only double down with two cards."
             )
 
-        if self.current_hand.is_split and not self.game.rules.allow_double_after_split:
-            raise InvalidActionError(f"{self.name} cannot double down after splitting.")
+        # Double after split validation is handled by rules.can_double_down()
 
         bet_for_current_hand = self.bets[self.current_hand_index]
 

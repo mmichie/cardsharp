@@ -239,7 +239,7 @@ def blackjack_verifier(sqlite_event_store):
 
     # Create a session
     session_id = event_store.create_session(
-        rules_config=vars(rules),
+        rules_config=rules.to_dict(),
         num_decks=6,
         penetration=0.75,
         use_csm=False,

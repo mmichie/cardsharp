@@ -9,4 +9,9 @@ from .spanish21 import Spanish21Variant
 VariantRegistry.register("classic", ClassicBlackjackVariant)
 VariantRegistry.register("spanish21", Spanish21Variant)
 
-__all__ = ["BlackjackVariant", "VariantRegistry", "ClassicBlackjackVariant", "Spanish21Variant"]
+__all__ = [
+    "BlackjackVariant",
+    "VariantRegistry",
+    "ClassicBlackjackVariant",
+    "Spanish21Variant",
+]

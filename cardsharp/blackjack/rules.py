@@ -53,10 +53,15 @@ class Rules:
         self.penetration = penetration
         self.burn_cards = burn_cards
         self.variant_name = variant
-        
+
         # Initialize variant
         variant_class = VariantRegistry.get(variant)
         self.variant: BlackjackVariant = variant_class(self)
+
+        # Cache action validator for performance
+        self._action_validator = (
+            self.variant.get_action_validator() if self.variant else None
+        )
 
     def to_dict(self) -> dict:
         """Convert rules to a dictionary for serialization."""
@@ -153,6 +158,13 @@ class Rules:
         Returns:
             bool: True if the hand can be doubled down, False otherwise.
         """
+        # Use cached variant's action validator if available
+        if self._action_validator:
+            return self._action_validator.can_double_down(
+                hand, len(hand.cards), hand.is_split
+            )
+
+        # Fallback to classic rules
         if not self.allow_double_down or len(hand.cards) != 2:
             return False
 
@@ -194,6 +206,17 @@ class Rules:
         Returns:
             bool: True if surrender is allowed, False otherwise.
         """
+        # Use cached variant's action validator if available
+        if self._action_validator:
+            # Spanish 21 allows surrender after doubling
+            after_double = (
+                len(hand.cards) > 2 and hasattr(hand, "doubled") and hand.doubled
+            )
+            return self._action_validator.can_surrender(
+                hand, after_double, is_first_action
+            )
+
+        # Fallback to classic rules
         if not self.allow_surrender or not is_first_action:
             return False
 
@@ -345,16 +368,16 @@ class Rules:
     def is_five_card_charlie(self, hand: Hand) -> bool:
         """
         Check if a hand qualifies as Five-card Charlie.
-        
+
         Five-card Charlie is when a player has 5 cards without busting (total <= 21).
-        
+
         Args:
             hand (Hand): The hand to check.
-            
+
         Returns:
             bool: True if the hand is a Five-card Charlie, False otherwise.
         """
         if not self.five_card_charlie:
             return False
-        
+
         return len(hand.cards) >= 5 and hand.value() <= 21
