@@ -21,21 +21,27 @@ def test_dummy_io_interface_methods():
     player = MockPlayer(name="Test")
 
     assert interface.output("Test") is None
+    assert interface.input("prompt") == ""
     assert (
         interface.get_player_action(player, player.available_actions)
         == player.available_actions[0]
     )
-    assert interface.check_numeric_response((1, 5), 1, 5) is True
+    assert interface.check_numeric_response("Enter a number: ") == 1
 
 
 def test_console_io_interface_methods(mocker):
     interface = ConsoleIOInterface()
 
     # Mock the builtin input function
-    mocker.patch("builtins.input", side_effect=[Action.HIT.name.lower(), "5"])
+    mocker.patch(
+        "builtins.input", side_effect=["test_input", Action.HIT.name.lower(), "5"]
+    )
 
     # Test output method (since it uses print, we just ensure it doesn't throw an error)
     interface.output("Test message")
+
+    # Test input method
+    assert interface.input("Enter something: ") == "test_input"
 
     # Test get_player_action method
     player = MockPlayer(

@@ -21,34 +21,31 @@ class IOInterface(ABC):
     """
     Abstract base class for an IO interface.
 
-    Methods
-    -------
-    @abstractmethod
-    async def output(self, message: str):
-        Output a message to the interface.
-
-    @abstractmethod
-    async def get_player_action(self, player: "Actor"):
-        Retrieve an action from a player.
-
-    @abstractmethod
-    async def check_numeric_response(self, ctx):
-        Check if a response is numeric.
+    This class defines the interface for input/output operations in the game.
+    Subclasses can be either synchronous or asynchronous.
     """
 
     @abstractmethod
-    async def output(self, message: str):
+    def output(self, message: str) -> None:
         """Output a message to the interface."""
+        pass
 
     @abstractmethod
-    async def get_player_action(
+    def input(self, prompt: str) -> str:
+        """Get input from the user with a prompt."""
+        pass
+
+    @abstractmethod
+    def get_player_action(
         self, player: Actor, valid_actions: list[Action], time_limit: int = 0
     ) -> Action:
         """Retrieve an action from a player with optional time limit in seconds."""
+        pass
 
     @abstractmethod
-    async def check_numeric_response(self, ctx):
-        """Check if a response is numeric."""
+    def check_numeric_response(self, ctx: str) -> int:
+        """Check if a response is numeric and return the integer value."""
+        pass
 
 
 class DummyIOInterface(IOInterface):
@@ -60,6 +57,9 @@ class DummyIOInterface(IOInterface):
     def output(self, message):
         Simulates output operation.
 
+    def input(self, prompt):
+        Simulates input operation.
+
     def get_player_action(self, player, actions) -> str:
         Retrieve an action from a player.
 
@@ -67,9 +67,13 @@ class DummyIOInterface(IOInterface):
         Simulates numeric response check.
     """
 
-    def output(self, message):
+    def output(self, message: str) -> None:
         """Simulates output operation."""
         pass
+
+    def input(self, prompt: str) -> str:
+        """Simulates input operation."""
+        return ""
 
     def get_player_action(
         self, player: Actor, valid_actions: list[Action], time_limit: int = 0
@@ -79,8 +83,9 @@ class DummyIOInterface(IOInterface):
         else:
             raise ValueError("No valid actions available.")
 
-    def check_numeric_response(self, response, min_val, max_val):
-        return True
+    def check_numeric_response(self, ctx: str) -> int:
+        """Always returns 1 for simulation."""
+        return 1
 
 
 class TestIOInterface(IOInterface):
@@ -89,19 +94,22 @@ class TestIOInterface(IOInterface):
 
     Methods
     -------
-    async def output(self, message):
+    def output(self, message):
         Collect an output message.
+
+    def input(self, prompt):
+        Return a test input.
 
     def add_player_action(self, action: str):
         Add a player action to the queue.
 
-    async def get_player_action(self, player: "Actor") -> str:
+    def get_player_action(self, player: "Actor") -> str:
         Retrieve an action from a player.
 
-    async def check_numeric_response(self, ctx):
+    def check_numeric_response(self, ctx):
         Simulates numeric response check.
 
-    async def prompt_user_action(self, player: "Actor", valid_actions: list[str]) -> str:
+    def prompt_user_action(self, player: "Actor", valid_actions: list[str]) -> str:
         Prompt a player for an action.
     """
 
@@ -110,9 +118,15 @@ class TestIOInterface(IOInterface):
     def __init__(self):
         self.sent_messages = []
         self.player_actions = []
+        self.input_responses = []
 
-    def output(self, message):
+    def output(self, message: str) -> None:
         self.sent_messages.append(message)
+
+    def input(self, prompt: str) -> str:
+        if self.input_responses:
+            return self.input_responses.pop(0)
+        return "test_input"
 
     def add_player_action(self, action: Action):
         """Add a player action to the queue."""
@@ -126,8 +140,9 @@ class TestIOInterface(IOInterface):
         else:
             raise ValueError("No more actions left in TestIOInterface queue.")
 
-    def check_numeric_response(self, ctx):
-        pass
+    def check_numeric_response(self, ctx: str) -> int:
+        """Returns 1 for testing."""
+        return 1
 
     def prompt_user_action(
         self, player: Actor, valid_actions: list[Action], time_limit: int = 0
@@ -145,6 +160,9 @@ class ConsoleIOInterface(IOInterface):
     def output(self, message: str):
         Output a message to the console.
 
+    def input(self, prompt: str):
+        Get input from the console.
+
     def get_player_action(self, player: "Actor", valid_actions: list[str]):
         Retrieve an action from a player and check if it's valid.
 
@@ -152,8 +170,11 @@ class ConsoleIOInterface(IOInterface):
         Check if a response is numeric.
     """
 
-    def output(self, message: str):
+    def output(self, message: str) -> None:
         print(message)
+
+    def input(self, prompt: str) -> str:
+        return input(prompt)
 
     def get_player_action(
         self, player: Actor, valid_actions: list[Action], time_limit: int = 0
@@ -198,7 +219,7 @@ class ConsoleIOInterface(IOInterface):
 
         raise Exception("Too many invalid attempts. Game aborted.")
 
-    def check_numeric_response(self, ctx):
+    def check_numeric_response(self, ctx: str) -> int:
         attempts = 0
         while attempts < 3:  # Setting a maximum number of attempts
             response = input(ctx)
@@ -214,36 +235,51 @@ class LoggingIOInterface(IOInterface):
     """
     A logging IO interface for recording purposes. Writes output messages to a log file.
 
-    Methods
-    -------
-    async def output(self, message):
-        Write an output message to the log file.
-
-    async def get_player_action(self, player: "Actor") -> str:
-        Retrieve an action from a player.
-
-    async def check_numeric_response(self, ctx):
-        Simulates numeric response check.
+    This class provides a hybrid sync/async approach where output is written to a file
+    and input is simulated.
     """
 
-    def __init__(self, log_file_path):
+    def __init__(self, log_file_path: str):
         self.log_file_path = log_file_path
+        self._loop = None
+        self._executor = ThreadPoolExecutor(max_workers=1)
 
-    async def output(self, message):
+    def output(self, message: str) -> None:
+        """Write an output message to the log file."""
+        with open(self.log_file_path, "a", encoding="utf-8") as log_file:
+            log_file.write(message + "\n")
+
+    def input(self, prompt: str) -> str:
+        """Log the prompt and return empty string."""
+        self.output(f"[INPUT PROMPT] {prompt}")
+        return ""
+
+    def get_player_action(
+        self, player: Actor, valid_actions: list[Action], time_limit: int = 0
+    ) -> Action:
+        """Get player action using their strategy."""
+        if hasattr(player, "decide_action"):
+            return player.decide_action(valid_actions)
+        return valid_actions[0] if valid_actions else Action.STAND
+
+    def check_numeric_response(self, ctx: str) -> int:
+        """Always returns 1 for logging interface."""
+        self.output(f"[NUMERIC PROMPT] {ctx}")
+        return 1
+
+    async def output_async(self, message: str) -> None:
+        """Async version of output for compatibility."""
         async with aiofiles.open(
             self.log_file_path, mode="a", encoding="utf-8"
         ) as log_file:
             await log_file.write(message + "\n")
-        await asyncio.sleep(0)  # Yield control to the event loop
 
-    async def get_player_action(
+    async def get_player_action_async(
         self, player: Actor, valid_actions: list[Action], time_limit: int = 0
     ) -> Action:
+        """Async version of get_player_action."""
         await asyncio.sleep(0)
-        return player.decide_action(valid_actions)
-
-    async def check_numeric_response(self, ctx):
-        await asyncio.sleep(0)  # Simulate asynchronous behavior
+        return self.get_player_action(player, valid_actions, time_limit)
 
 
 class AsyncIOInterfaceWrapper:
@@ -255,15 +291,24 @@ class AsyncIOInterfaceWrapper:
     into asynchronous codebases, such as asynchronous web frameworks or chatbots.
     """
 
-    def __init__(self, io_interface):
+    def __init__(self, io_interface: IOInterface):
         self.io_interface = io_interface
         self.executor = ThreadPoolExecutor()
 
-    async def output(self, message: str):
+    async def output(self, message: str) -> None:
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(self.executor, self.io_interface.output, message)
 
-    async def get_player_action(self, player, valid_actions, time_limit: int = 0):
+    async def input(self, prompt: str) -> str:
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            self.executor, self.io_interface.input, prompt
+        )
+        return result
+
+    async def get_player_action(
+        self, player: Actor, valid_actions: list[Action], time_limit: int = 0
+    ) -> Action:
         loop = asyncio.get_running_loop()
         action = await loop.run_in_executor(
             self.executor,
@@ -274,7 +319,7 @@ class AsyncIOInterfaceWrapper:
         )
         return action
 
-    async def check_numeric_response(self, ctx):
+    async def check_numeric_response(self, ctx: str) -> int:
         loop = asyncio.get_running_loop()
         numeric_response = await loop.run_in_executor(
             self.executor, self.io_interface.check_numeric_response, ctx
