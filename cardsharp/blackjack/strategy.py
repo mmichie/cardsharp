@@ -19,8 +19,10 @@ class Strategy(ABC):
     def decide_insurance(self, player) -> bool:
         """Decide whether to buy insurance. Returns True if the player wants to buy insurance."""
         pass
-    
-    def get_bet_amount(self, min_bet: float, max_bet: float, player_money: float) -> float:
+
+    def get_bet_amount(
+        self, min_bet: float, max_bet: float, player_money: float
+    ) -> float:
         """
         Determine bet amount for next hand. Called BEFORE cards are dealt.
         Default implementation returns minimum bet.
@@ -239,8 +241,10 @@ class BasicStrategy(Strategy):
             return True
 
     def decide_insurance(self, player) -> bool:
-        """Basic strategy does not recommend taking insurance."""
-        return False
+        """Take insurance when true count >= 3."""
+        self.calculate_true_count()
+        # Insurance becomes profitable at TC >= 3
+        return self.true_count >= 3
 
 
 class CountingStrategy(BasicStrategy):
@@ -312,10 +316,76 @@ class CountingStrategy(BasicStrategy):
 
         # DO NOT adjust bet here - bets must be placed before cards are dealt!
 
-        if self.true_count > 2:  # Adjust this threshold as needed
+        # Apply count-based play deviations
+        return self._count_based_decision(player, dealer_up_card, game)
+
+    def _count_based_decision(self, player, dealer_up_card: Card, game) -> Action:
+        """
+        Apply the Illustrious 18 - the most important play deviations based on count.
+        These deviations from basic strategy provide most of the advantage from counting.
+        """
+        hand_value = player.current_hand.value()
+        is_soft = player.current_hand.is_soft
+        dealer_value = get_blackjack_value(dealer_up_card.rank)
+
+        # Insurance deviation - most important
+        if hasattr(self, "_deciding_insurance") and self._deciding_insurance:
+            # Take insurance at TC >= 3 (traditional threshold)
+            if self.true_count >= 3:
+                return True  # This is for insurance decision
+
+        # Play deviations based on true count
+        # Format: (hand_value, is_soft, dealer_up, tc_threshold, action_if_above, action_if_below)
+        deviations = [
+            # Stand on 16 vs 10 at TC >= 0 (normally hit)
+            (16, False, 10, 0, Action.STAND, Action.HIT),
+            # Stand on 15 vs 10 at TC >= 4
+            (15, False, 10, 4, Action.STAND, Action.HIT),
+            # Stand on hard 12 vs 3 at TC >= 2 (normally hit)
+            (12, False, 3, 2, Action.STAND, Action.HIT),
+            # Stand on hard 12 vs 2 at TC >= 3
+            (12, False, 2, 3, Action.STAND, Action.HIT),
+            # Double 11 vs A at TC >= 1 (normally hit)
+            (11, False, 11, 1, Action.DOUBLE, None),  # 11 for Ace
+            # Double 9 vs 2 at TC >= 1
+            (9, False, 2, 1, Action.DOUBLE, None),
+            # Double 10 vs 10 at TC >= 4
+            (10, False, 10, 4, Action.DOUBLE, None),
+            # Double 9 vs 7 at TC >= 3
+            (9, False, 7, 3, Action.DOUBLE, None),
+            # Hit 13 vs 2 at TC < -1 (normally stand)
+            (13, False, 2, -1, None, Action.HIT),
+            # Hit 12 vs 4 at TC < 0 (normally stand)
+            (12, False, 4, 0, None, Action.HIT),
+            # Hit 12 vs 5 at TC < -2
+            (12, False, 5, -2, None, Action.HIT),
+            # Hit 12 vs 6 at TC < -1
+            (12, False, 6, -1, None, Action.HIT),
+            # Hit 13 vs 3 at TC < -2
+            (13, False, 3, -2, None, Action.HIT),
+        ]
+
+        # Check if any deviation applies
+        for hand, soft, dealer, tc_threshold, action_above, action_below in deviations:
+            if hand_value == hand and is_soft == soft and dealer_value == dealer:
+                if action_above and self.true_count >= tc_threshold:
+                    # Check if action is valid
+                    if (
+                        action_above == Action.DOUBLE
+                        and not player.current_hand.can_double
+                    ):
+                        # If can't double, hit instead
+                        return Action.HIT
+                    return action_above
+                elif action_below and self.true_count < tc_threshold:
+                    return action_below
+
+        # High positive count aggressive play
+        if self.true_count > 2:
             return self.aggressive_strategy(player, dealer_up_card, game)
-        else:
-            return super().decide_action(player, dealer_up_card, game)
+
+        # Default to basic strategy
+        return super().decide_action(player, dealer_up_card, game)
 
     def aggressive_strategy(self, player, dealer_up_card: Card, game) -> Action:
         # More aggressive play decisions when the count is high
@@ -334,40 +404,65 @@ class CountingStrategy(BasicStrategy):
             player, dealer_up_card, game
         )  # Default to basic strategy otherwise
 
-    def get_bet_amount(self, min_bet: float, max_bet: float, player_money: float) -> float:
+    def get_bet_amount(
+        self, min_bet: float, max_bet: float, player_money: float
+    ) -> float:
         """
         Determine bet amount based on current count.
         This is called BEFORE cards are dealt.
-        
+
         With CSM, the count is meaningless but the strategy doesn't know this,
         so it will bet high on false signals and lose more.
         """
         # Calculate true count before betting
         self.calculate_true_count()
-        
-        # Base bet is minimum
-        bet = min_bet
-        
-        # Increase bet when count is favorable (or appears to be with CSM)
-        if self.true_count > 2:
-            bet_multiplier = min(self.true_count, 5)  # Cap the multiplier at 5
-            bet = min_bet * bet_multiplier
-        elif self.true_count < -2:
-            # Bet less when count is negative (more low cards remaining)
-            bet = min_bet  # Stay at minimum
-        
+
+        # Aggressive betting spread based on true count
+        # Professional counters use wider spreads for better advantage
+        if self.true_count <= -2:
+            # Very negative count - bet minimum or consider sitting out
+            bet_multiplier = 1
+        elif self.true_count <= -1:
+            # Slightly negative - still minimum
+            bet_multiplier = 1
+        elif self.true_count <= 0:
+            # Neutral count
+            bet_multiplier = 1
+        elif self.true_count <= 1:
+            # Slightly positive - small increase
+            bet_multiplier = 2
+        elif self.true_count <= 2:
+            # Moderately positive
+            bet_multiplier = 4
+        elif self.true_count <= 3:
+            # Good count
+            bet_multiplier = 8
+        elif self.true_count <= 4:
+            # Very good count
+            bet_multiplier = 12
+        else:
+            # Excellent count - maximum bet
+            bet_multiplier = min(20, self.true_count * 4)  # Cap at 20x
+
+        bet = min_bet * bet_multiplier
+
         # Ensure bet doesn't exceed limits
         bet = min(bet, max_bet, player_money)
-        
+
         return bet
-    
+
     def notify_shuffle(self):
         """Called when the shoe is shuffled to reset the count."""
         self.reset_count()
 
     def update_decks_remaining(self, cards_played):
-        total_cards = 52 * 6  # Assuming 6 decks
-        self.decks_remaining = (total_cards - cards_played) / 52
+        # Don't assume 6 decks - use initial deck count
+        total_cards = (
+            52 * self.decks_remaining if hasattr(self, "_initial_decks") else 52 * 6
+        )
+        self.decks_remaining = max(
+            0.5, (total_cards - cards_played) / 52
+        )  # Never go below 0.5 decks
 
     def reset_count(self):
         """Reset the count at the start of a new shoe."""

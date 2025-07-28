@@ -396,7 +396,7 @@ def play_game(rules, io_interface, player_names, strategy, shoe: Optional[Shoe] 
     """
     # Track initial cut card state
     initial_cut_card_state = shoe.is_cut_card_reached() if shoe else False
-    
+
     players = [Player(name, io_interface, strategy) for name in player_names]
     game = BlackjackGame(rules, io_interface, shoe)
 
@@ -411,7 +411,7 @@ def play_game(rules, io_interface, player_names, strategy, shoe: Optional[Shoe] 
 
     if isinstance(strategy, CountingStrategy):
         strategy.update_decks_remaining(len(game.visible_cards))
-        
+
         # Check if shoe shuffled during this game (cut card was reached then reset)
         final_cut_card_state = game.shoe.is_cut_card_reached() if game.shoe else False
         if initial_cut_card_state and not final_cut_card_state:
@@ -450,7 +450,7 @@ def play_game_batch(rules, io_interface, player_names, num_games, strategy):
     results = []
     earnings = []
     total_bets = 0
-    
+
     # Track cards remaining to detect shuffles
     prev_cards_remaining = shoe.cards_remaining
 
@@ -462,7 +462,7 @@ def play_game_batch(rules, io_interface, player_names, num_games, strategy):
         results.append(result)
         earnings.append(game_earnings)
         total_bets += game_bets
-        
+
         # Check if shoe was shuffled (cards remaining increased)
         if isinstance(strategy, CountingStrategy) and shoe:
             curr_cards_remaining = shoe.cards_remaining
