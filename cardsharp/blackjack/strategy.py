@@ -241,10 +241,8 @@ class BasicStrategy(Strategy):
             return True
 
     def decide_insurance(self, player) -> bool:
-        """Take insurance when true count >= 3."""
-        self.calculate_true_count()
-        # Insurance becomes profitable at TC >= 3
-        return self.true_count >= 3
+        """Basic strategy does not recommend taking insurance."""
+        return False
 
 
 class CountingStrategy(BasicStrategy):
@@ -450,6 +448,12 @@ class CountingStrategy(BasicStrategy):
         bet = min(bet, max_bet, player_money)
 
         return bet
+
+    def decide_insurance(self, player) -> bool:
+        """Take insurance when true count >= 3."""
+        self.calculate_true_count()
+        # Insurance becomes profitable at TC >= 3
+        return self.true_count >= 3
 
     def notify_shuffle(self):
         """Called when the shoe is shuffled to reset the count."""
