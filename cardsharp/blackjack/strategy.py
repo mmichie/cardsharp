@@ -477,29 +477,50 @@ class CountingStrategy(BasicStrategy):
 
 
 class MartingaleStrategy(BasicStrategy):
-    def __init__(self, initial_bet=1, max_bet=100):
+    def __init__(self, initial_bet=10, max_bet_override=None):
         super().__init__()
         self.initial_bet = initial_bet
         self.current_bet = initial_bet
-        self.max_bet = max_bet
+        self.max_bet_override = max_bet_override  # None means use table max
         self.consecutive_losses = 0
+        self.last_money = 1000  # Track money to detect wins/losses
+        self.last_bet = initial_bet
 
     def decide_action(self, player, dealer_up_card: Card, game=None) -> Action:
+        # Check result of previous hand by comparing money
+        if hasattr(player, 'money'):
+            money_change = player.money - self.last_money
+            
+            # Update bet based on result
+            if money_change > 0:  # Won
+                self.current_bet = self.initial_bet
+                self.consecutive_losses = 0
+            elif money_change < -self.last_bet / 2:  # Lost (not just the bet deduction)
+                self.consecutive_losses += 1
+                self.current_bet = self.current_bet * 2
+            # Else pushed or new game - keep same bet
+            
+            self.last_money = player.money
+        
         # Use the BasicStrategy to decide the action
         return super().decide_action(player, dealer_up_card, game)
-
-    def place_bet(self) -> int:
-        return self.current_bet
-
-    def update_bet(self, result: str):
-        if result == "win":
-            self.current_bet = self.initial_bet
-            self.consecutive_losses = 0
-        elif result == "lose":
-            self.consecutive_losses += 1
-            new_bet = self.current_bet * 2
-            self.current_bet = min(new_bet, self.max_bet)
-        # In case of a push (tie), the bet remains the same
+    
+    def get_bet_amount(self, min_bet: float, max_bet: float, player_money: float) -> float:
+        """
+        Implement Martingale betting system.
+        Double bet after loss, reset to initial after win.
+        """
+        # Use table max if no override specified
+        effective_max = self.max_bet_override if self.max_bet_override is not None else max_bet
+        
+        # Ensure bet is within all limits
+        bet = max(min_bet, min(self.current_bet, effective_max, player_money))
+        
+        # Track this bet amount
+        self.last_bet = bet
+        self.last_money = player_money - bet  # Money after bet is placed
+        
+        return bet
 
     def reset_bet(self):
         self.current_bet = self.initial_bet
