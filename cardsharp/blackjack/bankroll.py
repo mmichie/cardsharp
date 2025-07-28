@@ -323,7 +323,7 @@ class ProgressiveBankrollManager(BasicBankrollManager):
         self.progression_limit = progression_limit
 
         # Progression state
-        self.current_progression = 0
+        self.current_progression: float = 0.0
         self.consecutive_wins = 0
         self.consecutive_losses = 0
         self.progression_active = False

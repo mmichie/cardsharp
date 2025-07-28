@@ -7,7 +7,20 @@ that wrap the Cardsharp engine components.
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional, Union, Tuple, Callable, TypeVar
+from typing import (
+    Dict,
+    Any,
+    List,
+    Optional,
+    Union,
+    Tuple,
+    Callable,
+    TypeVar,
+    TYPE_CHECKING,
+)
+
+if TYPE_CHECKING:
+    from cardsharp.engine.base import BaseEngine
 import threading
 import inspect
 import time
@@ -75,7 +88,7 @@ class CardsharpGame(ABC):
         self.event_waiter = EventWaiter(self.event_bus)
 
         # Engine will be initialized by concrete subclasses
-        self.engine = None
+        self.engine: Optional[BaseEngine] = None
 
     @abstractmethod
     async def initialize(self) -> None:

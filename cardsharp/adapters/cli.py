@@ -312,9 +312,7 @@ class CLIAdapter(PlatformAdapter):
         # Default fallback
         return None
 
-    async def handle_timeout(
-        self, player_id: str, player_name: str
-    ) -> Awaitable[Action]:
+    async def handle_timeout(self, player_id: str, player_name: str) -> Action:
         """
         Handle a player timeout by defaulting to STAND.
 

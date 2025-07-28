@@ -240,7 +240,7 @@ class CountingStrategy(BasicStrategy):
     def __init__(self):
         super().__init__()
         self.count = 0
-        self.true_count = 0
+        self.true_count: float = 0
         self.decks_remaining = 6  # Assume 6 decks by default
         self.exposed_cards = []  # Track cards that have been accidentally exposed
         self.advantage_factor = 0.0  # Additional advantage from exposed cards
@@ -339,7 +339,7 @@ class CountingStrategy(BasicStrategy):
     def reset_count(self):
         """Reset the count at the start of a new shoe."""
         self.count = 0
-        self.true_count = 0
+        self.true_count = 0.0
         self.decks_remaining = 6  # Reset to initial number of decks
 
 
