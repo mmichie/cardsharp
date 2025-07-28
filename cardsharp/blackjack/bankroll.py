@@ -70,7 +70,7 @@ class BasicBankrollManager:
         self.total_rebuy_amount = 0.0
 
         # Betting strategy
-        self.base_bet = None
+        self.base_bet: float = 0.0
 
     def calculate_bet(self, table: TableConditions, advantage: float = 0.0) -> float:
         """

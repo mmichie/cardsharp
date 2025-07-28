@@ -27,6 +27,7 @@ exclude = [
     "build",
     ".venv",
     "venv",
+    "tests",
 ]
 
 # Import discovery

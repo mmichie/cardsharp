@@ -174,7 +174,7 @@ class DecisionLogger:
 
     def get_decision_summary(self) -> Dict[str, Any]:
         """Get a summary of all decisions made."""
-        summary = {
+        summary: Dict[str, Any] = {
             "total_decisions": len(self.decision_history),
             "by_action": {},
             "by_player": {},

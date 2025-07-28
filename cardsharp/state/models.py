@@ -288,7 +288,7 @@ class GameState:
             Dictionary representation of the game state
         """
         # Create a basic dictionary with simple properties
-        result = {
+        result: Dict[str, Any] = {
             "id": self.id,
             "stage": self.stage.name,
             "round_number": self.round_number,

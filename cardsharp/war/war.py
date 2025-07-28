@@ -54,9 +54,9 @@ class WarGame:
         await self.io_interface.output(f"{self.players[0].name} drew {card1}")
         await self.io_interface.output(f"{self.players[1].name} drew {card2}")
 
-        if card1.rank > card2.rank:
+        if card1.rank.value > card2.rank.value:
             winner = self.players[0]
-        elif card2.rank > card1.rank:
+        elif card2.rank.value > card1.rank.value:
             winner = self.players[1]
         else:
             winner = None

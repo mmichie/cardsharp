@@ -13,8 +13,8 @@ class TestCaseParser:
     """Parse test cases from custom text format."""
 
     def __init__(self):
-        self.current_case = None
-        self.cases = []
+        self.current_case: Optional[Dict[str, Any]] = None
+        self.cases: List[TestCase] = []
 
     def parse_file(self, file_path: str) -> List[TestCase]:
         """Parse test cases from file."""
@@ -50,6 +50,7 @@ class TestCaseParser:
 
         if key == "deck":
             self._start_new_case()
+            assert self.current_case is not None  # Type hint for pyrefly
             self.current_case["deck"] = self._parse_deck(value)
         elif key == "rules":
             if self.current_case:
@@ -127,19 +128,19 @@ class TestCaseParser:
             parts.append("Five-card Charlie")
 
         # Add hand description if possible
-        if len(self.current_case["deck"]) >= 4:
+        if self.current_case and len(self.current_case["deck"]) >= 4:
             p1, d1, p2, d2 = self.current_case["deck"][:4]
             parts.append(f"{p1.rank}{p2.rank} vs {d1.rank}")
 
         # Add expected action
-        if self.current_case["expected_actions"]:
+        if self.current_case and self.current_case["expected_actions"]:
             action_str = ",".join(
                 a.value for a in self.current_case["expected_actions"]
             )
             parts.append(f"expect {action_str}")
 
         # Add outcome
-        if self.current_case["expected_outcome"]:
+        if self.current_case and self.current_case["expected_outcome"]:
             parts.append(f"-> {self.current_case['expected_outcome'].value}")
 
         return " ".join(parts) if parts else f"Test Case {len(self.cases) + 1}"

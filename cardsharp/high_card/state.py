@@ -63,7 +63,7 @@ class PlayerState:
             if (
                 player.id != self.id
                 and player.card
-                and player.card.rank > self.card.rank
+                and player.card.rank.value > self.card.rank.value
             ):
                 return False
 

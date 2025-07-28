@@ -620,6 +620,7 @@ class StateTransitionEngine:
             # Find the next eligible player to be attacker
             # Skip the current defender
             player_count = len(state.players)
+            assert state.attacker_index is not None  # In ATTACK stage, attacker_index must be set
             next_attacker_idx = (state.attacker_index + 1) % player_count
             while (
                 next_attacker_idx == state.defender_index
@@ -906,6 +907,10 @@ class StateTransitionEngine:
         # Calculate the next attacker and defender
         next_attacker_idx = None
         next_defender_idx = None
+        
+        # Both indices must be set during a round
+        assert state.defender_index is not None
+        assert state.attacker_index is not None
 
         if defender_won:
             # Defender becomes the next attacker

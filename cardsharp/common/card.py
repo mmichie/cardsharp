@@ -56,7 +56,7 @@ class Rank(Enum):
     KING = 13
 
     @property
-    def rank_value(self):
+    def rank_value(self) -> int:
         """The value of the rank, used for scoring."""
         return self.value
 

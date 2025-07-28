@@ -195,7 +195,8 @@ def main():
     print(f"  Bet limits: ${rules.min_bet}-${rules.max_bet}")
 
     # Create statistics tracking
-    stats = {
+    from typing import Dict, Any, List
+    stats: Dict[str, Any] = {
         # Game outcomes
         "player_wins": 0,
         "dealer_wins": 0,

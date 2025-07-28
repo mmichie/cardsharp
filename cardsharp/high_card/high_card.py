@@ -59,7 +59,7 @@ class HighCardGame:
             player.hands[0].add_card(drawn_card)
             await self.io_interface.send_message(f"{player.name} drew {drawn_card}")
 
-            if not high_card or drawn_card.rank > high_card.rank:
+            if not high_card or drawn_card.rank.value > high_card.rank.value:
                 high_card = drawn_card
                 winner = player
 
