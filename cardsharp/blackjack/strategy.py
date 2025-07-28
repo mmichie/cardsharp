@@ -19,6 +19,13 @@ class Strategy(ABC):
     def decide_insurance(self, player) -> bool:
         """Decide whether to buy insurance. Returns True if the player wants to buy insurance."""
         pass
+    
+    def get_bet_amount(self, min_bet: float, max_bet: float, player_money: float) -> float:
+        """
+        Determine bet amount for next hand. Called BEFORE cards are dealt.
+        Default implementation returns minimum bet.
+        """
+        return min_bet
 
     def receive_exposed_card_info(self, card: Card) -> None:
         """
@@ -299,8 +306,7 @@ class CountingStrategy(BasicStrategy):
         # Calculate true count
         self.calculate_true_count()
 
-        # Adjust bet size based on true count
-        self.adjust_bet(player)
+        # DO NOT adjust bet here - bets must be placed before cards are dealt!
 
         if self.true_count > 2:  # Adjust this threshold as needed
             return self.aggressive_strategy(player, dealer_up_card, game)
@@ -324,13 +330,32 @@ class CountingStrategy(BasicStrategy):
             player, dealer_up_card, game
         )  # Default to basic strategy otherwise
 
-    def adjust_bet(self, player):
-        # Increase bet size when the count is favorable
+    def get_bet_amount(self, min_bet: float, max_bet: float, player_money: float) -> float:
+        """
+        Determine bet amount based on current count.
+        This is called BEFORE cards are dealt.
+        
+        With CSM, the count is meaningless but the strategy doesn't know this,
+        so it will bet high on false signals and lose more.
+        """
+        # Calculate true count before betting
+        self.calculate_true_count()
+        
+        # Base bet is minimum
+        bet = min_bet
+        
+        # Increase bet when count is favorable (or appears to be with CSM)
         if self.true_count > 2:
             bet_multiplier = min(self.true_count, 5)  # Cap the multiplier at 5
-            new_bet = int(player.bets[0] * bet_multiplier)
-            max_bet = player.money  # Assuming the max bet is the player's current money
-            player.bets[0] = min(new_bet, max_bet)
+            bet = min_bet * bet_multiplier
+        elif self.true_count < -2:
+            # Bet less when count is negative (more low cards remaining)
+            bet = min_bet  # Stay at minimum
+        
+        # Ensure bet doesn't exceed limits
+        bet = min(bet, max_bet, player_money)
+        
+        return bet
 
     def update_decks_remaining(self, cards_played):
         total_cards = 52 * 6  # Assuming 6 decks

@@ -86,7 +86,17 @@ class PlacingBetsState(GameState):
         Handles the player bets and changes the game state to DealingState.
         """
         for player in game.players:
-            self.place_bet(game, player, 10)
+            # Get bet amount from strategy
+            if hasattr(player, 'strategy') and player.strategy:
+                bet_amount = player.strategy.get_bet_amount(
+                    game.rules.min_bet,
+                    game.rules.max_bet,
+                    player.money
+                )
+            else:
+                bet_amount = game.rules.min_bet
+            
+            self.place_bet(game, player, bet_amount)
         game.set_state(DealingState())
 
     def place_bet(self, game, player, amount):
