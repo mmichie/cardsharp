@@ -1,6 +1,7 @@
 from cardsharp.common.hand import Hand
 from cardsharp.common.card import Rank
 from cardsharp.blackjack.variants import VariantRegistry, BlackjackVariant
+from cardsharp.blackjack.hand import BlackjackHand
 
 
 class Rules:
@@ -90,17 +91,17 @@ class Rules:
             "variant": self.variant_name,
         }
 
-    def should_dealer_hit(self, hand: Hand) -> bool:
+    def should_dealer_hit(self, hand: BlackjackHand) -> bool:
         """Determine if the dealer should hit based on the game rules."""
         score = hand.value()
         is_soft_17 = score == 17 and hand.is_soft
         return score < 17 or (is_soft_17 and self.dealer_hit_soft_17)
 
-    def is_blackjack(self, hand: Hand) -> bool:
+    def is_blackjack(self, hand: BlackjackHand) -> bool:
         """Check if a hand is a blackjack."""
         return hand.value() == 21 and len(hand.cards) == 2
 
-    def can_split(self, hand: Hand) -> bool:
+    def can_split(self, hand: BlackjackHand) -> bool:
         """
         Check if the hand can be split.
 
@@ -148,7 +149,7 @@ class Rules:
         """
         return current_num_hands < (self.max_splits + 1)
 
-    def can_double_down(self, hand: Hand) -> bool:
+    def can_double_down(self, hand: BlackjackHand) -> bool:
         """
         Check if the hand can be doubled down based on the rules.
 
@@ -176,7 +177,9 @@ class Rules:
         # This matches basic strategy which includes soft hand doubles
         return True
 
-    def can_insure(self, dealer_hand: Hand, player_hand: Hand) -> bool:
+    def can_insure(
+        self, dealer_hand: BlackjackHand, player_hand: BlackjackHand
+    ) -> bool:
         """
         Check if the player can opt for insurance.
 
@@ -195,7 +198,7 @@ class Rules:
             return True
         return False
 
-    def can_surrender(self, hand: Hand, is_first_action: bool) -> bool:
+    def can_surrender(self, hand: BlackjackHand, is_first_action: bool) -> bool:
         """
         Check if the player can surrender based on the rules and game state.
 
@@ -285,7 +288,7 @@ class Rules:
         """
         return self.allow_double_after_split
 
-    def can_resplit(self, hand: Hand) -> bool:
+    def can_resplit(self, hand: BlackjackHand) -> bool:
         """
         Check if the hand can be resplit.
 
@@ -365,7 +368,7 @@ class Rules:
         """
         return self.insurance_payout
 
-    def is_five_card_charlie(self, hand: Hand) -> bool:
+    def is_five_card_charlie(self, hand: BlackjackHand) -> bool:
         """
         Check if a hand qualifies as Five-card Charlie.
 

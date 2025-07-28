@@ -120,6 +120,13 @@ class BlackjackGame(CardsharpGame):
         self._round_complete_event = asyncio.Event()
         self._action_complete_events = {}
 
+    @property
+    def _engine(self) -> BlackjackEngine:
+        """Get the engine, raising an error if not initialized."""
+        if not self.engine:
+            raise RuntimeError("Game not initialized. Call initialize() first.")
+        return self.engine
+
     async def initialize(self) -> None:
         """
         Initialize the Blackjack game and prepare for play.
@@ -195,7 +202,7 @@ class BlackjackGame(CardsharpGame):
         """
         # The engine doesn't have a remove_player method, so we need
         # to use the state transition engine directly
-        current_state = self.engine.state
+        current_state = self._engine.state
 
         # Check if the player exists
         player_exists = False
@@ -211,7 +218,7 @@ class BlackjackGame(CardsharpGame):
         new_state = StateTransitionEngine.remove_player(current_state, player_id)
 
         # Update the engine state
-        self.engine.state = new_state
+        self._engine.state = new_state
 
         # Remove from our player tracking
         if player_id in self._players:
@@ -230,7 +237,7 @@ class BlackjackGame(CardsharpGame):
         Returns:
             Current GameState object
         """
-        return self.engine.state
+        return self._engine.state
 
     async def place_bet(self, player_id: str, amount: float) -> bool:
         """
