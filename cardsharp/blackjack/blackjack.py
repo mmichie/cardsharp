@@ -394,6 +394,9 @@ def play_game(rules, io_interface, player_names, strategy, shoe: Optional[Shoe] 
     Function to play a single game of Blackjack, to be executed in a separate process.
     Now accepts an optional shoe parameter.
     """
+    # Track initial cut card state
+    initial_cut_card_state = shoe.is_cut_card_reached() if shoe else False
+    
     players = [Player(name, io_interface, strategy) for name in player_names]
     game = BlackjackGame(rules, io_interface, shoe)
 
@@ -408,6 +411,12 @@ def play_game(rules, io_interface, player_names, strategy, shoe: Optional[Shoe] 
 
     if isinstance(strategy, CountingStrategy):
         strategy.update_decks_remaining(len(game.visible_cards))
+        
+        # Check if shoe shuffled during this game (cut card was reached then reset)
+        final_cut_card_state = game.shoe.is_cut_card_reached() if game.shoe else False
+        if initial_cut_card_state and not final_cut_card_state:
+            # Shoe was shuffled during the game
+            strategy.reset_count()
 
     game.reset()
 
@@ -441,6 +450,9 @@ def play_game_batch(rules, io_interface, player_names, num_games, strategy):
     results = []
     earnings = []
     total_bets = 0
+    
+    # Track cards remaining to detect shuffles
+    prev_cards_remaining = shoe.cards_remaining
 
     for _ in range(num_games):
         game_earnings, game_bets, result, current_shoe = play_game(
@@ -450,6 +462,14 @@ def play_game_batch(rules, io_interface, player_names, num_games, strategy):
         results.append(result)
         earnings.append(game_earnings)
         total_bets += game_bets
+        
+        # Check if shoe was shuffled (cards remaining increased)
+        if isinstance(strategy, CountingStrategy) and shoe:
+            curr_cards_remaining = shoe.cards_remaining
+            if curr_cards_remaining > prev_cards_remaining:
+                # Shoe was shuffled, reset count
+                strategy.reset_count()
+            prev_cards_remaining = curr_cards_remaining
 
     return results, earnings, total_bets
 

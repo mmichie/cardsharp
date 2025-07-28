@@ -251,6 +251,7 @@ class CountingStrategy(BasicStrategy):
         self.decks_remaining = 6  # Assume 6 decks by default
         self.exposed_cards = []  # Track cards that have been accidentally exposed
         self.advantage_factor = 0.0  # Additional advantage from exposed cards
+        self.counted_cards = set()  # Track which cards we've already counted
 
     def update_count(self, card: Card):
         if card.rank in [Rank.TWO, Rank.THREE, Rank.FOUR, Rank.FIVE, Rank.SIX]:
@@ -299,9 +300,12 @@ class CountingStrategy(BasicStrategy):
         return total_advantage
 
     def decide_action(self, player, dealer_up_card: Card, game) -> Action:
-        # Update count based on all visible cards
+        # Update count based on NEW visible cards only
         for card in game.visible_cards:
-            self.update_count(card)
+            card_id = id(card)
+            if card_id not in self.counted_cards:
+                self.update_count(card)
+                self.counted_cards.add(card_id)
 
         # Calculate true count
         self.calculate_true_count()
@@ -356,6 +360,10 @@ class CountingStrategy(BasicStrategy):
         bet = min(bet, max_bet, player_money)
         
         return bet
+    
+    def notify_shuffle(self):
+        """Called when the shoe is shuffled to reset the count."""
+        self.reset_count()
 
     def update_decks_remaining(self, cards_played):
         total_cards = 52 * 6  # Assuming 6 decks
@@ -366,6 +374,7 @@ class CountingStrategy(BasicStrategy):
         self.count = 0
         self.true_count = 0.0
         self.decks_remaining = 6  # Reset to initial number of decks
+        self.counted_cards.clear()  # Clear counted cards tracking
 
 
 class MartingaleStrategy(BasicStrategy):
