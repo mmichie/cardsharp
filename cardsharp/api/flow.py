@@ -20,7 +20,7 @@ import uuid
 import functools
 import inspect
 
-from cardsharp.events import EventBus, EngineEventType, EventPriority
+from cardsharp.events import EventBus, EventEmitter, EngineEventType, EventPriority
 
 # Type for event data
 EventData = Dict[str, Any]
@@ -52,7 +52,7 @@ class EventWaiter:
         ```
     """
 
-    def __init__(self, event_bus: Optional[EventBus] = None):
+    def __init__(self, event_bus: Optional[EventEmitter] = None):
         """
         Initialize a new event waiter.
 
@@ -331,7 +331,7 @@ class EventSequence:
         ```
     """
 
-    def __init__(self, event_bus: Optional[EventBus] = None):
+    def __init__(self, event_bus: Optional[EventEmitter] = None):
         """
         Initialize a new event sequence.
 
@@ -462,7 +462,7 @@ class EventFilter:
         ```
     """
 
-    def __init__(self, event_bus: Optional[EventBus] = None):
+    def __init__(self, event_bus: Optional[EventEmitter] = None):
         """
         Initialize a new event filter.
 
@@ -664,7 +664,7 @@ class EventDrivenContext:
         ```
     """
 
-    def __init__(self, event_bus: Optional[EventBus] = None):
+    def __init__(self, event_bus: Optional[EventEmitter] = None):
         """
         Initialize a new event-driven context.
 

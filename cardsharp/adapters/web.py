@@ -9,10 +9,13 @@ It also includes WebSocket support for real-time communication.
 import asyncio
 import time
 import logging
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, TYPE_CHECKING
 from enum import Enum
 import queue
 import uuid
+
+if TYPE_CHECKING:
+    from asyncio import Task
 
 from cardsharp.adapters.base import PlatformAdapter
 from cardsharp.events import EventBus, EngineEventType, EventPriority
@@ -65,12 +68,12 @@ class WebAdapter(PlatformAdapter):
         self.current_state = {}
 
         # Thread for monitoring thread-safe queues
-        self.queue_monitor_task = None
-        self.running = False
+        self.queue_monitor_task: Optional[asyncio.Task[None]] = None
+        self.running: bool = False
 
         # WebSocket support
-        self.use_websockets = use_websockets and _has_websocket
-        self.websocket_handler = None
+        self.use_websockets: bool = use_websockets and _has_websocket
+        self.websocket_handler: Optional[Any] = None
         self.client_id = str(uuid.uuid4())
         self.event_bus = EventBus.get_instance()
 

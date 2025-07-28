@@ -7,8 +7,11 @@ Cardsharp engine, enabling backward compatibility with the current interface.
 
 import asyncio
 import sys
-from typing import List, Dict, Any, Optional, Union, Awaitable
+from typing import List, Dict, Any, Optional, Union, Awaitable, TYPE_CHECKING
 from enum import Enum
+
+if TYPE_CHECKING:
+    from asyncio import Task
 
 from cardsharp.adapters.base import PlatformAdapter
 
@@ -60,12 +63,12 @@ class CLIAdapter(PlatformAdapter):
             self.io_interface = ConsoleIOInterface()
 
         # Event queue for asynchronous operation
-        self._input_queue = asyncio.Queue()
-        self._input_event = asyncio.Event()
+        self._input_queue: asyncio.Queue[str] = asyncio.Queue()
+        self._input_event: asyncio.Event = asyncio.Event()
 
         # Flag to track if we're using the async input loop
-        self._async_input_running = False
-        self._input_task = None
+        self._async_input_running: bool = False
+        self._input_task: Optional[asyncio.Task[None]] = None
 
     async def initialize(self) -> None:
         """Initialize the CLI adapter."""
@@ -168,7 +171,7 @@ class CLIAdapter(PlatformAdapter):
         player_name: str,
         valid_actions: List[Action],
         timeout_seconds: Optional[float] = None,
-    ) -> Awaitable[Action]:
+    ) -> Action:
         """
         Request an action from a player via the console.
 

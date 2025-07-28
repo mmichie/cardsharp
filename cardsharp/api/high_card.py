@@ -75,7 +75,7 @@ class HighCardGame(CardsharpGame):
         self.config = default_config
 
         # Engine will be initialized in initialize()
-        self.engine = None
+        self.engine: Optional[HighCardEngine] = None
 
         # Keep track of players
         self._players = {}

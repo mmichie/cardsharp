@@ -6,10 +6,13 @@ Cardsharp Blackjack engine, supporting both synchronous and asynchronous operati
 """
 
 import asyncio
-from typing import Dict, Any, List, Optional, Union, Callable
+from typing import Dict, Any, List, Optional, Union, Callable, TYPE_CHECKING
 
 from cardsharp.adapters import PlatformAdapter
 from cardsharp.engine import BlackjackEngine
+
+if TYPE_CHECKING:
+    from asyncio import Task
 from cardsharp.events import EngineEventType
 from cardsharp.state import GameState, GameStage, StateTransitionEngine
 from cardsharp.blackjack.action import Action
@@ -108,7 +111,7 @@ class BlackjackGame(CardsharpGame):
         self._auto_play = auto_play
 
         # Engine will be initialized in initialize()
-        self.engine = None
+        self.engine: Optional[BlackjackEngine] = None
 
         # Keep track of players for auto-play
         self._players = {}

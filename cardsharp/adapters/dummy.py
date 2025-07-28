@@ -81,7 +81,7 @@ class DummyAdapter(PlatformAdapter):
         player_name: str,
         valid_actions: List[Action],
         timeout_seconds: Optional[float] = None,
-    ) -> Awaitable[Action]:
+    ) -> Action:
         """
         Return a predefined action or select one using the strategy function.
 
@@ -149,9 +149,7 @@ class DummyAdapter(PlatformAdapter):
             for key, value in data.items():
                 print(f"  {key}: {value}")
 
-    async def handle_timeout(
-        self, player_id: str, player_name: str
-    ) -> Awaitable[Action]:
+    async def handle_timeout(self, player_id: str, player_name: str) -> Action:
         """
         Handle a player timeout by returning STAND.
 

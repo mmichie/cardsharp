@@ -56,7 +56,7 @@ class PlatformAdapter(ABC):
         player_name: str,
         valid_actions: List[Action],
         timeout_seconds: Optional[float] = None,
-    ) -> Awaitable[Action]:
+    ) -> Action:
         """
         Request an action from a player.
 
@@ -88,9 +88,7 @@ class PlatformAdapter(ABC):
         pass
 
     @abstractmethod
-    async def handle_timeout(
-        self, player_id: str, player_name: str
-    ) -> Awaitable[Action]:
+    async def handle_timeout(self, player_id: str, player_name: str) -> Action:
         """
         Handle a player timeout.
 
