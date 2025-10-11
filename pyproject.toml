@@ -1,10 +1,13 @@
-[tool.poetry]
+[project]
 name = "cardsharp"
 version = "0.5.0"
 description = "Card Playing Simulator focused on Blackjack"
-authors = ["Matt Michie <mmichie@gmail.com>"]
-license = "MIT"
+authors = [
+    { name = "Matt Michie", email = "mmichie@gmail.com" }
+]
+license = { text = "MIT" }
 readme = "README.md"
+requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -12,36 +15,37 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Games/Entertainment :: Board Games",
 ]
+dependencies = [
+    "asyncio>=3.4.3,<4.0.0",
+    "aiofiles>=24.0.0",
+    "matplotlib>=3.9.2,<4.0.0",
+    "streamlit>=1.38.0,<2.0.0",
+    "scipy>=1.15.3,<2.0.0",
+    "numpy>=2.2.5,<3.0.0",
+    "pytest-xdist>=3.6.1,<4.0.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.12"
-asyncio = ">=3.4.3,<4.0.0"
-aiofiles = ">=24.0.0"
-matplotlib = "^3.9.2"
-streamlit = "^1.38.0"
-scipy = "^1.15.3"
-numpy = "^2.2.5"
-pytest-xdist = "^3.6.1"
-
-[tool.poetry.group.dev.dependencies]
-black = ">=24.10,<26.0"
-pytest = "^8.3.3"
-pyrefly = "^0.25.1"
-pytest-cov = "^6.0.0"
-pytest-mock = "^3.12.0"
-pytest-asyncio = "^0.25.1"
-flake8 = "^7.1.1"
-pylint = "^3.3.1"
-ruff = ">=0.9.1,<0.12.0"
-py-spy = ">=0.3.14,<0.5.0"
+[project.optional-dependencies]
+dev = [
+    "black>=24.10,<26.0",
+    "pytest>=8.3.3,<9.0.0",
+    "pyrefly>=0.25.1,<1.0.0",
+    "pytest-cov>=6.0.0,<7.0.0",
+    "pytest-mock>=3.12.0,<4.0.0",
+    "pytest-asyncio>=0.25.1,<1.0.0",
+    "flake8>=7.1.1,<8.0.0",
+    "pylint>=3.3.1,<4.0.0",
+    "ruff>=0.9.1,<0.12.0",
+    "py-spy>=0.3.14,<0.5.0",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 120

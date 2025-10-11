@@ -6,59 +6,59 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Development Setup
 ```bash
-# Install dependencies with poetry
-poetry install
+# Install dependencies with uv
+uv sync
 
-# Activate virtual environment
-poetry shell
+# Install with dev dependencies
+uv sync --all-extras
 ```
 
 ### Running Tests
 ```bash
 # Run all tests
-poetry run pytest
+uv run pytest
 
 # Run tests with coverage
-poetry run pytest --cov=cardsharp
+uv run pytest --cov=cardsharp
 
 # Run specific test modules
-poetry run pytest tests/api/test_event_cleanup.py -v
+uv run pytest tests/api/test_event_cleanup.py -v
 
 # Run tests in parallel
-poetry run pytest -n auto
+uv run pytest -n auto
 ```
 
 ### Linting and Code Quality
 ```bash
 # Run ruff linter
-poetry run ruff check .
+uv run ruff check .
 
 # Auto-fix linting issues
-poetry run ruff check --fix .
+uv run ruff check --fix .
 
 # Format code with black
-poetry run black .
+uv run black .
 
 # Run pylint
-poetry run pylint cardsharp
+uv run pylint cardsharp
 ```
 
 ### Running Simulations
 ```bash
 # Run blackjack simulation
-poetry run python cardsharp/blackjack/blackjack.py --simulate --num_games 10000
+uv run python cardsharp/blackjack/blackjack.py --simulate --num_games 10000
 
 # Run with visualization
-poetry run python cardsharp/blackjack/blackjack.py --simulate --num_games 10000 --vis
+uv run python cardsharp/blackjack/blackjack.py --simulate --num_games 10000 --vis
 
 # Run strategy analysis
-poetry run python cardsharp/blackjack/blackjack.py --analysis --num_games 5000
+uv run python cardsharp/blackjack/blackjack.py --analysis --num_games 5000
 
 # Interactive console mode
-poetry run python cardsharp/blackjack/blackjack.py --console
+uv run python cardsharp/blackjack/blackjack.py --console
 
 # Performance profiling
-poetry run python cardsharp/blackjack/blackjack.py --profile --num_games 1000
+uv run python cardsharp/blackjack/blackjack.py --profile --num_games 1000
 ```
 
 ## Architecture Overview
@@ -124,19 +124,19 @@ The project uses Pyrefly for fast type checking:
 
 ```bash
 # Type check a specific file
-poetry run pyrefly check cardsharp/blackjack/blackjack.py
+uv run pyrefly check cardsharp/blackjack/blackjack.py
 
 # Type check the entire project
-poetry run pyrefly check .
+uv run pyrefly check .
 
 # Check a code snippet
-poetry run pyrefly snippet "def foo(x: int) -> str: return x"
+uv run pyrefly snippet "def foo(x: int) -> str: return x"
 
 # Initialize pyrefly config (already done)
-poetry run pyrefly init
+uv run pyrefly init
 
 # Automatically add type annotations
-poetry run pyrefly autotype cardsharp/blackjack/strategy.py
+uv run pyrefly autotype cardsharp/blackjack/strategy.py
 ```
 
 Pyrefly configuration is in `pyrefly.toml` at the project root.
