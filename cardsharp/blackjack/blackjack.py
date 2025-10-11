@@ -357,6 +357,21 @@ class BlackjackGame:
         return False
 
 
+def generate_player_names(num_players: int) -> list[str]:
+    """
+    Generate player names for simulation.
+
+    Args:
+        num_players: Number of players to generate names for
+
+    Returns:
+        List of player names (e.g., ["Player1", "Player2", ...])
+    """
+    if num_players == 1:
+        return ["Player"]
+    return [f"Player{i+1}" for i in range(num_players)]
+
+
 def create_io_interface(args):
     """Create the IO interface based on the command line arguments."""
     strategy = None
@@ -568,7 +583,7 @@ def run_strategy_analysis(args, rules, initial_bankroll: int = 1000):
         }
         for strategy in strategies
     }
-    player_names = ["Bob"]
+    player_names = generate_player_names(args.num_players)
 
     # Initialize shoe once here instead of per game
     initial_shoe = Shoe(
@@ -797,6 +812,13 @@ def main():
         "--num_decks", type=int, default=6, help="Number of decks in the shoe"
     )
     parser.add_argument(
+        "--num_players",
+        type=int,
+        default=1,
+        help="Number of players at the table (1-7, default 1). "
+        "Multiple players see more cards per round, improving card counting accuracy.",
+    )
+    parser.add_argument(
         "--enable_bonus_payouts",
         action="store_true",
         help="Enable bonus payouts for special combinations",
@@ -842,6 +864,10 @@ def main():
     )
     args = parser.parse_args()
 
+    # Validate num_players
+    if args.num_players < 1 or args.num_players > 7:
+        parser.error("--num_players must be between 1 and 7 (typical blackjack table limit)")
+
     io_interface, strategy = create_io_interface(args)
     rules = create_rules(args)
 
@@ -878,6 +904,7 @@ def main():
         net_earnings = 0
         total_bets = 0
         results = []
+        player_names = generate_player_names(args.num_players)
 
         if args.single_cpu:
             # Initialize shoe once for single CPU mode
@@ -892,7 +919,7 @@ def main():
             )
             for i in range(args.num_games):
                 earnings, bets, result, current_shoe = play_game(
-                    rules, DummyIOInterface(), ["Bob"], strategy, shoe, args.bankroll
+                    rules, DummyIOInterface(), player_names, strategy, shoe, args.bankroll
                 )
                 shoe = current_shoe  # Update shoe state for next game
                 net_earnings += earnings
@@ -913,7 +940,7 @@ def main():
                     (
                         rules,
                         DummyIOInterface(),
-                        ["Bob"],
+                        player_names,
                         game_count,
                         strategy,
                         args.bankroll,
