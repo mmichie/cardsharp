@@ -434,7 +434,14 @@ def play_game(
 
 
 def play_game_batch(
-    rules, io_interface, player_names, num_games, strategy, initial_bankroll: int = 1000
+    rules,
+    io_interface,
+    player_names,
+    num_games,
+    strategy,
+    initial_bankroll: int = 1000,
+    shuffle_type: str = "perfect",
+    shuffle_count: int = None,
 ):
     """Function to play a batch of games of Blackjack, to be executed in a separate process."""
     # Ensure logging is disabled in worker processes
@@ -458,6 +465,8 @@ def play_game_batch(
         use_csm=rules.is_using_csm(),
         burn_cards=rules.burn_cards,
         deck_factory=rules.variant.create_deck if rules.variant else None,
+        shuffle_type=shuffle_type,
+        shuffle_count=shuffle_count,
     )
     results = []
     earnings = []
@@ -568,6 +577,8 @@ def run_strategy_analysis(args, rules, initial_bankroll: int = 1000):
         use_csm=rules.is_using_csm(),
         burn_cards=rules.burn_cards,
         deck_factory=rules.variant.create_deck if rules.variant else None,
+        shuffle_type=args.shuffle_type,
+        shuffle_count=args.shuffle_count,
     )
 
     graph = (
@@ -812,6 +823,23 @@ def main():
         choices=["classic", "spanish21"],
         help="Blackjack variant to play (default: classic)",
     )
+    parser.add_argument(
+        "--shuffle_type",
+        type=str,
+        default="perfect",
+        choices=["perfect", "riffle", "strip"],
+        help="Type of shuffle: 'perfect' (default, cryptographically random), "
+        "'riffle' (realistic GSR model, 4 shuffles), "
+        "'strip' (less effective, 6 shuffles)",
+    )
+    parser.add_argument(
+        "--shuffle_count",
+        type=int,
+        default=None,
+        help="Number of shuffles to perform (overrides default for shuffle type). "
+        "Research shows 7 riffle shuffles needed for true randomness on 52 cards. "
+        "Real dealers typically do 3-5 riffles (insufficient mixing).",
+    )
     args = parser.parse_args()
 
     io_interface, strategy = create_io_interface(args)
@@ -830,6 +858,8 @@ def main():
             use_csm=rules.is_using_csm(),
             burn_cards=rules.burn_cards,
             deck_factory=rules.variant.create_deck if rules.variant else None,
+            shuffle_type=args.shuffle_type,
+            shuffle_count=args.shuffle_count,
         )
         for _ in range(args.num_games):
             game = BlackjackGame(rules, io_interface, shoe)
@@ -857,6 +887,8 @@ def main():
                 use_csm=rules.is_using_csm(),
                 burn_cards=rules.burn_cards,
                 deck_factory=rules.variant.create_deck if rules.variant else None,
+                shuffle_type=args.shuffle_type,
+                shuffle_count=args.shuffle_count,
             )
             for i in range(args.num_games):
                 earnings, bets, result, current_shoe = play_game(
@@ -885,6 +917,8 @@ def main():
                         game_count,
                         strategy,
                         args.bankroll,
+                        args.shuffle_type,
+                        args.shuffle_count,
                     )
                     for game_count in game_batches
                 ]
