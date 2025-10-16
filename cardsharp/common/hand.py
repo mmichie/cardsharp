@@ -24,6 +24,8 @@ class AbstractHand(ABC):
     Subclasses should override the __repr__ and __str__ methods to provide a string representation of the hand.
     """
 
+    __slots__ = ("_cards",)
+
     def __init__(self):
         self._cards = []
 
@@ -63,6 +65,8 @@ class Hand(AbstractHand):
 
     This class provides a string representation of a hand of cards for both debugging and display purposes.
     """
+
+    __slots__ = ()
 
     def __repr__(self) -> str:
         """
