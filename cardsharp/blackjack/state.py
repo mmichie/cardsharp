@@ -90,7 +90,7 @@ class WaitingForPlayersState(GameState):
         Adds a player to the game and notifies the interface.
         """
         game.players.append(player)
-        game.io_interface.output(f"{player.name} has joined the game.")
+        game.output(f"{player.name} has joined the game.")
 
 
 class PlacingBetsState(GameState):
@@ -108,12 +108,12 @@ class PlacingBetsState(GameState):
             # Get bet amount from strategy
             if hasattr(player, 'strategy') and player.strategy:
                 bet_amount = player.strategy.get_bet_amount(
-                    game.rules.min_bet,
-                    game.rules.max_bet,
+                    game._min_bet,
+                    game._max_bet,
                     player.money
                 )
             else:
-                bet_amount = game.rules.min_bet
+                bet_amount = game._min_bet
 
             self.place_bet(game, player, bet_amount)
         game.set_state(_state_dealing)
@@ -122,9 +122,9 @@ class PlacingBetsState(GameState):
         """
         Handles the bet placement of a player and notifies the interface.
         """
-        min_bet = game.rules.min_bet
+        min_bet = game._min_bet
         player.place_bet(amount, min_bet)
-        game.io_interface.output(f"{player.name} has placed a bet of {amount}.")
+        game.output(f"{player.name} has placed a bet of {amount}.")
 
 
 class DealingState(GameState):
@@ -158,7 +158,7 @@ class DealingState(GameState):
             player.add_card(card)
             game.add_visible_card(card)
             if not is_dummy_io and player != game.dealer:
-                game.io_interface.output(f"Dealt {card} to {player.name}.")
+                game.output(f"Dealt {card} to {player.name}.")
 
         # Second round - deal second card to each player and dealer
         for player in players_with_dealer:
@@ -166,7 +166,7 @@ class DealingState(GameState):
             player.add_card(card)
             game.add_visible_card(card)
             if not is_dummy_io and player != game.dealer:
-                game.io_interface.output(f"Dealt {card} to {player.name}.")
+                game.output(f"Dealt {card} to {player.name}.")
 
     def check_blackjack(self, game):
         """Checks for blackjack for dealer and players, handles payouts appropriately."""
@@ -174,7 +174,7 @@ class DealingState(GameState):
 
         # First, check if the dealer has blackjack
         if dealer_has_blackjack:
-            game.io_interface.output("Dealer got a blackjack!")
+            game.output("Dealer got a blackjack!")
 
             # Handle insurance bets
             for player in game.players:
@@ -184,7 +184,7 @@ class DealingState(GameState):
                     # Total payout includes the original insurance bet plus winnings
                     total_payout = player.insurance + winnings
                     player.payout_insurance(total_payout)
-                    game.io_interface.output(
+                    game.output(
                         f"{player.name} wins insurance bet of ${total_payout:.2f}."
                     )
                     player.insurance = 0  # Reset insurance bet
@@ -196,13 +196,13 @@ class DealingState(GameState):
                     bet = player.bets[0]
                     player.payout(0, bet)
                     player.winner = ["draw"]
-                    game.io_interface.output(
+                    game.output(
                         f"{player.name} and dealer both have blackjack. Push."
                     )
                 else:
                     # Dealer wins, player loses bet
                     player.winner = ["dealer"]
-                    game.io_interface.output(
+                    game.output(
                         f"{player.name} loses to dealer's blackjack."
                     )
         else:
@@ -210,7 +210,7 @@ class DealingState(GameState):
             # Handle insurance bets: players lose insurance bets
             for player in game.players:
                 if player.insurance > 0:
-                    game.io_interface.output(
+                    game.output(
                         f"{player.name} loses insurance bet of ${player.insurance:.2f}."
                     )
                     # Insurance bet was already deducted when bought; no further action needed
@@ -218,10 +218,10 @@ class DealingState(GameState):
             # Check for player blackjacks
             for player in game.players:
                 if player.current_hand.is_blackjack:
-                    game.io_interface.output(f"{player.name} got a blackjack!")
+                    game.output(f"{player.name} got a blackjack!")
                     bet = player.bets[0]  # Use the bet for the first hand
                     # Use precise arithmetic for correct payout
-                    payout_amount = bet + (bet * game.rules.blackjack_payout)
+                    payout_amount = bet + (bet * game._blackjack_payout)
                     player.payout(0, payout_amount)  # Payout for hand index 0
                     player.blackjack = True
                     player.winner = [
@@ -243,10 +243,10 @@ class OfferInsuranceState(GameState):
         Handles insurance offers, dealer blackjack checks, and resolves insurance bets.
         """
         dealer_up_card = game.dealer.current_hand.cards[0]
-        game.io_interface.output(f"Dealer shows {dealer_up_card}.")
+        game.output(f"Dealer shows {dealer_up_card}.")
 
         # Offer insurance if dealer's upcard is an Ace
-        if dealer_up_card.rank == Rank.ACE and game.rules.allow_insurance:
+        if dealer_up_card.rank == Rank.ACE and game._allow_insurance:
             for player in game.players:
                 self.offer_insurance(game, player)
 
@@ -265,7 +265,7 @@ class OfferInsuranceState(GameState):
         # Handle loss of insurance bets
         for player in game.players:
             if player.insurance > 0:
-                game.io_interface.output(
+                game.output(
                     f"{player.name} loses insurance bet of ${player.insurance:.2f}."
                 )
                 # Insurance bet was already deducted when bought; reset insurance amount
@@ -276,12 +276,12 @@ class OfferInsuranceState(GameState):
             if player.current_hand.is_blackjack:
                 # Player wins immediately
                 bet = player.bets[0]
-                payout_amount = bet + (bet * game.rules.blackjack_payout)
+                payout_amount = bet + (bet * game._blackjack_payout)
                 player.payout(0, payout_amount)
                 player.blackjack = True
                 player.winner = ["player"]
                 player.hand_done[player.current_hand_index] = True
-                game.io_interface.output(f"{player.name} got a blackjack!")
+                game.output(f"{player.name} got a blackjack!")
 
         # Proceed to players' turns
         game.set_state(_state_players_turn)
@@ -295,30 +295,30 @@ class OfferInsuranceState(GameState):
             insurance_bet = player.bets[0] / 2
             try:
                 player.buy_insurance(insurance_bet)
-                game.io_interface.output(f"{player.name} has bought insurance.")
+                game.output(f"{player.name} has bought insurance.")
             except (ValueError, InsufficientFundsError) as e:
-                game.io_interface.output(str(e))
+                game.output(str(e))
         else:
-            game.io_interface.output(f"{player.name} declines insurance.")
+            game.output(f"{player.name} declines insurance.")
 
     def handle_dealer_blackjack(self, game):
         """
         Handles the scenario where the dealer has blackjack.
         Resolves insurance bets and player bets accordingly.
         """
-        game.io_interface.output("Dealer has blackjack!")
+        game.output("Dealer has blackjack!")
 
         # Handle insurance payouts
         for player in game.players:
             if player.insurance > 0:
                 total_payout = player.insurance * 3  # Original bet + 2:1 payout
                 player.payout_insurance(total_payout)
-                game.io_interface.output(
+                game.output(
                     f"{player.name} wins insurance bet of ${total_payout:.2f}."
                 )
                 player.insurance = 0  # Reset insurance bet
             else:
-                game.io_interface.output(f"{player.name} did not take insurance.")
+                game.output(f"{player.name} did not take insurance.")
 
         # Resolve player bets
         for player in game.players:
@@ -327,13 +327,13 @@ class OfferInsuranceState(GameState):
                 bet = player.bets[0]
                 player.payout(0, bet)
                 player.winner = ["draw"]
-                game.io_interface.output(
+                game.output(
                     f"{player.name} and dealer both have blackjack. Push."
                 )
             else:
                 # Dealer wins
                 player.winner = ["dealer"]
-                game.io_interface.output(f"{player.name} loses to dealer's blackjack.")
+                game.output(f"{player.name} loses to dealer's blackjack.")
 
 
 class PlayersTurnState(GameState):
@@ -352,13 +352,13 @@ class PlayersTurnState(GameState):
         for player in game.players:
             if player.done:
                 continue  # Skip this player
-            game.io_interface.output(f"{player.name}'s turn.")
+            game.output(f"{player.name}'s turn.")
             # Iterate over each hand the player has
             for hand_index, hand in enumerate(player.hands):
                 player.current_hand_index = hand_index
                 if player.hand_done[hand_index]:
                     continue  # Skip hands that are already done
-                game.io_interface.output(f"Playing hand {hand_index + 1}")
+                game.output(f"Playing hand {hand_index + 1}")
 
                 while not player.hand_done[hand_index]:
                     valid_actions = self.get_valid_actions(game, player, hand_index)
@@ -385,7 +385,7 @@ class PlayersTurnState(GameState):
                             decision_logger.log_decision_point(context)
                         self.player_action(game, player, action)
                     else:
-                        game.io_interface.output(
+                        game.output(
                             f"Invalid action {action}. Standing instead."
                         )
                         decision_logger.logger.warning(
@@ -467,18 +467,18 @@ class PlayersTurnState(GameState):
                 and any(card.rank == Rank.ACE for card in player.current_hand.cards)
                 and len(player.current_hand.cards) > 1
             ):
-                game.io_interface.output(f"{player.name} cannot hit on split aces.")
+                game.output(f"{player.name} cannot hit on split aces.")
                 player.hand_done[player.current_hand_index] = True
                 return
 
             card = game.shoe.deal()
             player.hit(card)
             game.add_visible_card(card)
-            game.io_interface.output(f"{player.name} hits and gets {card}.")
+            game.output(f"{player.name} hits and gets {card}.")
 
             # Check for Five-card Charlie
             if game.rules.is_five_card_charlie(player.current_hand):
-                game.io_interface.output(f"{player.name} has Five-card Charlie!")
+                game.output(f"{player.name} has Five-card Charlie!")
                 player.hand_done[player.current_hand_index] = True
             # Force stand on split aces after receiving one card
             elif (
@@ -487,11 +487,11 @@ class PlayersTurnState(GameState):
                 and len(player.current_hand.cards) == 2
             ):
                 player.hand_done[player.current_hand_index] = True
-                game.io_interface.output(
+                game.output(
                     f"{player.name}'s split ace stands automatically."
                 )
             elif player.is_busted():
-                game.io_interface.output(f"{player.name} has busted.")
+                game.output(f"{player.name} has busted.")
                 player.hand_done[player.current_hand_index] = True
 
         elif action == Action.SPLIT:
@@ -509,7 +509,7 @@ class PlayersTurnState(GameState):
             # Process the split using the player's split method
             player.split()
 
-            game.io_interface.output(f"{player.name} splits.")
+            game.output(f"{player.name} splits.")
 
             # Deal one card to each of the split hands
             # The new hand is always appended to the end of the hands list
@@ -518,7 +518,7 @@ class PlayersTurnState(GameState):
                 card = game.shoe.deal()
                 player.hands[i].add_card(card)
                 game.add_visible_card(card)
-                game.io_interface.output(f"{player.name}'s hand {i + 1} gets {card}.")
+                game.output(f"{player.name}'s hand {i + 1} gets {card}.")
 
                 decision_logger.logger.debug(
                     f"Split hand {i} now has: {[str(c) for c in player.hands[i].cards]}"
@@ -527,7 +527,7 @@ class PlayersTurnState(GameState):
                 # If splitting aces, automatically stand after dealing one card
                 if is_splitting_aces:
                     player.hand_done[i] = True
-                    game.io_interface.output(
+                    game.output(
                         f"Split ace hand {i + 1} stands automatically."
                     )
                     decision_logger.logger.info(
@@ -539,7 +539,7 @@ class PlayersTurnState(GameState):
             if player.current_hand.is_split and any(
                 card.rank == Rank.ACE for card in player.current_hand.cards
             ):
-                game.io_interface.output(
+                game.output(
                     f"{player.name} cannot double down on split aces."
                 )
                 return
@@ -548,19 +548,19 @@ class PlayersTurnState(GameState):
             card = game.shoe.deal()
             player.hit(card)
             game.add_visible_card(card)
-            game.io_interface.output(f"{player.name} doubles down and gets {card}.")
+            game.output(f"{player.name} doubles down and gets {card}.")
             if player.is_busted():
-                game.io_interface.output(f"{player.name} has busted.")
+                game.output(f"{player.name} has busted.")
             player.hand_done[player.current_hand_index] = True
 
         elif action == Action.STAND:
             player.stand()
             player.hand_done[player.current_hand_index] = True
-            game.io_interface.output(f"{player.name} stands.")
+            game.output(f"{player.name} stands.")
 
         elif action == Action.SURRENDER:
             player.surrender()
-            game.io_interface.output(f"{player.name} surrenders.")
+            game.output(f"{player.name} surrenders.")
             player.hand_done[player.current_hand_index] = True
 
 
@@ -581,7 +581,7 @@ class DealersTurnState(GameState):
         while game.dealer.should_hit(game.rules):
             self.dealer_action(game)
 
-        game.io_interface.output("Dealer stands.")
+        game.output("Dealer stands.")
         game.set_state(_state_end_round)
 
     def dealer_action(self, game):
@@ -591,7 +591,7 @@ class DealersTurnState(GameState):
         card = game.shoe.deal()
         game.dealer.add_card(card)
         game.add_visible_card(card)
-        game.io_interface.output(f"Dealer hits and gets {card}.")
+        game.output(f"Dealer hits and gets {card}.")
 
 
 class EndRoundState(GameState):
@@ -613,7 +613,7 @@ class EndRoundState(GameState):
 
         # Check if cut card was reached and we need to reshuffle
         if game.shoe.is_cut_card_reached():
-            game.io_interface.output(
+            game.output(
                 "Cut card reached. Shuffling shoe after this round."
             )
             # The shoe will automatically reshuffle on the next deal
@@ -663,30 +663,30 @@ class EndRoundState(GameState):
 
         dealer_hand_value = game.dealer.current_hand.value()
         dealer_cards = ", ".join(str(card) for card in game.dealer.current_hand.cards)
-        game.io_interface.output(f"Dealer's final cards: {dealer_cards}")
-        game.io_interface.output(f"Dealer's final hand value: {dealer_hand_value}")
+        game.output(f"Dealer's final cards: {dealer_cards}")
+        game.output(f"Dealer's final hand value: {dealer_hand_value}")
 
         for player in game.players:
             for hand_index, hand in enumerate(player.hands):
                 player_hand_value = hand.value()
                 player_cards = ", ".join(str(card) for card in hand.cards)
-                game.io_interface.output(
+                game.output(
                     f"{player.name}'s hand {hand_index + 1} final cards: {player_cards}"
                 )
-                game.io_interface.output(
+                game.output(
                     f"{player.name}'s hand {hand_index + 1} final hand value: {player_hand_value}"
                 )
                 winner = player.winner[hand_index]
                 if winner == "dealer":
-                    game.io_interface.output(
+                    game.output(
                         f"{player.name}'s hand {hand_index + 1} loses. Dealer wins!"
                     )
                 elif winner == "player":
-                    game.io_interface.output(
+                    game.output(
                         f"{player.name}'s hand {hand_index + 1} wins the round!"
                     )
                 elif winner == "draw":
-                    game.io_interface.output(
+                    game.output(
                         f"{player.name}'s hand {hand_index + 1} and Dealer tie! It's a push."
                     )
 
@@ -714,7 +714,7 @@ class EndRoundState(GameState):
 
                         # Output special hand message
                         if special_hand:
-                            game.io_interface.output(
+                            game.output(
                                 f"{player.name} gets {special_hand.description} bonus!"
                             )
                     elif winner == "draw":
@@ -733,7 +733,7 @@ class EndRoundState(GameState):
                             # Base payout (even money) + bonus amount
                             total_payout = (bet_for_hand * 2) + bonus_amount
                             player.payout(hand_index, total_payout)
-                            game.io_interface.output(
+                            game.output(
                                 f"{player.name} gets a bonus payout of {bonus_amount:.2f} for {bonus_combination}!"
                             )
                             continue  # Skip regular payout processing

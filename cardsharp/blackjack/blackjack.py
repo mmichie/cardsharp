@@ -188,25 +188,45 @@ class BlackjackGame:
             self.payout_calculator = None  # type: ignore
             self.variant = None  # type: ignore
 
+        # Cache frequently accessed rules attributes for performance
+        self._min_bet = rules.min_bet
+        self._max_bet = rules.max_bet
+        self._blackjack_payout = rules.blackjack_payout
+        self._allow_insurance = rules.allow_insurance
+        self._allow_surrender = rules.allow_surrender
+
+        # Cache IO check for performance (avoid repeated isinstance checks)
+        self._is_dummy_io = isinstance(io_interface, DummyIOInterface)
+
     def add_visible_card(self, card):
         """Add a card to the list of visible cards."""
         self.visible_cards.append(card)
 
+    def output(self, message):
+        """
+        Output a message through the IO interface.
+
+        Optimized to check cached _is_dummy_io flag instead of
+        calling isinstance() repeatedly.
+        """
+        if not self._is_dummy_io:
+            self.io_interface.output(message)
+
     def set_state(self, state):
         """Change the current state of the game."""
         # During simulation with DummyIOInterface, no need to output
-        if not isinstance(self.io_interface, DummyIOInterface):
+        if not self._is_dummy_io:
             self.io_interface.output(f"Changing state to {state}.")
         self.current_state = state
 
     def add_player(self, player):
         """Add a player to the game."""
         if player is None:
-            self.io_interface.output("Invalid player.")
+            self.output("Invalid player.")
             return
 
         if self.current_state.STATE_ID != STATE_WAITING:
-            self.io_interface.output("Game has already started.")
+            self.output("Game has already started.")
             return
 
         player.game = self
@@ -252,15 +272,15 @@ class BlackjackGame:
 
     def get_min_bet(self):
         """Get the minimum bet allowed in the game."""
-        return self.rules.min_bet
+        return self._min_bet
 
     def get_max_bet(self):
         """Get the maximum bet allowed in the game."""
-        return self.rules.max_bet
+        return self._max_bet
 
     def get_blackjack_payout(self):
         """Get the payout multiplier for a blackjack."""
-        return self.rules.blackjack_payout
+        return self._blackjack_payout
 
     def get_insurance_payout(self):
         """Get the payout multiplier for insurance."""
