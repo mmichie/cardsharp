@@ -26,9 +26,11 @@ import os
 
 from cardsharp.blackjack.actor import Dealer, Player
 from cardsharp.blackjack.state import (
-    EndRoundState,
-    PlacingBetsState,
-    WaitingForPlayersState,
+    STATE_END_ROUND,
+    STATE_PLACING_BETS,
+    STATE_WAITING,
+    _state_waiting,
+    _state_placing_bets,
 )
 from cardsharp.blackjack.stats import SimulationStats
 from cardsharp.blackjack.strategy import BasicStrategy
@@ -170,7 +172,7 @@ class BlackjackGame:
                 deck_factory=rules.variant.create_deck if rules.variant else None,
             )
         )
-        self.current_state = WaitingForPlayersState()
+        self.current_state = _state_waiting
         self.stats = SimulationStats()
         self.visible_cards = []
         self.minimum_players = 1
@@ -203,7 +205,7 @@ class BlackjackGame:
             self.io_interface.output("Invalid player.")
             return
 
-        if not isinstance(self.current_state, WaitingForPlayersState):
+        if self.current_state.STATE_ID != STATE_WAITING:
             self.io_interface.output("Game has already started.")
             return
 
@@ -213,7 +215,7 @@ class BlackjackGame:
 
     def play_round(self):
         """Play a round of the game until it reaches the end state."""
-        while not isinstance(self.current_state, EndRoundState):
+        while self.current_state.STATE_ID != STATE_END_ROUND:
             self.current_state.handle(self)
         self.current_state.handle(self)
 
@@ -428,7 +430,7 @@ def play_game(
     for player in players:
         game.add_player(player)
 
-    game.set_state(PlacingBetsState())
+    game.set_state(_state_placing_bets)
     game.play_round()
 
     net_earnings = sum(player.money - initial_bankroll for player in game.players)
@@ -556,7 +558,7 @@ def replay_game_with_strategy(
     for player in players:
         game.add_player(player)
 
-    game.set_state(PlacingBetsState())
+    game.set_state(_state_placing_bets)
     game.play_round()
 
     earnings = sum(player.money - initial_bankroll for player in game.players)

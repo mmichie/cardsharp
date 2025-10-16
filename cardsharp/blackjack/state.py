@@ -35,6 +35,16 @@ from cardsharp.blackjack.decision_logger import decision_logger, DecisionContext
 import logging
 
 
+# State ID constants for fast comparison (optimization)
+STATE_WAITING = 0
+STATE_PLACING_BETS = 1
+STATE_DEALING = 2
+STATE_OFFER_INSURANCE = 3
+STATE_PLAYERS_TURN = 4
+STATE_DEALERS_TURN = 5
+STATE_END_ROUND = 6
+
+
 class InsufficientFundsError(Exception):
     """Raised when a player does not have enough money to perform an action."""
 
@@ -44,7 +54,12 @@ class InsufficientFundsError(Exception):
 class GameState(ABC):
     """
     Abstract base class for game states.
+
+    States are stateless objects that implement game flow behavior.
+    They can be safely reused (singleton pattern) for performance.
     """
+    __slots__ = ()  # No instance attributes
+    STATE_ID = -1   # Override in subclasses
 
     @abstractmethod
     def handle(self, game) -> None:
@@ -58,6 +73,8 @@ class WaitingForPlayersState(GameState):
     """
     The game state while the game is waiting for players to join.
     """
+    __slots__ = ()
+    STATE_ID = STATE_WAITING
 
     def handle(self, game):
         """
@@ -66,7 +83,7 @@ class WaitingForPlayersState(GameState):
         """
         while len(game.players) < game.minimum_players:
             time.sleep(1)
-        game.set_state(PlacingBetsState())
+        game.set_state(_state_placing_bets)
 
     def add_player(self, game, player):
         """
@@ -80,6 +97,8 @@ class PlacingBetsState(GameState):
     """
     The game state where players are placing their bets.
     """
+    __slots__ = ()
+    STATE_ID = STATE_PLACING_BETS
 
     def handle(self, game):
         """
@@ -95,9 +114,9 @@ class PlacingBetsState(GameState):
                 )
             else:
                 bet_amount = game.rules.min_bet
-            
+
             self.place_bet(game, player, bet_amount)
-        game.set_state(DealingState())
+        game.set_state(_state_dealing)
 
     def place_bet(self, game, player, amount):
         """
@@ -112,6 +131,8 @@ class DealingState(GameState):
     """
     The game state where the dealer is dealing the cards.
     """
+    __slots__ = ()
+    STATE_ID = STATE_DEALING
 
     def handle(self, game):
         """
@@ -119,7 +140,7 @@ class DealingState(GameState):
         """
         self.deal(game)
         self.check_blackjack(game)
-        game.set_state(OfferInsuranceState())
+        game.set_state(_state_offer_insurance)
 
     def deal(self, game):
         """
@@ -214,6 +235,8 @@ class OfferInsuranceState(GameState):
     The game state where insurance is offered if the dealer has an Ace,
     and the dealer checks for blackjack if appropriate.
     """
+    __slots__ = ()
+    STATE_ID = STATE_OFFER_INSURANCE
 
     def handle(self, game):
         """
@@ -235,7 +258,7 @@ class OfferInsuranceState(GameState):
             ):
                 if game.dealer.current_hand.is_blackjack:
                     self.handle_dealer_blackjack(game)
-                    game.set_state(EndRoundState())
+                    game.set_state(_state_end_round)
                     return
 
         # Dealer does not have blackjack
@@ -261,7 +284,7 @@ class OfferInsuranceState(GameState):
                 game.io_interface.output(f"{player.name} got a blackjack!")
 
         # Proceed to players' turns
-        game.set_state(PlayersTurnState())
+        game.set_state(_state_players_turn)
 
     def offer_insurance(self, game, player):
         """
@@ -315,6 +338,8 @@ class OfferInsuranceState(GameState):
 
 class PlayersTurnState(GameState):
     """The game state where it's the players' turn to play."""
+    __slots__ = ()
+    STATE_ID = STATE_PLAYERS_TURN
 
     def handle(self, game):
         """Handles the players' actions and changes the game state to DealersTurnState."""
@@ -370,7 +395,7 @@ class PlayersTurnState(GameState):
                         player.hand_done[hand_index] = True
                     if player.is_busted() or player.is_done():
                         break  # Exit the loop if player is busted or done
-        game.set_state(DealersTurnState())
+        game.set_state(_state_dealers_turn)
 
     def get_valid_actions(self, game, player, hand_index):
         """Returns valid actions for the player's current hand, considering game rules."""
@@ -543,6 +568,8 @@ class DealersTurnState(GameState):
     """
     The game state where it's the dealer's turn to play.
     """
+    __slots__ = ()
+    STATE_ID = STATE_DEALERS_TURN
 
     def handle(self, game):
         """Handles the dealer's actions and changes the game state to EndRoundState."""
@@ -555,7 +582,7 @@ class DealersTurnState(GameState):
             self.dealer_action(game)
 
         game.io_interface.output("Dealer stands.")
-        game.set_state(EndRoundState())
+        game.set_state(_state_end_round)
 
     def dealer_action(self, game):
         """
@@ -571,6 +598,8 @@ class EndRoundState(GameState):
     """
     The game state where the round is ending.
     """
+    __slots__ = ()
+    STATE_ID = STATE_END_ROUND
 
     def handle(self, game):
         """
@@ -589,7 +618,7 @@ class EndRoundState(GameState):
             )
             # The shoe will automatically reshuffle on the next deal
 
-        game.set_state(PlacingBetsState())
+        game.set_state(_state_placing_bets)
 
     def calculate_winner(self, game):
         """Calculates the winner of the round."""
@@ -762,3 +791,14 @@ class EndRoundState(GameState):
         # Add more patterns as needed
 
         return None
+
+
+# Singleton state instances for performance (avoid repeated allocation)
+# States are stateless, so they can be safely reused across all games
+_state_waiting = WaitingForPlayersState()
+_state_placing_bets = PlacingBetsState()
+_state_dealing = DealingState()
+_state_offer_insurance = OfferInsuranceState()
+_state_players_turn = PlayersTurnState()
+_state_dealers_turn = DealersTurnState()
+_state_end_round = EndRoundState()

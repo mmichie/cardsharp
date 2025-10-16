@@ -64,9 +64,9 @@ class BlackjackTestRunner:
             test_player = testable_game.add_test_player()
 
             # Start game in PlacingBetsState to skip waiting
-            from cardsharp.blackjack.state import PlacingBetsState
+            from cardsharp.blackjack.state import _state_placing_bets
 
-            game.set_state(PlacingBetsState())
+            game.set_state(_state_placing_bets)
 
             # Play the round
             testable_game.play_round()
