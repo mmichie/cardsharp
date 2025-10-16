@@ -37,6 +37,7 @@ from cardsharp.blackjack.strategy import BasicStrategy
 from cardsharp.blackjack.strategy import CountingStrategy
 from cardsharp.blackjack.strategy import AggressiveStrategy
 from cardsharp.blackjack.strategy import MartingaleStrategy
+from cardsharp.blackjack.strategy_fast import FastBasicStrategy
 from cardsharp.common.shoe import Shoe
 from cardsharp.common.io_interface import (
     ConsoleIOInterface,
@@ -417,9 +418,9 @@ def create_io_interface(args):
             elif args.strat == "martin":
                 strategy = MartingaleStrategy()
             else:
-                strategy = BasicStrategy()
+                strategy = FastBasicStrategy()  # Use optimized strategy for simulation
         else:
-            strategy = BasicStrategy()
+            strategy = FastBasicStrategy()  # Use optimized strategy for simulation
     else:
         io_interface = ConsoleIOInterface()
         strategy = BasicStrategy()
