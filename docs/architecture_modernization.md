@@ -82,7 +82,7 @@ The API layer:
    - `CLIAdapter`: For console-based operation (backward compatibility)
    - `DummyAdapter`: For testing and simulation
 
-### Phase 2: State Immutability (Planned)
+### Phase 2: State Immutability (Completed)
 
 **Goal**: Refactor state management to use immutable patterns.
 
@@ -198,11 +198,11 @@ results = await game.auto_play_round(default_bet=25.0)
 
 A comprehensive demo showcasing all these features is available at `examples/async_api_demo.py`.
 
-### Phase 4: Integration (In Progress)
+### Phase 4: Integration (Completed)
 
 **Goal**: Connect all components into a cohesive system that maintains backward compatibility.
 
-The engine component, immutable state system, and asynchronous API have been successfully implemented and demonstrated with the blackjack game. However, integration across the entire codebase is incomplete.
+The engine component, immutable state system, and asynchronous API have been successfully implemented and integrated across the codebase.
 
 ## Phase 1 Implementation Details
 
@@ -429,19 +429,16 @@ await engine.place_bet(player_id, 25.0)
 
 ## Next Steps
 
-With Phase 2 completed, we're ready to move on to Phase 3 of the architecture modernization plan:
+With Phase 4 completed, future development is tracked using [bd (beads)](https://github.com/steveyegge/beads).
 
-1. **Enhanced Async Support**:
-   - Improve async functionality throughout the engine
-   - Add support for event-driven flow control
+View planned work:
+```bash
+bd list --json                    # View all planned work
+bd list -t epic --json           # View major phases/epics
+bd ready --json                  # View ready-to-work tasks
+```
 
-2. **Platform Integration**:
-   - Create more platform adapters (Web, Discord, etc.)
-   - Demonstrate multi-platform capabilities
-
-3. **Documentation and Examples**:
-   - Create comprehensive guides for the new architecture
-   - Provide examples for common use cases
+See AGENTS.md for details on using bd for issue tracking.
 
 ## Phase 4: Complete Integration (Completed)
 

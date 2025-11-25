@@ -60,85 +60,22 @@ All components communicate through the event bus, enabling a highly decoupled an
 
 ## Future Roadmap
 
-With the completion of Phase 4, future development will focus on expanding the framework's capabilities and adding new features:
+Future development is now tracked using [bd (beads)](https://github.com/steveyegge/beads) for better dependency management and collaboration.
 
-### Phase 5: Advanced Analytics and Strategy (Next)
+To view the current roadmap and planned features:
+```bash
+bd list --json                    # View all planned work
+bd list -t epic --json           # View major phases/epics
+bd ready --json                  # View ready-to-work tasks
+```
 
-1. **Enhanced Analytics**:
-   - Real-time strategy performance tracking
-   - Advanced statistics on game outcomes
-   - Machine learning integration for strategy optimization
-   - Visualization improvements for analytics data
+The roadmap includes:
+- Phase 5: Advanced Analytics and Strategy
+- Phase 6: Multi-Player and Network Support
+- Phase 7: Extended Game Library
+- Phase 8: Advanced UI and Visualization
 
-2. **Strategy Framework**:
-   - Strategy factory system for easy strategy creation
-   - Strategy composition for combining different approaches
-   - Dynamic strategy adjustment based on game conditions
-   - Strategy benchmarking and comparison tools
-
-3. **Simulation Improvements**:
-   - Parallel simulation capabilities
-   - Monte Carlo simulation enhancements
-   - Custom simulation scenarios
-   - Batch simulation with parameter sweeps
-
-### Phase 6: Multi-Player and Network Support
-
-1. **Network Architecture**:
-   - WebSocket server for multi-player gaming
-   - Client-server architecture for game hosting
-   - Authentication and player management
-   - Lobby system for game creation
-
-2. **Multi-Player Features**:
-   - Turn-based game mechanics
-   - Real-time player synchronization
-   - Chat and player interaction
-   - Tournament support
-
-3. **Security and Integrity**:
-   - Cryptographic verification of game outcomes
-   - Cheat prevention mechanisms
-   - Game audit trails
-   - Fair play enforcement
-
-### Phase 7: Extended Game Library
-
-1. **New Games**:
-   - Poker (multiple variants)
-   - Baccarat
-   - Roulette (completion)
-   - Craps
-   - Custom game creation tools
-
-2. **Game Configuration**:
-   - Rule customization interface
-   - Game variant management
-   - Custom deck configurations
-   - House rules editor
-
-### Phase 8: Advanced UI and Visualization
-
-1. **Graphical UI**:
-   - Web-based card game interface
-   - Mobile-responsive designs
-   - Animation and sound effects
-   - Customizable themes
-
-2. **3D Visualization**:
-   - 3D card and table rendering
-   - Realistic physics for cards and chips
-   - VR/AR support
-   - Immersive casino environment
-
-## Implementation Timeline
-
-The implementation of future phases will follow this tentative timeline:
-
-1. **Phase 5**: Q3-Q4 2023
-2. **Phase 6**: Q1-Q2 2024
-3. **Phase 7**: Q3-Q4 2024
-4. **Phase 8**: 2025
+See AGENTS.md for details on using bd for issue tracking.
 
 ## Conclusion
 

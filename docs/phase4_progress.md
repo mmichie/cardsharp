@@ -60,16 +60,15 @@ This document summarizes the progress made in Phase 4 of the Cardsharp architect
 
 ## Next Steps
 
-1. **Engine Component Testing**:
-   - Add tests for engine components
-   - Add integration tests for the full system
+Next steps are now tracked using [bd (beads)](https://github.com/steveyegge/beads). View current tasks:
 
-2. **Documentation Updates**:
-   - Update the README with Phase 4 completion
-   - Finalize architecture documentation
+```bash
+bd ready --json        # View ready-to-work tasks
+bd list -p 1-2 --json  # View high-priority tasks
+```
+
+See AGENTS.md for details on using bd for issue tracking.
 
 ## Conclusion
 
 Phase 4 of the Cardsharp architecture modernization has made significant progress in integrating the various components of the system. The refactoring of the Blackjack components, the integration of the UI with the engine pattern, and the enhancement of the verification system have resulted in a more modular, maintainable, and testable codebase.
-
-The next steps will focus on adding tests for the engine components and updating the documentation to reflect the completion of Phase 4.
