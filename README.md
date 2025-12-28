@@ -23,16 +23,11 @@ allows for easy extension to other card games.
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/cardsharp.git
+git clone https://github.com/mmichie/cardsharp.git
 cd cardsharp
 
-# Create a virtual environment (optional but recommended)
-python -m venv venv
-source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
-
-# Install dependencies
-pip install poetry
-poetry install
+# Create a virtual environment and install dependencies
+uv sync
 ```
 
 ## 🎮 Usage
