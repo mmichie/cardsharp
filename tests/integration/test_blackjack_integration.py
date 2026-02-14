@@ -19,6 +19,9 @@ from cardsharp.state.transitions import StateTransitionEngine
 @pytest.fixture
 def blackjack_system():
     """Create a complete blackjack system with adapter and engine."""
+    # Ensure a fresh EventBus singleton for this test
+    EventBus._instance = None
+
     # Create a dummy adapter with predetermined actions
     adapter = DummyAdapter(
         auto_actions={
@@ -284,33 +287,27 @@ async def test_state_transitions_integration(blackjack_system):
     # Add a player
     player_id = await engine.add_player("Test Player", 1000.0)
 
-    # Place a bet
+    # Place a bet - with a single player, this triggers dealing and
+    # automatic player turns via the DummyAdapter, so the game will
+    # have progressed past PLACING_BETS by the time this returns.
     await engine.place_bet(player_id, 25.0)
     states.append(engine.state.stage)
 
-    # The BlackjackEngine doesn't have start_round and deal_initial_cards methods
-    # The place_bet method automatically starts dealing when all players have bet
-    # Let's wait a bit for the dealing and player turn to happen
-    await asyncio.sleep(0.1)
-    states.append(engine.state.stage)
-
-    # We're not going to validate specific stages because they might vary
-    # depending on timing, but we'll verify that the stages are valid
-
-    # Check first two stages - these should be consistent
+    # Check first stage - this should be consistent
     assert states[0] == GameStage.WAITING_FOR_PLAYERS
-    assert states[1] == GameStage.PLACING_BETS
 
-    # The third state might be any valid state after placing bets
-    valid_next_states = [
-        GameStage.PLACING_BETS,  # Still in betting
-        GameStage.DEALING,  # Started dealing
+    # After place_bet with all bets placed, the engine automatically
+    # deals and processes player turns. The final state depends on the
+    # random cards dealt, so accept any valid post-bet state.
+    valid_post_bet_states = [
+        GameStage.PLACING_BETS,  # Round completed and prepared for next
+        GameStage.DEALING,  # Still dealing
         GameStage.PLAYER_TURN,  # Player's turn
         GameStage.DEALER_TURN,  # Dealer's turn
         GameStage.END_ROUND,  # Game ended
     ]
 
-    assert states[2] in valid_next_states, f"Unexpected state: {states[2]}"
+    assert states[1] in valid_post_bet_states, f"Unexpected state: {states[1]}"
 
     # Shutdown the engine
     await engine.shutdown()

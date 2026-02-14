@@ -16,6 +16,7 @@ from .notation import (
     BlackjackNotation,
     GameRecord,
     Hand,
+    STANDARD_TESTS,
 )
 from ..common.shoe import Shoe
 from ..common.card import Card as EngineCard, Suit, Rank
