@@ -12,27 +12,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v2
-      with:
-        python-version: "3.12"
+    - uses: actions/checkout@v4
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+    - name: Set up Python 3.14
+      run: uv python install 3.14
     - name: Install dependencies
-      run: |
-        curl -sSL https://install.python-poetry.org | python3 -
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
-        poetry install
+      run: uv sync --extra dev
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
-        poetry run flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        uv run flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        poetry run flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        uv run flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Analysing the code with pylint
       run: |
-        find . -type f -name \*.py|xargs poetry run pylint --disable=all --enable=F
+        find . -type f -name \*.py | xargs uv run pylint --disable=all --enable=F
     - name: Test with pytest
-      run: |
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
-        poetry run python -m pytest
+      run: uv run python -m pytest
