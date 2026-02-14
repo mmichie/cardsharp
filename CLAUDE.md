@@ -60,7 +60,7 @@ uv run python cardsharp/blackjack/blackjack.py --analysis --num_games 5000
 uv run python cardsharp/blackjack/blackjack.py --console
 
 # Performance profiling
-uv run python cardsharp/blackjack/blackjack.py --profile --num_games 1000
+uv run python cardsharp/blackjack/blackjack.py --simulate --profile --num_games 1000
 ```
 
 ## Architecture Overview

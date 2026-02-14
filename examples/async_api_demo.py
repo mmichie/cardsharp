@@ -29,7 +29,7 @@ try:
     from cardsharp.blackjack.action import Action
 except ImportError:
     print("ERROR: CardSharp package not found or incompletely installed.")
-    print("Please ensure CardSharp is installed properly with: poetry install")
+    print("Please ensure CardSharp is installed properly with: uv sync")
     sys.exit(1)
 
 

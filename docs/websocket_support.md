@@ -58,13 +58,13 @@ The `websocket_client.py` example demonstrates:
 ### Starting the WebSocket Server
 
 ```bash
-poetry run python examples/websocket_server.py --host localhost --port 8765
+uv run python examples/websocket_server.py --host localhost --port 8765
 ```
 
 ### Running the WebSocket Client
 
 ```bash
-poetry run python examples/websocket_client.py --url ws://localhost:8765
+uv run python examples/websocket_client.py --url ws://localhost:8765
 ```
 
 ### Using WebSockets with the Web Adapter
@@ -160,5 +160,5 @@ pip install websockets
 Or using Poetry:
 
 ```bash
-poetry add websockets
+uv add websockets
 ```

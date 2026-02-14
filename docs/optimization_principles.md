@@ -91,19 +91,19 @@ The goal is to make the SAME simulation run faster, not to create a different, s
 ### Basic Benchmark (Multiprocessing)
 ```bash
 # Default simulation uses multiprocessing for ~350,000 games/second
-poetry run python cardsharp/blackjack/blackjack.py --simulate --num_games 10000
+uv run python cardsharp/blackjack/blackjack.py --simulate --num_games 10000
 ```
 
 ### Single-threaded Benchmark
 ```bash
 # Use --single_cpu to disable multiprocessing (~22,000 games/second)
-poetry run python cardsharp/blackjack/blackjack.py --simulate --num_games 10000 --single_cpu
+uv run python cardsharp/blackjack/blackjack.py --simulate --num_games 10000 --single_cpu
 ```
 
 ### Performance Profiling
 ```bash
 # Profile the simulation to identify bottlenecks
-poetry run python cardsharp/blackjack/blackjack.py --profile --num_games 1000
+uv run python cardsharp/blackjack/blackjack.py --profile --num_games 1000
 ```
 
 ### Benchmark Output Example

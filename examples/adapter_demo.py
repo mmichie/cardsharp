@@ -11,33 +11,21 @@ import asyncio
 # Check if cardsharp is installed properly
 try:
     from cardsharp.adapters import CLIAdapter, DummyAdapter
+    from cardsharp.blackjack.action import Action
     from cardsharp.events import EventBus, EngineEventType
 except ImportError:
     print("ERROR: CardSharp package not found or incompletely installed.")
-    print("Please ensure CardSharp is installed properly with: poetry install")
+    print("Please ensure CardSharp is installed properly with: uv sync")
     import sys
 
     sys.exit(1)
 
 
-class MockAction:
-    """
-    Mock Action class for demonstration purposes.
-    In a real application, you would use the actual Action enum.
-    """
-
-    def __init__(self, name):
-        self.name = name
-
-    def __str__(self):
-        return self.name
-
-
-# Create mock action constants
-HIT = MockAction("HIT")
-STAND = MockAction("STAND")
-DOUBLE = MockAction("DOUBLE")
-SPLIT = MockAction("SPLIT")
+# Action constants
+HIT = Action.HIT
+STAND = Action.STAND
+DOUBLE = Action.DOUBLE
+SPLIT = Action.SPLIT
 
 
 async def main():

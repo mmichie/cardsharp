@@ -39,7 +39,7 @@ CardSharp offers various modes of operation to suit different needs:
 Run a batch simulation of Blackjack games:
 
 ```bash
-python cardsharp/blackjack/blackjack.py --simulate --num_games 10000 --vis
+uv run python cardsharp/blackjack/blackjack.py --simulate --num_games 10000 --vis
 ```
 
 This command simulates 10,000 games of Blackjack and displays a real-time visualization of the results.
@@ -49,7 +49,7 @@ This command simulates 10,000 games of Blackjack and displays a real-time visual
 Compare different Blackjack strategies:
 
 ```bash
-python cardsharp/blackjack/blackjack.py --analysis --num_games 5000
+uv run python cardsharp/blackjack/blackjack.py --analysis --num_games 5000
 ```
 
 This runs a comparative analysis of Basic, Counting, Aggressive, and Martingale strategies over 5,000 games.
@@ -59,7 +59,7 @@ This runs a comparative analysis of Basic, Counting, Aggressive, and Martingale 
 Play Blackjack interactively in the console:
 
 ```bash
-python cardsharp/blackjack/blackjack.py --console
+uv run python cardsharp/blackjack/blackjack.py --console
 ```
 
 ### Event System Demo
@@ -67,7 +67,7 @@ python cardsharp/blackjack/blackjack.py --console
 Try the new event system:
 
 ```bash
-python examples/event_system_demo.py
+uv run python examples/event_system_demo.py
 ```
 
 ### Platform Adapter Demo
@@ -75,7 +75,7 @@ python examples/event_system_demo.py
 Experience the platform adapter system:
 
 ```bash
-python examples/adapter_demo.py
+uv run python examples/adapter_demo.py
 ```
 
 ### Immutable State Demo
@@ -83,7 +83,7 @@ python examples/adapter_demo.py
 See how immutable state transitions work:
 
 ```bash
-python examples/immutable_state_demo.py
+uv run python examples/immutable_state_demo.py
 ```
 
 ### BlackjackEngine Demo
@@ -91,7 +91,7 @@ python examples/immutable_state_demo.py
 Experience the new engine with immutable state:
 
 ```bash
-python examples/blackjack_engine_demo.py
+uv run python examples/blackjack_engine_demo.py
 ```
 
 ### Asynchronous API Demo
@@ -99,7 +99,7 @@ python examples/blackjack_engine_demo.py
 See the new Phase 3 asynchronous API in action:
 
 ```bash
-python examples/async_api_demo.py
+uv run python examples/async_api_demo.py
 ```
 
 This demo showcases:
@@ -113,7 +113,7 @@ This demo showcases:
 Experience the BlackjackGame API with event handling:
 
 ```bash
-python examples/blackjack_game_demo.py
+uv run python examples/blackjack_game_demo.py
 ```
 
 ### Card Handling Demo
@@ -121,7 +121,7 @@ python examples/blackjack_game_demo.py
 See how different card representations work with the HandState class:
 
 ```bash
-python examples/card_handling_demo.py
+uv run python examples/card_handling_demo.py
 ```
 
 ### Event Cleanup Demo
@@ -129,7 +129,7 @@ python examples/card_handling_demo.py
 Demonstrate proper cleanup of event handlers when games are shut down:
 
 ```bash
-python examples/event_cleanup_test.py
+uv run python examples/event_cleanup_demo.py
 ```
 
 ### Modern UI Demo
@@ -137,7 +137,7 @@ python examples/event_cleanup_test.py
 Experience the Streamlit-based web UI for Blackjack:
 
 ```bash
-python examples/modern_blackjack_ui.py
+uv run python examples/modern_blackjack_ui.py
 ```
 
 ### Verification System Demo
@@ -145,7 +145,7 @@ python examples/modern_blackjack_ui.py
 See the immutable state verification system in action:
 
 ```bash
-python examples/verification_demo.py
+uv run python examples/verification_demo.py
 ```
 
 ### Full CLI Blackjack Game
@@ -153,19 +153,19 @@ python examples/verification_demo.py
 Play the complete blackjack game using the new architecture:
 
 ```bash
-python examples/cli_blackjack.py
+uv run python examples/cli_blackjack.py
 ```
 
 You can customize your game experience with these options:
 ```bash
 # Play with 3 players
-python examples/cli_blackjack.py --players 3
+uv run python examples/cli_blackjack.py --players 3
 
 # Start with a custom bankroll
-python examples/cli_blackjack.py --bankroll 500
+uv run python examples/cli_blackjack.py --bankroll 500
 
 # Play a fixed number of rounds
-python examples/cli_blackjack.py --rounds 5
+uv run python examples/cli_blackjack.py --rounds 5
 ```
 
 ## 📁 Project Structure
@@ -210,13 +210,13 @@ Run the test suite to ensure everything is working correctly:
 
 ```bash
 # Run all tests
-pytest tests/
+uv run pytest tests/
 
 # Run tests with coverage report
-pytest tests/ --cov=cardsharp
+uv run pytest tests/ --cov=cardsharp
 
 # Run specific test modules
-pytest tests/api/test_event_cleanup.py -v
+uv run pytest tests/api/test_event_cleanup.py -v
 ```
 
 The project includes comprehensive test coverage for:

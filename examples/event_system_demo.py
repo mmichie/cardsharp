@@ -14,7 +14,7 @@ try:
     from cardsharp.events import EventEmitter, EventBus, EngineEventType, EventPriority
 except ImportError:
     print("ERROR: CardSharp package not found or incompletely installed.")
-    print("Please ensure CardSharp is installed properly with: poetry install")
+    print("Please ensure CardSharp is installed properly with: uv sync")
     import sys
 
     sys.exit(1)
@@ -46,7 +46,8 @@ async def main():
         player = data.get("player_name", "Unknown player")
         print(f"Hand result: {player} - {result}")
 
-    def on_any_event(event_type, data):
+    def on_any_event(event_data):
+        event_type, data = event_data
         # Only log certain events to avoid cluttering the output
         if event_type not in ["CARD_DEALT", "PLAYER_ACTION"]:
             print(f"[Event log] {event_type}: {data}")

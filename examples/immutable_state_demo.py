@@ -20,7 +20,7 @@ try:
     )
 except ImportError:
     print("ERROR: CardSharp package not found or incompletely installed.")
-    print("Please ensure CardSharp is installed properly with: poetry install")
+    print("Please ensure CardSharp is installed properly with: uv sync")
     import sys
 
     sys.exit(1)

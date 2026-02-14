@@ -33,9 +33,9 @@ async def run_verification_demo():
     # Create a rules object
     rules = Rules(
         blackjack_payout=1.5,
-        deck_count=6,
+        num_decks=6,
         dealer_hit_soft_17=False,
-        offer_insurance=True,
+        allow_insurance=True,
         allow_surrender=True,
         allow_double_after_split=True,
         allow_split=True,

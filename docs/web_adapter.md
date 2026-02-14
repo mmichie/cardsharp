@@ -37,7 +37,7 @@ The example Streamlit app shows how to use the web adapter to create a fully fun
 To run the example Streamlit app:
 
 ```bash
-poetry run streamlit run examples/streamlit_blackjack.py
+uv run streamlit run examples/streamlit_blackjack.py
 ```
 
 ### Creating Custom Web Interfaces
