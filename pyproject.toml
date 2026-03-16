@@ -16,7 +16,7 @@ classifiers = [
     "Topic :: Games/Entertainment :: Board Games",
 ]
 dependencies = [
-    "asyncio>=3.4.3,<4.0.0",
+    "asyncio>=3.4.3,<5.0.0",
     "aiofiles>=24.0.0",
     "matplotlib>=3.9.2,<4.0.0",
     "scipy>=1.15.3,<2.0.0",
