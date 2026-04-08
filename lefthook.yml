@@ -1,0 +1,11 @@
+pre-commit:
+  parallel: true
+  commands:
+    format-check:
+      glob: "*.py"
+      run: uv run black --check {staged_files}
+    lint:
+      glob: "*.py"
+      run: uv run ruff check {staged_files}
+    test:
+      run: uv run python -m pytest
