@@ -1,256 +1,73 @@
-# CardSharp: Advanced Card Game Simulation Framework
+# CardSharp
 
-CardSharp is a powerful Python package for simulating, analyzing, and playing
-card games. While it currently focuses on Blackjack, its flexible architecture
-allows for easy extension to other card games.
+A Python framework for simulating and analyzing card games. Currently supports
+Blackjack, War, High Card, Baccarat, Dragon Tiger, and Durak.
 
-[![GitHub stars](https://img.shields.io/github/stars/mmichie/cardsharp.svg)](https://github.com/mmichie/cardsharp/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python Versions](https://img.shields.io/pypi/pyversions/cardsharp.svg)](https://pypi.org/project/cardsharp/)
 
-## 🚀 Key Features
-
-- 🃏 Robust Blackjack simulation with multiple strategies
-- 📊 Real-time visualization of game statistics
-- ⚙️ Highly configurable game rules and parameters
-- 🧪 Extensible framework for implementing new card games
-- 🖥️ Support for both CLI and programmatic usage
-- 🧮 Advanced statistical analysis of game outcomes
-- 🔄 Event-driven architecture for improved modularity
-- 🔌 Platform adapters for multi-platform support
-
-## 🛠️ Installation
+## Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/mmichie/cardsharp.git
 cd cardsharp
-
-# Create a virtual environment and install dependencies
 uv sync
 ```
 
-## 🎮 Usage
+## Usage
 
-CardSharp offers various modes of operation to suit different needs:
-
-### Blackjack Simulation
-
-Run a batch simulation of Blackjack games:
+### Simulation
 
 ```bash
+# Run 10,000 blackjack games with visualization
 uv run python cardsharp/blackjack/blackjack.py --simulate --num_games 10000 --vis
-```
 
-This command simulates 10,000 games of Blackjack and displays a real-time visualization of the results.
-
-### Strategy Analysis
-
-Compare different Blackjack strategies:
-
-```bash
+# Compare strategies (Basic, Counting, Aggressive, Martingale)
 uv run python cardsharp/blackjack/blackjack.py --analysis --num_games 5000
+
+# Performance profiling
+uv run python cardsharp/blackjack/blackjack.py --simulate --profile --num_games 1000
 ```
 
-This runs a comparative analysis of Basic, Counting, Aggressive, and Martingale strategies over 5,000 games.
-
-### Interactive Console Mode
-
-Play Blackjack interactively in the console:
+### Interactive Play
 
 ```bash
+# Console blackjack
 uv run python cardsharp/blackjack/blackjack.py --console
+
+# Full CLI game with options
+uv run python examples/cli_blackjack.py --players 3 --bankroll 500 --rounds 5
 ```
 
-### Event System Demo
-
-Try the new event system:
+### Examples
 
 ```bash
-uv run python examples/event_system_demo.py
+uv run python examples/async_api_demo.py        # Async API with event-driven flow
+uv run python examples/blackjack_engine_demo.py  # Engine with immutable state
+uv run python examples/adapter_demo.py           # Platform adapter system
+uv run python examples/modern_blackjack_ui.py    # Streamlit web UI
 ```
 
-### Platform Adapter Demo
+See `examples/` for the full set of demos.
 
-Experience the platform adapter system:
+## Architecture
+
+CardSharp uses an event-driven architecture with immutable state transitions:
+
+- **Events** -- Components communicate through pub/sub (`cardsharp/events/`)
+- **Immutable State** -- Game state transitions via pure functions (`cardsharp/state/`)
+- **Engines** -- Game logic per game type (`cardsharp/engine/`, `cardsharp/blackjack/`, etc.)
+- **Adapters** -- Platform-specific rendering and input (`cardsharp/adapters/`)
+- **APIs** -- High-level sync/async interfaces (`cardsharp/api/`)
+
+## Testing
 
 ```bash
-uv run python examples/adapter_demo.py
+uv run pytest                              # Run all tests
+uv run pytest --cov=cardsharp              # With coverage
+uv run pytest tests/api/test_event_cleanup.py -v  # Specific module
+uv run pytest -n auto                      # Parallel
 ```
 
-### Immutable State Demo
+## License
 
-See how immutable state transitions work:
-
-```bash
-uv run python examples/immutable_state_demo.py
-```
-
-### BlackjackEngine Demo
-
-Experience the new engine with immutable state:
-
-```bash
-uv run python examples/blackjack_engine_demo.py
-```
-
-### Asynchronous API Demo
-
-See the new Phase 3 asynchronous API in action:
-
-```bash
-uv run python examples/async_api_demo.py
-```
-
-This demo showcases:
-- High-level BlackjackGame interface
-- Event-driven flow control
-- Synchronous and asynchronous operation modes
-- Auto-play capabilities
-
-### BlackjackGame Demo
-
-Experience the BlackjackGame API with event handling:
-
-```bash
-uv run python examples/blackjack_game_demo.py
-```
-
-### Card Handling Demo
-
-See how different card representations work with the HandState class:
-
-```bash
-uv run python examples/card_handling_demo.py
-```
-
-### Event Cleanup Demo
-
-Demonstrate proper cleanup of event handlers when games are shut down:
-
-```bash
-uv run python examples/event_cleanup_demo.py
-```
-
-### Modern UI Demo
-
-Experience the Streamlit-based web UI for Blackjack:
-
-```bash
-uv run python examples/modern_blackjack_ui.py
-```
-
-### Verification System Demo
-
-See the immutable state verification system in action:
-
-```bash
-uv run python examples/verification_demo.py
-```
-
-### Full CLI Blackjack Game
-
-Play the complete blackjack game using the new architecture:
-
-```bash
-uv run python examples/cli_blackjack.py
-```
-
-You can customize your game experience with these options:
-```bash
-# Play with 3 players
-uv run python examples/cli_blackjack.py --players 3
-
-# Start with a custom bankroll
-uv run python examples/cli_blackjack.py --bankroll 500
-
-# Play a fixed number of rounds
-uv run python examples/cli_blackjack.py --rounds 5
-```
-
-## 📁 Project Structure
-
-- `cardsharp/`
-  - `blackjack/`: Blackjack-specific implementations
-  - `common/`: Shared utilities and base classes
-  - `events/`: Event system for event-driven architecture
-  - `adapters/`: Platform adapters for different environments
-  - `state/`: Immutable state models and transition functions
-  - `engine/`: Core game engine implementation
-  - `war/`: War card game implementation
-  - `high_card/`: High Card game implementation
-  - `roulette/`: Roulette game implementation (in progress)
-  - `verification/`: Game verification and event recording
-
-## 🏗️ Architecture
-
-CardSharp has undergone a phased modernization to an event-driven, adapter-based architecture:
-
-- **Event System**: Core components communicate through a robust event system
-- **Adapters**: Platform-specific code is isolated in adapters
-- **Immutable State**: Game state transitions via pure functions
-- **Asynchronous API**: Clean, platform-agnostic API with rich event-driven flow control
-- **Dual Mode**: Support for both synchronous and asynchronous operation
-
-The architecture modernization plan has been completed:
-1. ✅ Phase 1: Event System and Adapters
-2. ✅ Phase 2: Immutable State
-3. ✅ Phase 3: Asynchronous API
-4. ✅ Phase 4: Integration & Component Architecture
-
-Check out the [architecture documentation](docs/architecture_modernization.md) for details.
-
-### 📊 Performance Optimization
-
-When optimizing CardSharp simulations, it's critical to maintain accuracy. See our [optimization principles](docs/optimization_principles.md) for guidelines on proper performance improvements without compromising simulation fidelity.
-
-## 🧪 Testing
-
-Run the test suite to ensure everything is working correctly:
-
-```bash
-# Run all tests
-uv run pytest tests/
-
-# Run tests with coverage report
-uv run pytest tests/ --cov=cardsharp
-
-# Run specific test modules
-uv run pytest tests/api/test_event_cleanup.py -v
-```
-
-The project includes comprehensive test coverage for:
-- Core components (cards, decks, etc.)
-- Game engines (Blackjack, War, High Card)
-- API interfaces
-- Resource management (event cleanup)
-- Component integration
-
-## 🤝 Contributing
-
-We welcome contributions! Here's how you can help:
-
-1. Fork the repository
-2. Create a new branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests to ensure no regressions
-5. Commit your changes (`git commit -am 'Add some amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🌟 Star Us!
-
-If you find CardSharp useful, please consider giving it a star on GitHub. It helps us gain visibility and encourages further development!
-
-[![GitHub stars](https://img.shields.io/github/stars/mmichie/cardsharp.svg?style=social&label=Star)](https://github.com/mmichie/cardsharp)
-
-## 📬 Contact
-
-For questions, suggestions, or discussions, please open an issue on GitHub or
-contact the maintainers directly.
-
-Happy gaming and may the odds be ever in your favor! 🎰🃏
+MIT
