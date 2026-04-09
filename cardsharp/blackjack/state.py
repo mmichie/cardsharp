@@ -196,12 +196,14 @@ class DealingState(GameState):
                     bet = player.bets[0]
                     player.payout(0, bet)
                     player.winner = ["draw"]
+                    player.hand_done[player.current_hand_index] = True
                     game.output(
                         f"{player.name} and dealer both have blackjack. Push."
                     )
                 else:
                     # Dealer wins, player loses bet
                     player.winner = ["dealer"]
+                    player.hand_done[player.current_hand_index] = True
                     game.output(
                         f"{player.name} loses to dealer's blackjack."
                     )

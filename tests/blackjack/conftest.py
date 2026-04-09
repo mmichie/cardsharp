@@ -4,8 +4,10 @@ Pytest configuration and fixtures for blackjack tests.
 
 import pytest
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional  # noqa: F401
 from cardsharp.blackjack.decision_logger import decision_logger
+from cardsharp.blackjack.test_support import BlackjackScenario, ScenarioResult
+from cardsharp.common.testing import RiggedShoe
 
 
 def pytest_configure(config):
@@ -145,3 +147,62 @@ def pytest_runtest_logreport(report):
                     summary['by_category'][marker]['total'] += 1
                     if report.outcome == "passed":
                         summary['by_category'][marker]['passed'] += 1
+
+
+@pytest.fixture
+def scenario():
+    """Factory fixture for running blackjack scenarios with predetermined cards.
+
+    Usage::
+
+        def test_blackjack(scenario):
+            result = scenario(player=["As", "Kh"], dealer=["Th", "7d"])
+            assert result.player_won
+            assert result.player_value == 21
+    """
+
+    def _run(
+        *,
+        player: Optional[List[str]] = None,
+        dealer: List[str],
+        extra: Optional[List[str]] = None,
+        players: Optional[List[List[str]]] = None,
+        rules: Optional[Dict[str, Any]] = None,
+    ) -> ScenarioResult:
+        return BlackjackScenario(
+            player=player,
+            dealer=dealer,
+            extra=extra,
+            players=players,
+            rules=rules,
+        ).play()
+
+    return _run
+
+
+@pytest.fixture
+def rigged_shoe():
+    """Factory fixture for creating a RiggedShoe from hand specifications.
+
+    Usage::
+
+        def test_custom_game(rigged_shoe):
+            shoe = rigged_shoe(player=["As", "Kh"], dealer=["Th", "7d"])
+            game = BlackjackGame(Rules(), DummyIOInterface(), shoe)
+            ...
+    """
+
+    def _make(
+        *,
+        player: Optional[List[str]] = None,
+        dealer: Optional[List[str]] = None,
+        extra: Optional[List[str]] = None,
+        players: Optional[List[List[str]]] = None,
+    ) -> RiggedShoe:
+        if dealer is not None:
+            return RiggedShoe.from_hands(
+                player=player, dealer=dealer, extra=extra, players=players,
+            )
+        raise ValueError("'dealer' is required")
+
+    return _make

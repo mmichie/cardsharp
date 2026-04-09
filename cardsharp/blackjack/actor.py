@@ -115,7 +115,9 @@ class Player(SimplePlayer):
 
             # Check for surrender - least common action
             if not self.current_hand.is_split:
-                valid.append(Action.SURRENDER)
+                is_first_action = len(self.action_history[self.current_hand_index]) == 0
+                if self.game.rules.can_surrender(self.current_hand, is_first_action):
+                    valid.append(Action.SURRENDER)
 
         return valid
 

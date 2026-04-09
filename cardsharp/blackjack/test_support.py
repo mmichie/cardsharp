@@ -13,6 +13,7 @@ from .actor import Player, Dealer
 from .hand import BlackjackHand
 from .strategy import BasicStrategy
 from ..common.card import Card
+from ..common.testing import RiggedShoe
 
 
 class GameOutcome(Enum):
@@ -313,3 +314,132 @@ class TestableBlackjackGame:
         if self.test_player:
             return self.test_player.game_record
         return None
+
+
+@dataclass
+class ScenarioResult:
+    """Results from a played blackjack scenario.
+
+    Provides both raw data and convenience properties for assertions::
+
+        result = BlackjackScenario(
+            player=["As", "Kh"], dealer=["Th", "7d"],
+        ).play()
+        assert result.player_won
+        assert result.player_blackjack
+        assert result.player_value == 21
+    """
+
+    player_value: int
+    dealer_value: int
+    player_cards: List[Card]
+    dealer_cards: List[Card]
+    outcome: GameOutcome
+    actions_taken: List[str]
+    player_blackjack: bool
+    dealer_blackjack: bool
+    player_bust: bool
+    dealer_bust: bool
+    game_record: GameRecord
+
+    @property
+    def player_won(self) -> bool:
+        return self.outcome in (
+            GameOutcome.PLAYER_BLACKJACK,
+            GameOutcome.PLAYER_HIGHER,
+            GameOutcome.DEALER_BUST,
+            GameOutcome.FIVE_CARD_CHARLIE,
+        )
+
+    @property
+    def dealer_won(self) -> bool:
+        return self.outcome in (
+            GameOutcome.DEALER_BLACKJACK,
+            GameOutcome.DEALER_HIGHER,
+            GameOutcome.PLAYER_BUST,
+        )
+
+    @property
+    def is_push(self) -> bool:
+        return self.outcome in (GameOutcome.PUSH, GameOutcome.BOTH_BLACKJACK)
+
+    @property
+    def is_surrender(self) -> bool:
+        return self.outcome == GameOutcome.SURRENDER
+
+
+class BlackjackScenario:
+    """Run a blackjack game with predetermined cards and check results.
+
+    Wires up RiggedShoe, BlackjackGame, TestableBlackjackGame, and
+    TestPlayer so you can focus on specifying hands and asserting outcomes.
+
+    Example::
+
+        result = BlackjackScenario(
+            player=["Th", "6h"],
+            dealer=["7h", "Td"],
+            extra=["Kc"],  # player hits, busts
+        ).play()
+        assert result.player_bust
+        assert result.dealer_won
+    """
+
+    def __init__(
+        self,
+        *,
+        player: Optional[List[str]] = None,
+        dealer: List[str],
+        extra: Optional[List[str]] = None,
+        players: Optional[List[List[str]]] = None,
+        rules: Optional[Dict[str, Any]] = None,
+    ):
+        self.player_spec = player
+        self.dealer_spec = dealer
+        self.extra_spec = extra
+        self.players_spec = players
+        self.rules_kwargs = rules or {}
+
+    def play(self) -> ScenarioResult:
+        """Play the scenario and return results."""
+        from .blackjack import BlackjackGame
+        from .rules import Rules
+        from .state import _state_placing_bets
+        from ..common.io_interface import DummyIOInterface
+
+        shoe = RiggedShoe.from_hands(
+            player=self.player_spec,
+            dealer=self.dealer_spec,
+            extra=self.extra_spec,
+            players=self.players_spec,
+        )
+
+        rules = Rules(**self.rules_kwargs)
+        io = DummyIOInterface()
+        game = BlackjackGame(rules, io, shoe)
+
+        testable = TestableBlackjackGame(game)
+        test_player = testable.add_test_player()
+
+        game.set_state(_state_placing_bets)
+        testable.play_round()
+
+        record = testable.get_game_record()
+        if not record or not record.hand_outcomes:
+            raise RuntimeError("Scenario produced no game record")
+
+        primary = record.hand_outcomes[0]
+
+        return ScenarioResult(
+            player_value=primary.final_value,
+            dealer_value=record.dealer_value,
+            player_cards=primary.final_cards,
+            dealer_cards=record.dealer_cards,
+            outcome=primary.outcome,
+            actions_taken=[a.action_taken for a in record.player_actions],
+            player_blackjack=primary.is_blackjack,
+            dealer_blackjack=record.dealer_blackjack,
+            player_bust=primary.is_bust,
+            dealer_bust=record.dealer_bust,
+            game_record=record,
+        )

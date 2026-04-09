@@ -121,12 +121,12 @@
 @expect_actions:
 @expect_outcome: P
 
-# Test: Player 21 vs Dealer Blackjack - Lose
-@deck: 7h,As,4d,Kh,Th
+# Test: Player 11 vs Dealer Blackjack - Round ends immediately
+@deck: 7h,As,4d,Kh
 @rules: {'allow_double_down': True}
-@expect_actions: H,S
+@expect_actions:
 @expect_outcome: L
-@expect_value: 21
+@expect_value: 11
 
 # ========== DOUBLE AFTER SPLIT TESTS ==========
 
@@ -189,10 +189,10 @@
 @expect_outcome: W
 @note: Split aces get 21 each but dealer has 19
 
-# Test: Insurance Declined (never take insurance in basic strategy)
+# Test: Insurance Declined - Dealer Blackjack ends round immediately
 @deck: Th,As,9h,Kh
 @rules: {'allow_insurance': True}
-@expect_actions: S
+@expect_actions:
 @expect_outcome: L
 @expect_value: 19
 
