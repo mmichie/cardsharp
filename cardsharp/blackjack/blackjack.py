@@ -27,7 +27,6 @@ import os
 from cardsharp.blackjack.actor import Dealer, Player
 from cardsharp.blackjack.state import (
     STATE_END_ROUND,
-    STATE_PLACING_BETS,
     STATE_WAITING,
     PlacingBetsState,
     _state_waiting,
@@ -322,25 +321,16 @@ class BlackjackGame:
                 )  # 1=too high, -1=too low
                 error_amount = params.get("error_amount", 1)
 
-                # Store original value method
+                # Inject a miscounted value into the hand's cache
                 hand = self.dealer.current_hand
                 original_value = hand.value()
+                hand._cache["value"] = original_value + (error_direction * error_amount)
 
-                # Create a closure to override the value method
-                def miscount_value():
-                    return original_value + (error_direction * error_amount)
-
-                # Store original method reference
-                original_method = hand.value
-
-                # Apply the override
-                hand.value = miscount_value
-
-                # Schedule restoration
+                # Schedule cache invalidation so subsequent calls recalculate
                 import threading
 
                 threading.Timer(
-                    0.1, lambda: setattr(hand, "value", original_method)
+                    0.1, lambda: hand._cache.update({"value": None})
                 ).start()
 
                 return True
@@ -890,7 +880,9 @@ def main():
 
     # Validate num_players
     if args.num_players < 1 or args.num_players > 7:
-        parser.error("--num_players must be between 1 and 7 (typical blackjack table limit)")
+        parser.error(
+            "--num_players must be between 1 and 7 (typical blackjack table limit)"
+        )
 
     io_interface, strategy = create_io_interface(args)
     rules = create_rules(args)
@@ -943,7 +935,12 @@ def main():
             )
             for i in range(args.num_games):
                 earnings, bets, result, current_shoe = play_game(
-                    rules, DummyIOInterface(), player_names, strategy, shoe, args.bankroll
+                    rules,
+                    DummyIOInterface(),
+                    player_names,
+                    strategy,
+                    shoe,
+                    args.bankroll,
                 )
                 shoe = current_shoe  # Update shoe state for next game
                 net_earnings += earnings

@@ -10,9 +10,10 @@ import asyncio
 
 # Check if cardsharp is installed properly
 try:
-    from cardsharp.adapters import CLIAdapter
+    from cardsharp.adapters import CLIAdapter, DummyAdapter
     from cardsharp.engine import BlackjackEngine
-    from cardsharp.events import EventBus, EngineEventType, EventPriority
+    from cardsharp.events import EventBus, EngineEventType
+    from cardsharp.blackjack.action import Action
 except ImportError:
     print("ERROR: CardSharp package not found or incompletely installed.")
     print("Please ensure CardSharp is installed properly with: uv sync")
@@ -22,8 +23,19 @@ except ImportError:
 
 
 async def main():
-    # Create the adapter
-    adapter = CLIAdapter()
+    # Use DummyAdapter when no TTY is available (e.g. CI, piped input)
+    import sys
+
+    if sys.stdin.isatty():
+        adapter = CLIAdapter()
+    else:
+        adapter = DummyAdapter(
+            auto_actions={
+                "alice": [Action.STAND] * 10,
+                "bob": [Action.STAND] * 10,
+            },
+            verbose=True,
+        )
 
     # Create the engine
     config = {

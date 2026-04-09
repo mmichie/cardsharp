@@ -10,7 +10,7 @@ import asyncio
 import sys
 from typing import Dict, Any, List
 
-from cardsharp.adapters import CLIAdapter
+from cardsharp.adapters import CLIAdapter, DummyAdapter
 from cardsharp.api.durak import DurakGame
 from cardsharp.durak.state import GameState
 
@@ -42,7 +42,8 @@ class DurakDemo:
             default_config.update(config)
 
         self.config = default_config
-        self.adapter = CLIAdapter()
+        self.interactive = sys.stdin.isatty()
+        self.adapter = CLIAdapter() if self.interactive else DummyAdapter(verbose=True)
         self.game = DurakGame(adapter=self.adapter, config=self.config)
         self.player_ids = []
 
@@ -58,12 +59,22 @@ class DurakDemo:
 
         # Add players
         player_names = ["Player", "Alice", "Bob", "Charlie"]
-        num_players = int(input(f"Enter number of players (2-{len(player_names)}): "))
+        if self.interactive:
+            num_players = int(
+                input(f"Enter number of players (2-{len(player_names)}): ")
+            )
+        else:
+            num_players = 3
         num_players = max(2, min(num_players, len(player_names)))
 
         for i in range(num_players):
-            name = input(f"Enter name for player {i+1} (default: {player_names[i]}): ")
-            if not name:
+            if self.interactive:
+                name = input(
+                    f"Enter name for player {i+1} (default: {player_names[i]}): "
+                )
+                if not name:
+                    name = player_names[i]
+            else:
                 name = player_names[i]
             player_id = await self.game.add_player(name)
             self.player_ids.append(player_id)
@@ -73,12 +84,20 @@ class DurakDemo:
         await self.game.deal_initial_cards()
         print("Initial cards dealt.")
 
-    async def play_game(self) -> None:
+    async def play_game(self, max_turns: int = 0) -> None:
         """
         Play the game until it's over.
+
+        Args:
+            max_turns: Maximum number of turns (0 for unlimited).
         """
+        turn = 0
         # Keep playing until the game is over
         while not await self.game.is_game_over():
+            turn += 1
+            if max_turns and turn > max_turns:
+                print(f"\nReached {max_turns} turn limit, stopping.")
+                break
             # Get the current state
             state = await self.game.get_state()
 
@@ -190,6 +209,13 @@ class DurakDemo:
                 print(f"{len(action_list)+i+1}. Pass to {target_name}")
                 action_list.append(("PASS_TO_PLAYER", target_id))
 
+        if not action_list:
+            return ("PASS",)
+
+        # In non-interactive mode, pick the first available action
+        if not self.interactive:
+            return action_list[0]
+
         # Get user choice
         choice = -1
         while choice < 1 or choice > len(action_list):
@@ -242,7 +268,10 @@ class DurakDemo:
         """
         Shut down the game.
         """
-        await self.game.shutdown()
+        try:
+            await asyncio.wait_for(self.game.shutdown(), timeout=5.0)
+        except asyncio.TimeoutError:
+            pass
         print("Game shut down.")
 
 
@@ -274,10 +303,18 @@ async def main():
 
     try:
         await demo.setup_game()
-        await demo.play_game()
+        max_turns = 0 if sys.stdin.isatty() else 20
+        await demo.play_game(max_turns=max_turns)
     finally:
         await demo.shutdown()
 
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+    # Force exit -- the DurakGame engine can leave dangling background tasks
+    # that prevent clean process shutdown.
+    if not sys.stdin.isatty():
+        import os
+
+        os._exit(0)

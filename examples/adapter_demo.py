@@ -273,7 +273,12 @@ async def dummy_adapter_demo():
 
 
 if __name__ == "__main__":
-    # Run both demos
-    asyncio.run(main())
-    print("\n\n=== DUMMY ADAPTER DEMO ===")
+    import sys
+
+    print("=== DUMMY ADAPTER DEMO ===")
     asyncio.run(dummy_adapter_demo())
+    if sys.stdin.isatty():
+        print("\n\n=== CLI ADAPTER DEMO ===")
+        asyncio.run(main())
+    else:
+        print("\nSkipping CLI adapter demo (no TTY).")

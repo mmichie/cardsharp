@@ -18,9 +18,6 @@ import sys
 try:
     from cardsharp.api import (
         BlackjackGame,
-        EventWaiter,
-        EventSequence,
-        EventFilter,
         event_driven,
         EventDrivenContext,
     )
@@ -36,7 +33,7 @@ except ImportError:
 class DemoOptions:
     """Demo configuration options"""
 
-    CLI_MODE = True  # Set to False to use a DummyAdapter instead of CLI
+    CLI_MODE = sys.stdin.isatty()  # Use CLI adapter only when a TTY is available
     PLAYER_COUNT = 2  # Number of players to add
     AUTO_PLAY = True  # Whether to auto-play or require manual input
     ROUND_COUNT = 3  # Number of rounds to play
@@ -182,62 +179,72 @@ async def showcase_event_driven_flow():
         and data.get("action") == "STAND",
     )
 
-    # Execute the sequence
+    # Execute the sequence with a timeout
     print("Executing pre-planned action sequence: HIT then STAND")
-    results = await sequence.execute(game)
+    try:
+        results = await asyncio.wait_for(sequence.execute(game), timeout=10.0)
 
-    # Show results
-    for step_name, (success, result, error) in results.items():
-        if success:
-            print(f"Step '{step_name}' succeeded")
-        else:
-            print(f"Step '{step_name}' failed: {error}")
+        # Show results
+        for step_name, (success, result, error) in results.items():
+            if success:
+                print(f"Step '{step_name}' succeeded")
+            else:
+                print(f"Step '{step_name}' failed: {error}")
+    except asyncio.TimeoutError:
+        print("Event sequence timed out (expected in non-interactive mode)")
 
     print("\nDemonstrating event context manager:")
 
-    # Wait for the game to get back to the betting stage
-    print("Waiting for next round...")
-    await game.wait_for_event(EngineEventType.ROUND_ENDED, timeout=10.0)
+    try:
+        # Wait for the game to get back to the betting stage
+        print("Waiting for next round...")
+        await game.wait_for_event(EngineEventType.ROUND_ENDED, timeout=10.0)
 
-    # Place another bet
-    await game.place_bet(player_id, 50.0)
+        # Place another bet
+        await game.place_bet(player_id, 50.0)
 
-    # Use the event context manager to set up temporary handlers
-    async with EventDrivenContext(game.event_bus) as ctx:
-        # Set up handlers for specific events
-        cards_dealt = 0
+        # Use the event context manager to set up temporary handlers
+        async with EventDrivenContext(game.event_bus) as ctx:
+            # Set up handlers for specific events
+            cards_dealt = 0
 
-        def card_deal_handler(data):
-            nonlocal cards_dealt
-            if data.get("player_id") == player_id:
-                cards_dealt += 1
-                print(f"Card dealt to player: {data.get('card', '?')}")
+            def card_deal_handler(data):
+                nonlocal cards_dealt
+                if data.get("player_id") == player_id:
+                    cards_dealt += 1
+                    print(f"Card dealt to player: {data.get('card', '?')}")
 
-        def hand_result_handler(data):
-            if data.get("player_id") == player_id:
-                result = data.get("result", "unknown")
-                print(f"Hand result: {result.upper()}")
+            def hand_result_handler(data):
+                if data.get("player_id") == player_id:
+                    result = data.get("result", "unknown")
+                    print(f"Hand result: {result.upper()}")
 
-        # Register handlers for the duration of the context
-        ctx.on(EngineEventType.CARD_DEALT, card_deal_handler)
-        ctx.on(EngineEventType.HAND_RESULT, hand_result_handler)
+            # Register handlers for the duration of the context
+            ctx.on(EngineEventType.CARD_DEALT, card_deal_handler)
+            ctx.on(EngineEventType.HAND_RESULT, hand_result_handler)
 
-        # Execute actions and wait for events
-        print("Playing with event context - will track cards and results")
-        await game.execute_action(player_id, Action.HIT)
-        await game.execute_action(player_id, Action.STAND)
-
-        # Wait for the hand to be resolved
-        try:
-            await ctx.wait_for(
-                EngineEventType.HAND_RESULT,
-                lambda evt, data: data.get("player_id") == player_id,
-                timeout=5.0,
+            # Execute actions and wait for events
+            print("Playing with event context - will track cards and results")
+            await asyncio.wait_for(
+                game.execute_action(player_id, Action.HIT), timeout=10.0
             )
-        except asyncio.TimeoutError:
-            print("Timeout waiting for hand result")
+            await asyncio.wait_for(
+                game.execute_action(player_id, Action.STAND), timeout=10.0
+            )
 
-    print(f"Total cards dealt to player: {cards_dealt}")
+            # Wait for the hand to be resolved
+            try:
+                await ctx.wait_for(
+                    EngineEventType.HAND_RESULT,
+                    lambda evt, data: data.get("player_id") == player_id,
+                    timeout=5.0,
+                )
+            except asyncio.TimeoutError:
+                print("Timeout waiting for hand result")
+
+        print(f"Total cards dealt to player: {cards_dealt}")
+    except asyncio.TimeoutError:
+        print("Event context demo timed out")
 
     # Shutdown the game
     await game.shutdown()
@@ -277,45 +284,62 @@ async def showcase_decorated_functions():
         print("Bet placed but event not captured")
 
     # Shutdown the game
-    await game.shutdown()
+    try:
+        await asyncio.wait_for(game.shutdown(), timeout=5.0)
+    except asyncio.TimeoutError:
+        print("Shutdown timed out")
     print("Decorated functions demo completed!")
 
 
-async def showcase_sync_api():
+def showcase_sync_api():
     """Showcase synchronous API usage"""
+    import signal
+
     print("\n=== SYNCHRONOUS API DEMO ===")
     print("Creating a game with synchronous API")
 
     # Create the game with sync mode
     game = BlackjackGame(adapter=DummyAdapter(verbose=True), use_async=False)
 
-    # Use synchronous methods
-    print("Initializing game synchronously...")
-    game.initialize_sync()
+    def _timeout_handler(signum, frame):
+        raise TimeoutError("Sync demo timed out")
 
-    print("Starting game synchronously...")
-    game.start_game_sync()
+    old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(15)
 
-    print("Adding player synchronously...")
-    player_id = game.add_player_sync("SyncPlayer", 1000.0)
+    try:
+        # Use synchronous methods
+        print("Initializing game synchronously...")
+        game.initialize_sync()
 
-    print("Playing a round synchronously...")
-    game.place_bet_sync(player_id, 100.0)
+        print("Starting game synchronously...")
+        game.start_game_sync()
 
-    # Auto-play the round
-    print("Auto-playing round synchronously...")
-    results = game.auto_play_round_sync()
+        print("Adding player synchronously...")
+        player_id = game.add_player_sync("SyncPlayer", 1000.0)
 
-    # Display a simple summary
-    for player in results["players"]:
-        player_name = player["name"]
-        player_balance = player["balance"]
-        print(f"{player_name}'s balance: ${player_balance:.2f}")
+        print("Playing a round synchronously...")
+        game.place_bet_sync(player_id, 100.0)
 
-    # Shutdown
-    print("Shutting down synchronously...")
-    game.shutdown_sync()
-    print("Synchronous API demo completed!")
+        # Auto-play the round
+        print("Auto-playing round synchronously...")
+        results = game.auto_play_round_sync()
+
+        # Display a simple summary
+        for player in results["players"]:
+            player_name = player["name"]
+            player_balance = player["balance"]
+            print(f"{player_name}'s balance: ${player_balance:.2f}")
+
+        # Shutdown
+        print("Shutting down synchronously...")
+        game.shutdown_sync()
+        print("Synchronous API demo completed!")
+    except TimeoutError:
+        print("Sync demo timed out during shutdown")
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
 
 
 async def main():
@@ -330,14 +354,13 @@ async def main():
         await showcase_basics()
 
         # Run the event-driven flow control demo
-        await showcase_event_driven_flow()
+        await asyncio.wait_for(showcase_event_driven_flow(), timeout=30.0)
 
         # Run the decorated functions demo
-        await showcase_decorated_functions()
+        await asyncio.wait_for(showcase_decorated_functions(), timeout=30.0)
 
-        # Run the synchronous API demo (this runs in a separate thread)
-        await asyncio.to_thread(showcase_sync_api)
-
+    except asyncio.TimeoutError:
+        print("\nDemo section timed out, continuing...")
     except KeyboardInterrupt:
         print("\nDemo interrupted. Exiting...")
 
@@ -346,3 +369,13 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+    # Run the sync demo outside the async event loop to avoid
+    # EventBus singleton conflicts with asyncio.to_thread.
+    showcase_sync_api()
+
+    # Force exit -- cancelled background tasks from the event-driven demos
+    # can leave dangling threads that prevent clean shutdown.
+    import os
+
+    os._exit(0)
