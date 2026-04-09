@@ -125,6 +125,27 @@ class TestSplits:
         assert result.player_value == 20
         assert "split" not in result.actions_taken
 
+    def test_nines_vs_7_stands(self, scenario):
+        """9,9 vs 7: stand on 18, don't split."""
+        result = scenario(
+            player=["9h", "9d"],
+            dealer=["7h", "Kh"],
+            rules={"allow_split": True},
+        )
+        assert result.player_value == 18
+        assert "split" not in result.actions_taken
+        assert result.player_won
+
+    def test_hard_16_vs_6_stands(self, scenario):
+        """Hard 16 vs 6: stand (dealer likely busts)."""
+        result = scenario(
+            player=["Th", "6s"],
+            dealer=["6h", "Kd"],
+            extra=["Kh"],  # dealer: 6+K=16, hits K -> bust
+        )
+        assert result.player_value == 16
+        assert result.player_won
+
 
 # ---------------------------------------------------------------------------
 # Surrender scenarios
@@ -138,6 +159,39 @@ class TestSurrender:
             player=["Th", "6s"],
             dealer=["As", "9d"],
             rules={"allow_surrender": True},
+        )
+        assert result.is_surrender
+
+    def test_surrender_16_vs_10(self, scenario):
+        """Hard 16 vs 10 -- surrender."""
+        result = scenario(
+            player=["Th", "6s"],
+            dealer=["Kh", "9d"],
+        )
+        assert result.is_surrender
+
+    def test_surrender_15_vs_10(self, scenario):
+        """Hard 15 vs 10 -- surrender."""
+        result = scenario(
+            player=["Th", "5s"],
+            dealer=["Kh", "8d"],
+        )
+        assert result.is_surrender
+
+    def test_surrender_16_vs_9(self, scenario):
+        """Hard 16 vs 9 -- surrender."""
+        result = scenario(
+            player=["Th", "6s"],
+            dealer=["9h", "Kd"],
+        )
+        assert result.is_surrender
+
+    def test_late_surrender(self, scenario):
+        """Late surrender allowed after dealer checks for blackjack."""
+        result = scenario(
+            player=["Th", "6h"],
+            dealer=["As", "9d"],
+            rules={"allow_late_surrender": True},
         )
         assert result.is_surrender
 
@@ -200,14 +254,26 @@ class TestSoftHands:
         assert result.player_value == 21
 
     def test_soft_18_hits_vs_strong_upcard(self, scenario):
-        """Soft 18 vs 9 -- basic strategy says hit."""
+        """Soft 18 vs 10 -- basic strategy says hit."""
         result = scenario(
             player=["As", "7h"],
-            dealer=["9d", "Kd"],
+            dealer=["Th", "9d"],
             extra=["3c"],  # A+7+3 = 21
         )
         assert "hit" in result.actions_taken
         assert result.player_value == 21
+
+    def test_soft_18_vs_3_doubles(self, scenario):
+        """Soft 18 vs 3: basic strategy says double (DS)."""
+        result = scenario(
+            player=["As", "7h"],
+            dealer=["3d", "5c"],
+            extra=["2h", "Kh"],  # player doubles +2 -> 20, dealer 3+5+K=18
+            rules={"allow_double_down": True},
+        )
+        assert "double" in result.actions_taken
+        assert result.player_value == 20
+        assert result.player_won
 
 
 # ---------------------------------------------------------------------------
@@ -260,6 +326,41 @@ class TestSplitExecution:
         )
         assert "split" in result.actions_taken
         assert "double" in result.actions_taken
+        assert result.player_won
+
+    def test_no_double_after_split(self, scenario):
+        """Split 8s, DAS disallowed: must hit instead of double, both bust."""
+        result = scenario(
+            player=["8h", "8d"],
+            dealer=["7h", "Kh"],
+            # Hand1: 8h+3c=11, can't double, hit 5h->16, hit 9h->bust
+            # Hand2: 8d+2h=10, can't double, hit 6h->16, hit Tc->bust
+            extra=["3c", "2h", "5h", "9h", "6h", "Tc"],
+            rules={"allow_split": True, "allow_double_after_split": False},
+        )
+        assert "split" in result.actions_taken
+        assert "double" not in result.actions_taken
+        assert result.dealer_won
+
+    def test_split_nines_vs_9(self, scenario):
+        """Split 9s vs 9: hand1 gets T->19 (push), hand2 gets 8->17 (loss)."""
+        result = scenario(
+            player=["9h", "9c"],
+            dealer=["9d", "Th"],
+            extra=["Td", "8h"],
+            rules={"allow_split": True},
+        )
+        assert "split" in result.actions_taken
+
+    def test_split_aces_both_get_21(self, scenario):
+        """Split aces each get a 10-value card -> 21. Dealer has 19."""
+        result = scenario(
+            player=["As", "Ac"],
+            dealer=["Kh", "9h"],
+            extra=["Kd", "Th"],
+            rules={"allow_split": True},
+        )
+        assert "split" in result.actions_taken
         assert result.player_won
 
 
@@ -343,6 +444,18 @@ class TestFiveCardCharlie:
         assert result.player_won
         assert result.player_value == 16
 
+    def test_five_card_charlie_low_total(self, scenario):
+        """5 cards totaling 11 still wins via charlie rule."""
+        result = scenario(
+            player=["2h", "2s"],
+            dealer=["Kh", "Th"],
+            # 2+2+2+2+3 = 11, five cards -> charlie
+            extra=["2d", "2c", "3h"],
+            rules={"five_card_charlie": True},
+        )
+        assert result.player_won
+        assert result.player_value == 11
+
 
 # ---------------------------------------------------------------------------
 # Surrender fallback
@@ -373,6 +486,38 @@ class TestSurrenderFallback:
         assert not result.is_surrender
         assert result.player_won
         assert result.player_value == 12
+
+
+# ---------------------------------------------------------------------------
+# Basic strategy edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestBasicStrategyEdgeCases:
+
+    def test_hard_16_vs_8_hits(self, scenario):
+        """16 vs 8: basic strategy says hit, not surrender."""
+        result = scenario(
+            player=["Th", "6s"],
+            dealer=["8s", "Kd"],
+            extra=["3h"],  # 16+3 = 19, dealer 8+K=18
+        )
+        assert not result.is_surrender
+        assert "hit" in result.actions_taken
+        assert result.player_value == 19
+        assert result.player_won
+
+    def test_10_vs_ace_hits_not_doubles(self, scenario):
+        """Hard 10 vs A: hit, not double."""
+        result = scenario(
+            player=["6h", "4h"],
+            dealer=["As", "7h"],
+            extra=["Kh"],  # 6+4+K = 20, dealer A+7=18
+            rules={"allow_double_down": True},
+        )
+        assert "double" not in result.actions_taken
+        assert result.player_value == 20
+        assert result.player_won
 
 
 # ---------------------------------------------------------------------------
