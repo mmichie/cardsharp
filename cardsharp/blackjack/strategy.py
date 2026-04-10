@@ -58,6 +58,14 @@ class DealerStrategy(Strategy):
 
 
 class BasicStrategy(Strategy):
+    # The CSV is the H17 (dealer hits soft 17) multi-deck strategy.
+    # When dealer stands on soft 17, these 3 cells change:
+    _S17_OVERRIDES = {
+        ("Hard11", 9): "H",    # Hard 11 vs A: D → H
+        ("Soft18", 0): "S",    # Soft 18 vs 2: DS → S
+        ("Pair8", 9): "P",     # Pair 8 vs A: R → P
+    }
+
     def __init__(self, strategy_file=None):
         if strategy_file is None:
             strategy_file = os.path.join(
@@ -68,6 +76,7 @@ class BasicStrategy(Strategy):
             "2": 0, "3": 1, "4": 2, "5": 3, "6": 4,
             "7": 5, "8": 6, "9": 7, "10": 8, "A": 9,
         }
+        self._s17_applied = False
 
     def _load_strategy(self, strategy_file):
         strategy = {}
@@ -121,7 +130,19 @@ class BasicStrategy(Strategy):
         }
         return mapping[symbol]
 
+    def _apply_s17_overrides(self):
+        """Patch the strategy table for S17 (dealer stands on soft 17)."""
+        for (hand_type, dealer_idx), action in self._S17_OVERRIDES.items():
+            if hand_type in self.strategy:
+                self.strategy[hand_type][dealer_idx] = action
+        self._s17_applied = True
+
     def decide_action(self, player, dealer_up_card: Card, game=None) -> Action:
+        if game is not None and not self._s17_applied:
+            if not game.rules.dealer_hit_soft_17:
+                self._apply_s17_overrides()
+            self._s17_applied = True  # Only check once
+
         current_hand = player.current_hand
         hand_type = self._get_hand_type(current_hand)
         dealer_card = self._get_dealer_card(dealer_up_card)
@@ -160,6 +181,10 @@ class BasicStrategy(Strategy):
         if action == Action.SURRENDER:
             if Action.SURRENDER in valid_actions:
                 return Action.SURRENDER
+            # Surrender unavailable -- for pairs (e.g. 8,8 vs A), split is
+            # the correct fallback before defaulting to hit.
+            if Action.SPLIT in valid_actions:
+                return Action.SPLIT
             return Action.HIT if Action.HIT in valid_actions else Action.STAND
 
         if action == Action.SPLIT:

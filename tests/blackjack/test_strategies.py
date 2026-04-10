@@ -379,6 +379,80 @@ class TestCountingEdgeCases:
 
 
 # -------------------------------------------------------------------
+# H17 / S17 strategy adjustments
+# -------------------------------------------------------------------
+
+
+class TestH17S17Adjustments:
+    """The CSV is H17. When game rules are S17, 3 cells change."""
+
+    def _game(self, dealer_hit_soft_17):
+        from cardsharp.blackjack.rules import Rules
+
+        game = MagicMock()
+        game.rules = Rules(dealer_hit_soft_17=dealer_hit_soft_17)
+        return game
+
+    def test_hard_11_vs_ace_h17(self):
+        """H17: double 11 vs A."""
+        s = BasicStrategy()
+        p = _make_player([_card(Rank.FIVE), _card(Rank.SIX)])
+        result = s.decide_action(p, _card(Rank.ACE), game=self._game(True))
+        assert result == Action.DOUBLE
+
+    def test_hard_11_vs_ace_s17(self):
+        """S17: hit 11 vs A."""
+        s = BasicStrategy()
+        p = _make_player([_card(Rank.FIVE), _card(Rank.SIX)])
+        result = s.decide_action(p, _card(Rank.ACE), game=self._game(False))
+        assert result == Action.HIT
+
+    def test_soft_18_vs_2_h17(self):
+        """H17: double-or-stand soft 18 vs 2."""
+        s = BasicStrategy()
+        p = _make_player([_card(Rank.ACE), _card(Rank.SEVEN)])
+        result = s.decide_action(p, _card(Rank.TWO), game=self._game(True))
+        assert result == Action.DOUBLE
+
+    def test_soft_18_vs_2_s17(self):
+        """S17: stand soft 18 vs 2."""
+        s = BasicStrategy()
+        p = _make_player([_card(Rank.ACE), _card(Rank.SEVEN)])
+        result = s.decide_action(p, _card(Rank.TWO), game=self._game(False))
+        assert result == Action.STAND
+
+    def test_pair_8_vs_ace_h17(self):
+        """H17: surrender 8,8 vs A."""
+        s = BasicStrategy()
+        p = _make_player([_card(Rank.EIGHT), _card(Rank.EIGHT)])
+        p.valid_actions = [Action.HIT, Action.STAND, Action.SPLIT, Action.SURRENDER]
+        result = s.decide_action(p, _card(Rank.ACE), game=self._game(True))
+        assert result == Action.SURRENDER
+
+    def test_pair_8_vs_ace_s17(self):
+        """S17: split 8,8 vs A."""
+        s = BasicStrategy()
+        p = _make_player([_card(Rank.EIGHT), _card(Rank.EIGHT)])
+        result = s.decide_action(p, _card(Rank.ACE), game=self._game(False))
+        assert result == Action.SPLIT
+
+    def test_pair_8_vs_ace_h17_no_surrender(self):
+        """H17 without surrender: fall back to split 8,8 vs A."""
+        s = BasicStrategy()
+        p = _make_player([_card(Rank.EIGHT), _card(Rank.EIGHT)])
+        # No SURRENDER in valid actions
+        result = s.decide_action(p, _card(Rank.ACE), game=self._game(True))
+        assert result == Action.SPLIT
+
+    def test_no_game_uses_h17_default(self):
+        """Without game reference, the CSV (H17) is used as-is."""
+        s = BasicStrategy()
+        p = _make_player([_card(Rank.FIVE), _card(Rank.SIX)])
+        result = s.decide_action(p, _card(Rank.ACE))
+        assert result == Action.DOUBLE
+
+
+# -------------------------------------------------------------------
 # BasicStrategy fallback paths
 # -------------------------------------------------------------------
 

@@ -346,32 +346,52 @@ class TestPlayDeviations:
         )
         assert Action.HIT in actions
 
-    def test_double_11_vs_ace_at_tc_1(self):
-        """Double 11 vs A when TC >= 1 (normally hit).
+    def test_double_11_vs_ace_h17(self):
+        """H17 base strategy doubles 11 vs A at any count.
 
         Dealt cards: 7(0)+4(+1)+A(-1)+8(0) shift by 0.
-        Pre-set 1, TC=1 at decision.
+        Pre-set 0, TC=0 at decision.
         """
         actions = _play_counting_scenario(
             player_cards=["7h", "4s"],   # 11
             dealer_cards=["As", "8d"],   # A(-1), 8(0)
             extra=["9c"],                # double card → 20
-            running_count=1,
+            running_count=0,
             rules_kwargs={"allow_double_down": True},
         )
         assert Action.DOUBLE in actions
 
-    def test_hit_11_vs_ace_at_tc_0(self):
-        """Below TC 1: basic strategy hits 11 vs A.
+    def test_double_11_vs_ace_s17_at_tc_1(self):
+        """S17: base strategy hits 11 vs A, deviation doubles at TC >= 1.
 
-        Dealt cards shift by 0. Pre-set 0, TC=0.
+        Dealt cards shift by 0. Pre-set 1, TC=1 at decision.
+        """
+        actions = _play_counting_scenario(
+            player_cards=["7h", "4s"],
+            dealer_cards=["As", "8d"],
+            extra=["9c"],  # double card → 20
+            running_count=1,
+            rules_kwargs={
+                "allow_double_down": True,
+                "dealer_hit_soft_17": False,
+            },
+        )
+        assert Action.DOUBLE in actions
+
+    def test_hit_11_vs_ace_s17_at_tc_0(self):
+        """S17: hit 11 vs A when TC < 1 (deviation threshold not met).
+
+        Dealt cards shift by 0. Pre-set 0, TC=0 at decision.
         """
         actions = _play_counting_scenario(
             player_cards=["7h", "4s"],
             dealer_cards=["As", "8d"],
             extra=["Tc"],  # hit card → 21
             running_count=0,
-            rules_kwargs={"allow_double_down": True},
+            rules_kwargs={
+                "allow_double_down": True,
+                "dealer_hit_soft_17": False,
+            },
         )
         assert Action.HIT in actions
         assert Action.DOUBLE not in actions
