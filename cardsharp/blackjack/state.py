@@ -169,29 +169,22 @@ class DealingState(GameState):
                 game.output(f"Dealt {card} to {player.name}.")
 
     def check_blackjack(self, game):
-        """Checks for blackjack for dealer and players, handles payouts appropriately."""
+        """Handle blackjack detection for no-peek mode.
+
+        When dealer peek is enabled, OfferInsuranceState handles all blackjack
+        resolution after insurance is offered and the peek is performed. This
+        avoids double-processing payouts.
+        """
+        if game.rules.should_dealer_peek():
+            return  # OfferInsuranceState handles everything after insurance/peek
+
+        # No-peek mode: resolve blackjacks immediately
         dealer_has_blackjack = game.dealer.current_hand.is_blackjack
 
-        # First, check if the dealer has blackjack
         if dealer_has_blackjack:
             game.output("Dealer got a blackjack!")
-
-            # Handle insurance bets
-            for player in game.players:
-                if player.insurance > 0:
-                    insurance_multiplier = game.rules.get_insurance_payout()
-                    winnings = player.insurance * insurance_multiplier
-                    total_payout = player.insurance + winnings
-                    player.payout_insurance(total_payout)
-                    game.output(
-                        f"{player.name} wins insurance bet of ${total_payout:.2f}."
-                    )
-                    player.insurance = 0  # Reset insurance bet
-
-            # Now, handle players' hands
             for player in game.players:
                 if player.current_hand.is_blackjack:
-                    # Push - return the original bet
                     bet = player.bets[0]
                     player.payout(0, bet)
                     player.winner = ["draw"]
@@ -200,34 +193,20 @@ class DealingState(GameState):
                         f"{player.name} and dealer both have blackjack. Push."
                     )
                 else:
-                    # Dealer wins, player loses bet
                     player.winner = ["dealer"]
                     player.hand_done[player.current_hand_index] = True
                     game.output(
                         f"{player.name} loses to dealer's blackjack."
                     )
         else:
-            # Dealer does not have blackjack
-            # Handle insurance bets: players lose insurance bets
-            for player in game.players:
-                if player.insurance > 0:
-                    game.output(
-                        f"{player.name} loses insurance bet of ${player.insurance:.2f}."
-                    )
-                    # Insurance bet was already deducted when bought; no further action needed
-
-            # Check for player blackjacks
             for player in game.players:
                 if player.current_hand.is_blackjack:
                     game.output(f"{player.name} got a blackjack!")
-                    bet = player.bets[0]  # Use the bet for the first hand
-                    # Use precise arithmetic for correct payout
+                    bet = player.bets[0]
                     payout_amount = bet + (bet * game._blackjack_payout)
-                    player.payout(0, payout_amount)  # Payout for hand index 0
+                    player.payout(0, payout_amount)
                     player.blackjack = True
-                    player.winner = [
-                        "player"
-                    ]  # Since there's only one hand at this point
+                    player.winner = ["player"]
                     player.hand_done[player.current_hand_index] = True
 
 
@@ -250,6 +229,17 @@ class OfferInsuranceState(GameState):
         if dealer_up_card.rank == Rank.ACE and game._allow_insurance:
             for player in game.players:
                 self.offer_insurance(game, player)
+
+        # Early surrender: offered before dealer peeks, so player can
+        # surrender even against a dealer blackjack.
+        if game.rules.can_early_surrender() and game.rules.should_dealer_peek():
+            for player in game.players:
+                if player.done or player.hand_done[0]:
+                    continue
+                action = player.decide_action(dealer_up_card=dealer_up_card)
+                if action == Action.SURRENDER:
+                    player.surrender()
+                    game.output(f"{player.name} takes early surrender.")
 
         # Check for dealer blackjack if dealer peeking is allowed
         if game.rules.should_dealer_peek():
@@ -324,17 +314,21 @@ class OfferInsuranceState(GameState):
 
         # Resolve player bets
         for player in game.players:
+            if player.hand_done[player.current_hand_index]:
+                continue  # Already resolved (e.g., early surrender)
             if player.current_hand.is_blackjack:
                 # Push
                 bet = player.bets[0]
                 player.payout(0, bet)
                 player.winner = ["draw"]
+                player.hand_done[player.current_hand_index] = True
                 game.output(
                     f"{player.name} and dealer both have blackjack. Push."
                 )
             else:
                 # Dealer wins
                 player.winner = ["dealer"]
+                player.hand_done[player.current_hand_index] = True
                 game.output(f"{player.name} loses to dealer's blackjack.")
 
 
@@ -643,8 +637,15 @@ class EndRoundState(GameState):
                     )
                 else:
                     # Fallback to classic rules
-                    # Check for Five-card Charlie first (automatic win unless dealer has blackjack)
-                    if game.rules.is_five_card_charlie(hand) and not dealer_blackjack:
+                    # Blackjack priority: natural 21 beats non-natural 21
+                    if dealer_blackjack and not player_blackjack:
+                        winner = "dealer"
+                    elif player_blackjack and not dealer_blackjack:
+                        winner = "player"
+                    elif dealer_blackjack and player_blackjack:
+                        winner = "draw"
+                    # Check for Five-card Charlie (automatic win unless dealer has blackjack)
+                    elif game.rules.is_five_card_charlie(hand) and not dealer_blackjack:
                         winner = "player"
                     elif player_hand_value > 21:
                         winner = "dealer"

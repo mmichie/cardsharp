@@ -783,6 +783,33 @@ class TestEarlySurrender:
         )
         assert result.is_surrender
 
+    def test_early_surrender_vs_dealer_blackjack(self, scenario):
+        """Early surrender works even when dealer has blackjack (before peek)."""
+        result = scenario(
+            player=["Th", "6s"],
+            dealer=["As", "Kd"],
+            rules={"allow_early_surrender": True, "dealer_peek": True},
+        )
+        # Player surrenders before peek discovers dealer BJ
+        assert result.is_surrender
+        assert result.money_change == -0.5  # half bet returned
+
+    def test_late_surrender_blocked_by_dealer_blackjack(self, scenario):
+        """Late surrender NOT available when dealer has blackjack (peek first)."""
+        result = scenario(
+            player=["Th", "6s"],
+            dealer=["As", "Kd"],
+            rules={
+                "allow_surrender": True,
+                "allow_early_surrender": False,
+                "dealer_peek": True,
+            },
+        )
+        # Peek finds dealer BJ before player can act -- round ends, full loss
+        assert result.dealer_blackjack
+        assert result.dealer_won
+        assert result.money_change == -1
+
     def test_all_surrender_disabled(self, scenario):
         """With all surrender types disabled, player must hit 16 vs A."""
         result = scenario(
@@ -797,6 +824,51 @@ class TestEarlySurrender:
         )
         assert not result.is_surrender
         assert result.player_value == 19
+
+
+# ---------------------------------------------------------------------------
+# Peek mode (no double-processing)
+# ---------------------------------------------------------------------------
+
+
+class TestDealerPeek:
+
+    def test_peek_dealer_blackjack_insurance_paid_once(self, scenario):
+        """With peek, insurance payout happens exactly once (not double-processed)."""
+        result = scenario(
+            player=["Th", "9h"],
+            dealer=["As", "Kd"],
+            rules={"allow_insurance": True, "dealer_peek": True},
+            accept_insurance=True,
+        )
+        assert result.dealer_blackjack
+        # Correct: bet=1 lost, insurance=0.5 cost, insurance pays 0.5*3=1.5.
+        # Net: -1 - 0.5 + 1.5 = 0 (break even).
+        # If double-processed, would be +1.5 (wrong).
+        assert result.money_change == 0
+
+    def test_peek_both_blackjack_push_paid_once(self, scenario):
+        """With peek, push payout happens exactly once."""
+        result = scenario(
+            player=["As", "Kh"],
+            dealer=["Ah", "Kd"],
+            rules={"dealer_peek": True},
+        )
+        assert result.is_push
+        # Push: bet returned exactly once. Net = 0.
+        # If double-processed, money would be +1 (wrong).
+        assert result.money_change == 0
+
+    def test_peek_player_blackjack_paid_once(self, scenario):
+        """With peek, player BJ is paid 3:2 exactly once."""
+        result = scenario(
+            player=["As", "Kh"],
+            dealer=["Th", "7d"],
+            rules={"dealer_peek": True, "blackjack_payout": 1.5},
+        )
+        assert result.player_blackjack
+        # 3:2 payout: net +1.5. If double-processed, would be +3.0.
+        assert result.money_change == 1.5
 
 
 # ---------------------------------------------------------------------------
