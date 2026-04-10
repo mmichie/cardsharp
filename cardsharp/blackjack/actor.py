@@ -65,6 +65,7 @@ class Player(SimplePlayer):
         self.bets = []
         self.insurance = 0
         self.total_bets = 0
+        self.initial_bets = 0
         self.total_winnings = 0
         self.hands = [BlackjackHand()]
         self.done = False
@@ -287,6 +288,7 @@ class Player(SimplePlayer):
         self.money -= amount
         self.bets = [amount]
         self.total_bets += amount
+        self.initial_bets += amount
 
     def buy_insurance(self, amount: int):
         """Attempts to buy insurance."""
@@ -336,6 +338,7 @@ class Player(SimplePlayer):
         self.blackjack = False
         self.winner = []
         self.total_bets = 0
+        self.initial_bets = 0
         self.total_winnings = 0
         self.current_hand_index = 0
         self.hand_done = [False]

@@ -45,7 +45,7 @@ def test_single_player_game():
     io_interface = DummyIOInterface()
     player_names = ["TestPlayer"]
 
-    earnings, bets, stats, shoe = play_game(
+    earnings, bets, _, stats, shoe = play_game(
         rules,
         io_interface,
         player_names,
@@ -68,7 +68,7 @@ def test_multiplayer_game_three_players():
     io_interface = DummyIOInterface()
     player_names = ["Alice", "Bob", "Charlie"]
 
-    earnings, bets, stats, shoe = play_game(
+    earnings, bets, _, stats, shoe = play_game(
         rules,
         io_interface,
         player_names,
@@ -97,7 +97,7 @@ def test_multiplayer_game_max_players():
     io_interface = DummyIOInterface()
     player_names = generate_player_names(7)
 
-    earnings, bets, stats, shoe = play_game(
+    earnings, bets, _, stats, shoe = play_game(
         rules,
         io_interface,
         player_names,
@@ -133,7 +133,7 @@ def test_multiplayer_independent_decisions():
     io_interface = DummyIOInterface()
     player_names = ["Player1", "Player2", "Player3"]
 
-    earnings, bets, stats, shoe = play_game(
+    earnings, bets, _, stats, shoe = play_game(
         rules,
         io_interface,
         player_names,
@@ -168,7 +168,7 @@ def test_card_counting_multiple_players_see_more_cards():
     # Track initial count
     initial_count = strategy_single.count
 
-    earnings_single, bets_single, stats_single, shoe_single = play_game(
+    earnings_single, bets_single, _, stats_single, shoe_single = play_game(
         rules,
         io_interface,
         ["Player"],
@@ -183,7 +183,7 @@ def test_card_counting_multiple_players_see_more_cards():
     random.seed(42)
     strategy_multi = CountingStrategy()
 
-    earnings_multi, bets_multi, stats_multi, shoe_multi = play_game(
+    earnings_multi, bets_multi, _, stats_multi, shoe_multi = play_game(
         rules,
         io_interface,
         generate_player_names(7),
@@ -219,7 +219,7 @@ def test_multiplayer_stats_aggregation():
     io_interface = DummyIOInterface()
     player_names = generate_player_names(5)
 
-    earnings, bets, stats, shoe = play_game(
+    earnings, bets, _, stats, shoe = play_game(
         rules,
         io_interface,
         player_names,
@@ -263,7 +263,7 @@ def test_multiplayer_different_outcomes():
     shoe = None  # Will be created on first play_game call
 
     for _ in range(10):
-        earnings, bets, stats, shoe = play_game(
+        earnings, bets, _, stats, shoe = play_game(
             rules,
             io_interface,
             player_names,
@@ -295,7 +295,7 @@ def test_multiplayer_betting_scales():
     for num_players in [1, 3, 7]:
         player_names = generate_player_names(num_players)
 
-        earnings, bets, stats, shoe = play_game(
+        earnings, bets, _, stats, shoe = play_game(
             rules,
             io_interface,
             player_names,
@@ -327,7 +327,7 @@ def test_multiplayer_preserves_shoe_state():
     initial_cards = shoe.cards_remaining
 
     # Play a round
-    earnings, bets, stats, shoe = play_game(
+    earnings, bets, _, stats, shoe = play_game(
         rules,
         io_interface,
         player_names,
@@ -343,7 +343,7 @@ def test_multiplayer_preserves_shoe_state():
 
     # Play another round with the same shoe
     second_round_start = shoe.cards_remaining
-    earnings2, bets2, stats2, shoe = play_game(
+    earnings2, bets2, _, stats2, shoe = play_game(
         rules,
         io_interface,
         player_names,

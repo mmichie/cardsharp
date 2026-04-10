@@ -446,6 +446,7 @@ def play_game(
 
     net_earnings = sum(player.money - initial_bankroll for player in game.players)
     total_bets = sum(player.total_bets for player in game.players)
+    initial_bets = sum(player.initial_bets for player in game.players)
 
     if isinstance(strategy, CountingStrategy) and game.shoe:
         # Detect reshuffle: cards_remaining goes UP when shoe reshuffles.
@@ -468,7 +469,7 @@ def play_game(
 
     game.reset()
 
-    return net_earnings, total_bets, game.stats.report(), game.shoe
+    return net_earnings, total_bets, initial_bets, game.stats.report(), game.shoe
 
 
 def play_game_batch(
@@ -511,7 +512,7 @@ def play_game_batch(
     total_bets = 0
 
     for _ in range(num_games):
-        game_earnings, game_bets, result, current_shoe = play_game(
+        game_earnings, game_bets, game_initial, result, current_shoe = play_game(
             rules, io_interface, player_names, strategy, shoe, initial_bankroll
         )
         shoe = current_shoe
@@ -539,6 +540,7 @@ def run_strategy_analysis(args, rules, initial_bankroll: int = 1000):
         name: {
             "net_earnings": 0,
             "total_bets": 0,
+            "initial_bets": 0,
             "wins": 0,
             "losses": 0,
             "draws": 0,
@@ -570,7 +572,7 @@ def run_strategy_analysis(args, rules, initial_bankroll: int = 1000):
 
     for game_number in range(args.num_games):
         for strategy_name, strategy in strategies.items():
-            earnings, total_bets, result, shoes[strategy_name] = play_game(
+            earnings, total_bets, init_bets, result, shoes[strategy_name] = play_game(
                 rules,
                 DummyIOInterface(),
                 player_names,
@@ -581,6 +583,7 @@ def run_strategy_analysis(args, rules, initial_bankroll: int = 1000):
 
             results[strategy_name]["net_earnings"] += earnings
             results[strategy_name]["total_bets"] += total_bets
+            results[strategy_name]["initial_bets"] += init_bets
             results[strategy_name]["wins"] += result["player_wins"]
             results[strategy_name]["losses"] += result["dealer_wins"]
             results[strategy_name]["draws"] += result["draws"]
@@ -607,9 +610,12 @@ def run_strategy_analysis(args, rules, initial_bankroll: int = 1000):
             win_rate = result["wins"] / total_games
             print(f"Win Rate: {win_rate:.2%}")
 
+        if result["initial_bets"] > 0:
+            edge_initial = (-result["net_earnings"] / result["initial_bets"]) * 100
+            print(f"Edge (initial wagers): {edge_initial:.2f}%")
         if result["total_bets"] > 0:
-            house_edge = (-result["net_earnings"] / result["total_bets"]) * 100
-            print(f"House Edge: {house_edge:.2f}%")
+            edge_total = (-result["net_earnings"] / result["total_bets"]) * 100
+            print(f"Edge (total action):   {edge_total:.2f}%")
 
     best_strategy = max(results, key=lambda x: results[x]["net_earnings"])
     worst_strategy = min(results, key=lambda x: results[x]["net_earnings"])
@@ -869,7 +875,7 @@ def main():
                 shuffle_count=args.shuffle_count,
             )
             for i in range(args.num_games):
-                earnings, bets, result, current_shoe = play_game(
+                earnings, bets, _, result, current_shoe = play_game(
                     rules,
                     DummyIOInterface(),
                     player_names,
