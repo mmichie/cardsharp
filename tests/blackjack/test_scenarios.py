@@ -966,6 +966,70 @@ class TestOBO:
 
 
 # ---------------------------------------------------------------------------
+# Ace handling and payout correctness
+# ---------------------------------------------------------------------------
+
+
+class TestAceEdgeCases:
+
+    def test_split_21_pays_1_to_1_not_3_to_2(self, scenario):
+        """Split aces + 10 = 21, but NOT natural blackjack. Pays 1:1.
+
+        If the engine incorrectly paid 3:2, money_change would be +3.
+        """
+        result = scenario(
+            player=["As", "Ac"],
+            dealer=["7h", "Td"],       # 17, stands
+            extra=["Kd", "Th"],        # split: A+K=21, A+T=21
+            rules={"allow_split": True},
+        )
+        assert result.player_won
+        # Two hands each winning 1:1 on a 1-unit bet = +2 total
+        assert result.money_change == 2
+
+    def test_dealer_ace_demotion_keeps_hitting(self, scenario):
+        """Dealer A+3 hits 8 -> ace demotes to 1 (hard 12), must keep hitting.
+
+        Tests that dealer correctly continues through soft->hard transition.
+        """
+        result = scenario(
+            player=["Th", "8h"],       # 18, stands
+            dealer=["Ah", "3d"],       # soft 14
+            extra=["8c", "7d"],        # dealer: soft14 +8=hard12 +7=hard19
+        )
+        assert result.dealer_value == 19
+        assert result.dealer_won
+
+    def test_soft_double_ace_demotion(self, scenario):
+        """Soft 18 doubles, gets 7 -> ace demotes to hard 15. Must stand.
+
+        Verifies hand value tracking through soft->hard on double down.
+        """
+        result = scenario(
+            player=["As", "7h"],       # soft 18
+            dealer=["3d", "Tc"],       # 13
+            extra=["7h", "4d"],        # player double(->15), dealer hit(->17)
+            rules={"allow_double_down": True},
+        )
+        assert result.player_value == 15
+        assert result.dealer_won
+        assert result.money_change == -2  # lost doubled bet
+
+    def test_multiple_aces_in_hand(self, scenario):
+        """A+5+A+4 = 21 with two aces (only one can be 11).
+
+        Tests multi-ace hand value: 11+5+1+4=21, not 11+5+11+4=31.
+        """
+        result = scenario(
+            player=["As", "5h"],       # soft 16
+            dealer=["Th", "8d"],       # 18
+            extra=["Ac", "4d"],        # hit A(->soft17), hit 4(->21)
+        )
+        assert result.player_value == 21
+        assert result.player_won
+
+
+# ---------------------------------------------------------------------------
 # Engine edge cases -- scenarios that could hide real bugs
 # ---------------------------------------------------------------------------
 
