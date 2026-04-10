@@ -6,13 +6,16 @@ no randomness, no statistics. Each test constructs a specific situation
 and asserts the strategy does the right thing.
 """
 
+import random
+
 import pytest
 from cardsharp.common.card import Card, Suit, Rank
-from cardsharp.common.testing import RiggedShoe, parse_card, cards
+from cardsharp.common.shoe import Shoe
+from cardsharp.common.testing import RiggedShoe, cards
 from cardsharp.blackjack.strategy import CountingStrategy, BasicStrategy
 from cardsharp.blackjack.action import Action
 from cardsharp.blackjack.actor import Player
-from cardsharp.blackjack.blackjack import BlackjackGame
+from cardsharp.blackjack.blackjack import BlackjackGame, play_game
 from cardsharp.blackjack.rules import Rules
 from cardsharp.blackjack.state import _state_placing_bets
 from cardsharp.common.io_interface import DummyIOInterface
@@ -495,3 +498,59 @@ class TestCountIntegration:
         # TC between 1 and 2 → 2x bet
         bet = strategy.get_bet_amount(10, 1000, 10000)
         assert bet == 40, f"Expected 4x bet at TC~1.37, got {bet}"
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: counting beats basic over same shoes
+# ---------------------------------------------------------------------------
+
+
+class TestCountingBeatsBasic:
+
+    def test_counting_outperforms_basic_over_same_shoes(self):
+        """Play 500 shoes with both strategies on identical card sequences.
+
+        This is the definitive test: same cards, different strategies.
+        Counting should earn significantly more than basic.
+        """
+        basic_earn = 0
+        counting_earn = 0
+        counting_initial_bets = 0
+        basic_initial_bets = 0
+        rules = Rules(min_bet=10, max_bet=1000)
+        io = DummyIOInterface()
+
+        for seed in range(500):
+            random.seed(seed)
+            shoe_b = Shoe(num_decks=1, penetration=0.75)
+            strat_b = BasicStrategy()
+
+            random.seed(seed)
+            shoe_c = Shoe(num_decks=1, penetration=0.75)
+            strat_c = CountingStrategy(num_decks=1)
+
+            for _ in range(20):
+                e, _, ib, _, s = play_game(
+                    rules, io, ["P"], strat_b, shoe_b, 10000
+                )
+                basic_earn += e
+                basic_initial_bets += ib
+                shoe_b = s
+
+                e, _, ib, _, s = play_game(
+                    rules, io, ["P"], strat_c, shoe_c, 10000
+                )
+                counting_earn += e
+                counting_initial_bets += ib
+                shoe_c = s
+
+        # Counting must earn more than basic
+        assert counting_earn > basic_earn, (
+            f"Counting ({counting_earn:+.0f}) should beat basic ({basic_earn:+.0f})"
+        )
+
+        # Counting should show a player edge on initial wagers
+        player_edge = counting_earn / counting_initial_bets
+        assert player_edge > 0, (
+            f"Counting should be profitable, got {player_edge:.4%} edge"
+        )
