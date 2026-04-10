@@ -728,14 +728,34 @@ class TestResplitting:
         assert result.actions_taken.count("split") == 2
         assert result.player_won
 
-    def test_cannot_resplit_when_disabled(self, scenario):
-        """With resplitting disabled, second pair can't be split."""
+    def test_unsplittable_pair_uses_hard_total(self, scenario):
+        """When max splits reached, pair is played as hard total (not blindly hit)."""
         result = scenario(
             player=["8h", "8d"],
             dealer=["6h", "Td"],
-            # Split: hand0=8h gets 8c=pair, hand1=8d gets Th=18
-            # Can't resplit, so hand0 has 8+8=16, hits
-            extra=["8c", "Th", "5h", "Kc"],  # hand0: 16+5=21, dealer busts
+            # Split: hand0=8h+8c (pair again!), hand1=8d+Th=18
+            # Can't resplit (disabled): hand0=8+8=16 vs 6 → stand (hard 16 vs 6)
+            # Dealer: 6+T=16, hits Kc → bust
+            extra=["8c", "Th", "Kc"],
+            rules={
+                "allow_split": True,
+                "allow_resplitting": False,
+            },
+        )
+        assert result.actions_taken.count("split") == 1
+        assert result.player_won
+        # Key: hand0 (8+8=16 vs 6) should stand, not hit
+        assert result.player_value == 16
+
+    def test_cannot_resplit_when_disabled(self, scenario):
+        """With resplitting disabled, second pair stands as hard total."""
+        result = scenario(
+            player=["8h", "8d"],
+            dealer=["6h", "Td"],
+            # Split: hand0=8h+8c=16, hand1=8d+Th=18
+            # Can't resplit: hand0 stands on 16 vs 6 (correct basic strategy)
+            # Dealer: 6+T=16, hits Kc -> bust
+            extra=["8c", "Th", "Kc"],
             rules={
                 "allow_split": True,
                 "allow_resplitting": False,

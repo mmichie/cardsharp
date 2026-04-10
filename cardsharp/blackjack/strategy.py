@@ -169,7 +169,7 @@ class BasicStrategy(Strategy):
             )
             action = Action.HIT  # Default to HIT if unknown symbol
 
-        final_action = self._get_valid_action(player, action, action_symbol)
+        final_action = self._get_valid_action(player, action, action_symbol, dealer_card)
 
         if final_action != action:
             decision_logger.logger.info(
@@ -178,7 +178,7 @@ class BasicStrategy(Strategy):
 
         return final_action
 
-    def _get_valid_action(self, player, action, action_symbol):
+    def _get_valid_action(self, player, action, action_symbol, dealer_card=None):
         valid_actions = player.valid_actions
 
         if action == Action.DOUBLE:
@@ -208,11 +208,24 @@ class BasicStrategy(Strategy):
         elif action == Action.SPLIT:
             if Action.SPLIT in valid_actions:
                 return Action.SPLIT
+            elif dealer_card is not None:
+                # Can't split -- re-evaluate as the hard total.
+                # E.g., 9,9 = Hard18 → Stand, not Hit.
+                hard_type = f"Hard{player.current_hand.value()}"
+                hard_symbol = self._get_action_from_strategy(hard_type, dealer_card)
+                try:
+                    hard_action = self._map_action_symbol(hard_symbol)
+                    if hard_action in valid_actions:
+                        return hard_action
+                except KeyError:
+                    pass
+                if Action.HIT in valid_actions:
+                    return Action.HIT
+                return Action.STAND
             else:
                 if Action.HIT in valid_actions:
                     return Action.HIT
-                else:
-                    return Action.STAND  # Fallback if HIT is not valid
+                return Action.STAND
 
         elif action in valid_actions:
             return action
