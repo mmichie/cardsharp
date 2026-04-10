@@ -12,7 +12,6 @@ from cardsharp.verification.events import EventType, EventEmitter, EventRecorder
 from cardsharp.verification.storage import SQLiteEventStore
 from cardsharp.verification.verifier import BlackjackVerifier
 from cardsharp.verification.statistics import StatisticalValidator
-from cardsharp.blackjack.state_events import patch_game_states
 
 
 class VerificationSystem:
@@ -38,9 +37,6 @@ class VerificationSystem:
         # Create verifiers
         self.verifier = BlackjackVerifier(self.event_store)
         self.statistical_validator = StatisticalValidator(self.event_store)
-
-        # Apply patches to game states
-        patch_game_states()
 
         # Create an event recorder
         self.event_recorder = EventRecorder()

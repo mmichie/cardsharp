@@ -9,7 +9,7 @@ import pytest
 import tempfile
 import sqlite3
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from cardsharp.verification.schema import initialize_database
 from cardsharp.verification.events import EventType, GameEvent, EventEmitter
@@ -22,10 +22,6 @@ from cardsharp.verification.main import (
     init_verification,
 )
 from cardsharp.blackjack.rules import Rules
-from cardsharp.blackjack.state_events import (
-    patch_game_states,
-    EventEmittingPlacingBetsState,
-)
 
 
 @pytest.fixture
@@ -393,44 +389,3 @@ def test_event_handling(verification_system):
     assert system.current_session_id is not None
 
 
-def test_state_event_emission():
-    """Test that state events are emitted correctly."""
-    # Apply state patches
-    patch_game_states()
-
-    # Create a mock game
-    game = MagicMock()
-    game.stats.games_played = 0
-    game.players = []
-
-    # Create an event state
-    state = EventEmittingPlacingBetsState()
-
-    # Create a listener
-    events = []
-
-    def listener(event):
-        events.append(event)
-
-    # Connect the listener
-    state.add_listener(EventType.BET_PLACED, listener)
-
-    # Set context
-    state.set_context(game, 1)
-
-    # Create a mock player
-    player = MagicMock()
-    player.name = "Test Player"
-
-    # Add the player to the game
-    game.players.append(player)
-
-    # Place a bet
-    with patch.object(state, "place_bet", wraps=state.place_bet):
-        state.place_bet(game, player, 10)
-
-    # Check that an event was emitted
-    assert len(events) == 1
-    assert events[0].event_type == EventType.BET_PLACED
-    assert events[0].data["player_name"] == "Test Player"
-    assert events[0].data["amount"] == 10
