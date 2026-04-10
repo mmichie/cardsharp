@@ -125,13 +125,15 @@ class TestBetSizing:
         s.decks_remaining = 1.0
         assert s.get_bet_amount(10, 1000, 10000) == 10
 
-    def test_2x_bet_at_tc_1(self):
+    def test_minimum_bet_at_tc_1(self):
+        """TC +1 is breakeven -- still bet minimum."""
         s = CountingStrategy(num_decks=1)
         s.count = 1
         s.decks_remaining = 1.0
-        assert s.get_bet_amount(10, 1000, 10000) == 20
+        assert s.get_bet_amount(10, 1000, 10000) == 10
 
     def test_4x_bet_at_tc_2(self):
+        """TC +2: ~0.5% player edge, start escalating."""
         s = CountingStrategy(num_decks=1)
         s.count = 2
         s.decks_remaining = 1.0
@@ -155,6 +157,13 @@ class TestBetSizing:
         s.decks_remaining = 1.0
         assert s.get_bet_amount(10, 1000, 10000) == 200
 
+    def test_20x_bet_at_tc_10(self):
+        """Max bet caps at 20x regardless of how high TC goes."""
+        s = CountingStrategy(num_decks=1)
+        s.count = 10
+        s.decks_remaining = 1.0
+        assert s.get_bet_amount(10, 1000, 10000) == 200
+
     def test_bet_capped_at_max_bet(self):
         s = CountingStrategy(num_decks=1)
         s.count = 10
@@ -168,7 +177,7 @@ class TestBetSizing:
         assert s.get_bet_amount(10, 1000, 50) == 50
 
     def test_half_deck_amplifies_true_count(self):
-        """RC=2 with 0.5 decks remaining → TC=4 → 12x bet."""
+        """RC=2 with 0.5 decks remaining -> TC=4 -> 12x bet."""
         s = CountingStrategy(num_decks=1)
         s.count = 2
         s.decks_remaining = 0.5
@@ -495,9 +504,9 @@ class TestCountIntegration:
         # TC = 8 / 5.85 ≈ 1.37
         assert strategy.true_count > 1.0
 
-        # TC between 1 and 2 → 2x bet
+        # TC ~1.37 truncates to 1 → minimum bet (need TC >= 2 to escalate)
         bet = strategy.get_bet_amount(10, 1000, 10000)
-        assert bet == 40, f"Expected 4x bet at TC~1.37, got {bet}"
+        assert bet == 10, f"Expected minimum bet at TC~1.37, got {bet}"
 
 
 # ---------------------------------------------------------------------------

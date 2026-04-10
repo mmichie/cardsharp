@@ -273,21 +273,27 @@ class CountingStrategy(BasicStrategy):
     def get_bet_amount(
         self, min_bet: float, max_bet: float, player_money: float
     ) -> float:
-        """Determine bet amount based on current count."""
+        """Determine bet amount based on current true count.
+
+        Standard bet ramp: minimum at TC <= +1 (house still has edge),
+        escalate from TC +2 where the player edge begins. Each TC point
+        is worth ~0.5% advantage.
+        """
         self.calculate_true_count()
 
-        if self.true_count <= 0:
-            bet_multiplier = 1
-        elif self.true_count <= 1:
-            bet_multiplier = 2
-        elif self.true_count <= 2:
-            bet_multiplier = 4
-        elif self.true_count <= 3:
-            bet_multiplier = 8
-        elif self.true_count <= 4:
-            bet_multiplier = 12
+        # Truncate TC toward zero (standard Hi-Lo convention)
+        tc = int(self.true_count) if self.true_count >= 0 else -int(-self.true_count)
+
+        if tc <= 1:
+            bet_multiplier = 1    # House edge or breakeven -- bet minimum
+        elif tc == 2:
+            bet_multiplier = 4    # ~0.5% player edge
+        elif tc == 3:
+            bet_multiplier = 8    # ~1.0% player edge
+        elif tc == 4:
+            bet_multiplier = 12   # ~1.5% player edge
         else:
-            bet_multiplier = min(20, int(self.true_count * 4))
+            bet_multiplier = 20   # TC 5+ : ~2%+ player edge, max bet
 
         bet = min_bet * bet_multiplier
         return min(bet, max_bet, player_money)
