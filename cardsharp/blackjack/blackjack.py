@@ -510,9 +510,6 @@ def play_game_batch(
     earnings = []
     total_bets = 0
 
-    # Track cards remaining to detect shuffles
-    prev_cards_remaining = shoe.cards_remaining
-
     for _ in range(num_games):
         game_earnings, game_bets, result, current_shoe = play_game(
             rules, io_interface, player_names, strategy, shoe, initial_bankroll
@@ -521,14 +518,7 @@ def play_game_batch(
         results.append(result)
         earnings.append(game_earnings)
         total_bets += game_bets
-
-        # Check if shoe was shuffled (cards remaining increased)
-        if isinstance(strategy, CountingStrategy) and shoe:
-            curr_cards_remaining = shoe.cards_remaining
-            if curr_cards_remaining > prev_cards_remaining:
-                # Shoe was shuffled, reset count
-                strategy.reset_count()
-            prev_cards_remaining = curr_cards_remaining
+        # Shuffle detection and count updates are handled inside play_game.
 
     return results, earnings, total_bets
 
