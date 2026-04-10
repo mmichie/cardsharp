@@ -671,9 +671,7 @@ def run_strategy_analysis(args, rules, initial_bankroll: int = 1000):
             print(f"Win Rate: {win_rate:.2%}")
 
         if result["total_bets"] > 0:
-            house_edge = (
-                (result["total_bets"] - result["net_earnings"]) / result["total_bets"]
-            ) * 100
+            house_edge = (-result["net_earnings"] / result["total_bets"]) * 100
             print(f"House Edge: {house_edge:.2f}%")
 
     best_strategy = max(results, key=lambda x: results[x]["net_earnings"])

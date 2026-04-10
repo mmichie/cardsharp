@@ -17,61 +17,41 @@ class Strategy(ABC):
 
     @abstractmethod
     def decide_insurance(self, player) -> bool:
-        """Decide whether to buy insurance. Returns True if the player wants to buy insurance."""
+        """Decide whether to buy insurance."""
         pass
 
     def get_bet_amount(
         self, min_bet: float, max_bet: float, player_money: float
     ) -> float:
-        """
-        Determine bet amount for next hand. Called BEFORE cards are dealt.
-        Default implementation returns minimum bet.
-        """
+        """Determine bet amount for next hand. Called BEFORE cards are dealt."""
         return min_bet
 
     def receive_exposed_card_info(self, card: Card) -> None:
-        """
-        Receives information about a card that has been accidentally exposed.
-
-        This method can be overridden by strategies that can take advantage of exposed card information.
-
-        Args:
-            card: The Card object that was exposed
-
-        Returns:
-            None
-        """
-        # Default implementation does nothing with the exposed card
+        """Receives information about a card that has been accidentally exposed."""
         pass
 
     def get_advantage(self, game_state=None) -> float:
-        """
-        Returns the player's estimated advantage in the current situation.
-
-        This method can be overridden by strategies that can calculate their edge.
-
-        Args:
-            game_state: Current game state (optional)
-
-        Returns:
-            Float representing player advantage as a decimal (e.g., 0.01 = 1% advantage)
-        """
-        # Default implementation assumes slight house edge
+        """Returns the player's estimated advantage as a decimal (e.g., 0.01 = 1%)."""
         return -0.005
 
 
 class DealerStrategy(Strategy):
+    """Dealer plays by fixed rules: hit below 17, hit soft 17, stand otherwise.
+
+    Note: actual dealer play in the engine uses rules.should_dealer_hit()
+    which respects the dealer_hit_soft_17 setting. This strategy is only
+    used when a Dealer actor is treated as a regular player.
+    """
+
     def decide_action(self, player, dealer_up_card=None, game=None) -> Action:
         if player.is_busted():
             return Action.STAND
-        if player.current_hand.value() < 17 or (
-            player.current_hand.value() == 17 and player.current_hand.is_soft
-        ):
+        hand = player.current_hand
+        if hand.value() < 17 or (hand.value() == 17 and hand.is_soft):
             return Action.HIT
-        else:
-            return Action.STAND
+        return Action.STAND
 
-    def decide_insurance(self, player):
+    def decide_insurance(self, player) -> bool:
         return False
 
 
@@ -83,26 +63,18 @@ class BasicStrategy(Strategy):
             )
         self.strategy = self._load_strategy(strategy_file)
         self.dealer_indexes = {
-            "2": 0,
-            "3": 1,
-            "4": 2,
-            "5": 3,
-            "6": 4,
-            "7": 5,
-            "8": 6,
-            "9": 7,
-            "10": 8,
-            "A": 9,
+            "2": 0, "3": 1, "4": 2, "5": 3, "6": 4,
+            "7": 5, "8": 6, "9": 7, "10": 8, "A": 9,
         }
 
     def _load_strategy(self, strategy_file):
         strategy = {}
         with open(strategy_file, "r") as f:
             reader = csv.reader(f)
-            _ = next(reader)  # Skip header row
+            next(reader)  # Skip header row
             for row in reader:
                 hand_type = row[0]
-                actions = [action.strip() for action in row[1:]]  # Strip whitespace
+                actions = [action.strip() for action in row[1:]]
                 strategy[hand_type] = actions
         return strategy
 
@@ -116,11 +88,9 @@ class BasicStrategy(Strategy):
             else:
                 return f"Pair{get_blackjack_value(rank)}"
         elif hand.is_soft:
-            value = hand.value()
-            return f"Soft{value}"
+            return f"Soft{hand.value()}"
         else:
-            value = hand.value()
-            return f"Hard{value}"
+            return f"Hard{hand.value()}"
 
     def _get_dealer_card(self, dealer_up_card):
         rank = dealer_up_card.rank
@@ -134,13 +104,9 @@ class BasicStrategy(Strategy):
     def _get_action_from_strategy(self, hand_type, dealer_card):
         dealer_index = self.dealer_indexes[dealer_card]
         actions = self.strategy.get(hand_type, [])
-        if actions:
-            if dealer_index < len(actions):
-                return actions[dealer_index]
-            else:
-                return "H"  # Default to Hit if index out of bounds
-        else:
-            return "H"  # Default to Hit if hand type not found
+        if actions and dealer_index < len(actions):
+            return actions[dealer_index]
+        return "H"  # Default to Hit if hand type not found or index out of bounds
 
     def _map_action_symbol(self, symbol):
         mapping = {
@@ -167,7 +133,7 @@ class BasicStrategy(Strategy):
             decision_logger.logger.warning(
                 f"Unknown action symbol: {action_symbol}, defaulting to HIT"
             )
-            action = Action.HIT  # Default to HIT if unknown symbol
+            action = Action.HIT
 
         final_action = self._get_valid_action(player, action, action_symbol, dealer_card)
 
@@ -184,33 +150,22 @@ class BasicStrategy(Strategy):
         if action == Action.DOUBLE:
             if Action.DOUBLE in valid_actions:
                 return Action.DOUBLE
-            else:
-                if action_symbol == "DS":
-                    if Action.STAND in valid_actions:
-                        return Action.STAND
-                    else:
-                        return Action.HIT  # Fallback to HIT if STAND not possible
-                else:
-                    if Action.HIT in valid_actions:
-                        return Action.HIT
-                    else:
-                        return Action.STAND  # Fallback if HIT is not valid
+            # DS = Double if allowed, otherwise Stand
+            if action_symbol == "DS":
+                return Action.STAND if Action.STAND in valid_actions else Action.HIT
+            return Action.HIT if Action.HIT in valid_actions else Action.STAND
 
-        elif action == Action.SURRENDER:
+        if action == Action.SURRENDER:
             if Action.SURRENDER in valid_actions:
                 return Action.SURRENDER
-            else:
-                if Action.HIT in valid_actions:
-                    return Action.HIT
-                else:
-                    return Action.STAND  # Fallback if HIT is not valid
+            return Action.HIT if Action.HIT in valid_actions else Action.STAND
 
-        elif action == Action.SPLIT:
+        if action == Action.SPLIT:
             if Action.SPLIT in valid_actions:
                 return Action.SPLIT
-            elif dealer_card is not None:
-                # Can't split -- re-evaluate as the hard total.
-                # E.g., 9,9 = Hard18 → Stand, not Hit.
+            # Can't split -- re-evaluate as the hard total.
+            # E.g., 9,9 = Hard18 -> Stand, not Hit.
+            if dealer_card is not None:
                 hard_type = f"Hard{player.current_hand.value()}"
                 hard_symbol = self._get_action_from_strategy(hard_type, dealer_card)
                 try:
@@ -219,253 +174,127 @@ class BasicStrategy(Strategy):
                         return hard_action
                 except KeyError:
                     pass
-                if Action.HIT in valid_actions:
-                    return Action.HIT
-                return Action.STAND
-            else:
-                if Action.HIT in valid_actions:
-                    return Action.HIT
-                return Action.STAND
+            return Action.HIT if Action.HIT in valid_actions else Action.STAND
 
-        elif action in valid_actions:
+        if action in valid_actions:
             return action
 
-        else:
-            # If the recommended action is not valid, default to HIT or STAND
-            if Action.HIT in valid_actions:
-                return Action.HIT
-            elif Action.STAND in valid_actions:
-                return Action.STAND
-            else:
-                # As a last resort, return any available action
-                return valid_actions[0]
-
-    def _is_action_valid(self, player, action):
-        if action == Action.DOUBLE:
-            return player.current_hand.can_double
-        elif action == Action.SPLIT:
-            return player.current_hand.can_split
-        elif action == Action.SURRENDER:
-            return (
-                len(player.current_hand.cards) == 2
-            )  # Can only surrender with two cards
-        else:
-            # HIT and STAND are always valid
-            return True
+        # Last resort fallback
+        if Action.HIT in valid_actions:
+            return Action.HIT
+        if Action.STAND in valid_actions:
+            return Action.STAND
+        return valid_actions[0]
 
     def decide_insurance(self, player) -> bool:
-        """Basic strategy does not recommend taking insurance."""
+        """Basic strategy never takes insurance."""
         return False
 
 
+# Illustrious 18 deviations for card counting.
+# Format: (hand_value, is_soft, dealer_up_value, tc_threshold, action_above, action_below)
+_COUNTING_DEVIATIONS = [
+    (16, False, 10, 0, Action.STAND, Action.HIT),    # Stand 16 vs 10 at TC >= 0
+    (15, False, 10, 4, Action.STAND, Action.HIT),    # Stand 15 vs 10 at TC >= 4
+    (12, False, 3, 2, Action.STAND, Action.HIT),     # Stand 12 vs 3 at TC >= 2
+    (12, False, 2, 3, Action.STAND, Action.HIT),     # Stand 12 vs 2 at TC >= 3
+    (11, False, 11, 1, Action.DOUBLE, None),          # Double 11 vs A at TC >= 1
+    (9, False, 2, 1, Action.DOUBLE, None),            # Double 9 vs 2 at TC >= 1
+    (10, False, 10, 4, Action.DOUBLE, None),          # Double 10 vs 10 at TC >= 4
+    (9, False, 7, 3, Action.DOUBLE, None),            # Double 9 vs 7 at TC >= 3
+    (13, False, 2, -1, None, Action.HIT),             # Hit 13 vs 2 at TC < -1
+    (12, False, 4, 0, None, Action.HIT),              # Hit 12 vs 4 at TC < 0
+    (12, False, 5, -2, None, Action.HIT),             # Hit 12 vs 5 at TC < -2
+    (12, False, 6, -1, None, Action.HIT),             # Hit 12 vs 6 at TC < -1
+    (13, False, 3, -2, None, Action.HIT),             # Hit 13 vs 3 at TC < -2
+]
+
+
 class CountingStrategy(BasicStrategy):
-    def __init__(self):
+    def __init__(self, num_decks=6):
         super().__init__()
         self.count = 0
         self.true_count: float = 0
-        self.decks_remaining = 6  # Assume 6 decks by default
-        self.exposed_cards = []  # Track cards that have been accidentally exposed
-        self.advantage_factor = 0.0  # Additional advantage from exposed cards
-        self.counted_cards = set()  # Track which cards we've already counted
+        self.initial_decks = num_decks
+        self.decks_remaining: float = num_decks
+        self.exposed_cards: list = []
+        self.advantage_factor = 0.0
+        self.counted_cards: set = set()
 
     def update_count(self, card: Card):
-        if card.rank in [Rank.TWO, Rank.THREE, Rank.FOUR, Rank.FIVE, Rank.SIX]:
+        if card.rank in (Rank.TWO, Rank.THREE, Rank.FOUR, Rank.FIVE, Rank.SIX):
             self.count += 1
-        elif card.rank in [Rank.TEN, Rank.JACK, Rank.QUEEN, Rank.KING, Rank.ACE]:
+        elif card.rank in (Rank.TEN, Rank.JACK, Rank.QUEEN, Rank.KING, Rank.ACE):
             self.count -= 1
 
     def calculate_true_count(self):
-        self.true_count = self.count / max(1, self.decks_remaining)
+        self.true_count = self.count / max(0.5, self.decks_remaining)
 
     def receive_exposed_card_info(self, card: Card) -> None:
-        """
-        Adjust strategy based on exposed card information.
-
-        Args:
-            card: The Card object that was exposed
-        """
-        # Add to exposed cards list
         self.exposed_cards.append(card)
-
-        # Update count
         self.update_count(card)
-
-        # Increase advantage factor - seeing dealer hole card is a huge advantage
-        self.advantage_factor += 0.05  # 5% advantage from seeing a key card
+        self.advantage_factor += 0.05
 
     def get_advantage(self, game_state=None) -> float:
-        """
-        Calculate player advantage based on card counting.
-
-        Returns:
-            Float representing player advantage
-        """
-        # Calculate advantage from card counting
         self.calculate_true_count()
-
-        # Base advantage starts with house edge
-        base_advantage = -0.005  # 0.5% house edge
-
-        # Adjust based on count - each true count point is worth ~0.5% in player advantage
+        base_advantage = -0.005
         count_advantage = self.true_count * 0.005
+        return base_advantage + count_advantage + self.advantage_factor
 
-        # Add advantage from exposed cards
-        total_advantage = base_advantage + count_advantage + self.advantage_factor
+    def decide_action(self, player, dealer_up_card: Card, game=None) -> Action:
+        if game is not None:
+            for card in game.visible_cards:
+                card_id = id(card)
+                if card_id not in self.counted_cards:
+                    self.update_count(card)
+                    self.counted_cards.add(card_id)
 
-        return total_advantage
-
-    def decide_action(self, player, dealer_up_card: Card, game) -> Action:
-        # Update count based on NEW visible cards only
-        for card in game.visible_cards:
-            card_id = id(card)
-            if card_id not in self.counted_cards:
-                self.update_count(card)
-                self.counted_cards.add(card_id)
-
-        # Calculate true count
         self.calculate_true_count()
-
-        # DO NOT adjust bet here - bets must be placed before cards are dealt!
-
-        # Apply count-based play deviations
         return self._count_based_decision(player, dealer_up_card, game)
 
     def _count_based_decision(self, player, dealer_up_card: Card, game) -> Action:
-        """
-        Apply the Illustrious 18 - the most important play deviations based on count.
-        These deviations from basic strategy provide most of the advantage from counting.
-        """
+        """Apply the Illustrious 18 count-based play deviations."""
         hand_value = player.current_hand.value()
         is_soft = player.current_hand.is_soft
         dealer_value = get_blackjack_value(dealer_up_card.rank)
 
-        # Insurance deviation - most important
-        if hasattr(self, "_deciding_insurance") and self._deciding_insurance:
-            # Take insurance at TC >= 3 (traditional threshold)
-            if self.true_count >= 3:
-                return True  # This is for insurance decision
-
-        # Play deviations based on true count
-        # Format: (hand_value, is_soft, dealer_up, tc_threshold, action_if_above, action_if_below)
-        deviations = [
-            # Stand on 16 vs 10 at TC >= 0 (normally hit)
-            (16, False, 10, 0, Action.STAND, Action.HIT),
-            # Stand on 15 vs 10 at TC >= 4
-            (15, False, 10, 4, Action.STAND, Action.HIT),
-            # Stand on hard 12 vs 3 at TC >= 2 (normally hit)
-            (12, False, 3, 2, Action.STAND, Action.HIT),
-            # Stand on hard 12 vs 2 at TC >= 3
-            (12, False, 2, 3, Action.STAND, Action.HIT),
-            # Double 11 vs A at TC >= 1 (normally hit)
-            (11, False, 11, 1, Action.DOUBLE, None),  # 11 for Ace
-            # Double 9 vs 2 at TC >= 1
-            (9, False, 2, 1, Action.DOUBLE, None),
-            # Double 10 vs 10 at TC >= 4
-            (10, False, 10, 4, Action.DOUBLE, None),
-            # Double 9 vs 7 at TC >= 3
-            (9, False, 7, 3, Action.DOUBLE, None),
-            # Hit 13 vs 2 at TC < -1 (normally stand)
-            (13, False, 2, -1, None, Action.HIT),
-            # Hit 12 vs 4 at TC < 0 (normally stand)
-            (12, False, 4, 0, None, Action.HIT),
-            # Hit 12 vs 5 at TC < -2
-            (12, False, 5, -2, None, Action.HIT),
-            # Hit 12 vs 6 at TC < -1
-            (12, False, 6, -1, None, Action.HIT),
-            # Hit 13 vs 3 at TC < -2
-            (13, False, 3, -2, None, Action.HIT),
-        ]
-
-        # Check if any deviation applies
-        for hand, soft, dealer, tc_threshold, action_above, action_below in deviations:
+        for hand, soft, dealer, tc_threshold, action_above, action_below in _COUNTING_DEVIATIONS:
             if hand_value == hand and is_soft == soft and dealer_value == dealer:
                 if action_above and self.true_count >= tc_threshold:
-                    # Check if action is valid
-                    if (
-                        action_above == Action.DOUBLE
-                        and not player.current_hand.can_double
-                    ):
-                        # If can't double, hit instead
+                    if action_above == Action.DOUBLE and not player.current_hand.can_double:
                         return Action.HIT
                     return action_above
-                elif action_below and self.true_count < tc_threshold:
+                if action_below and self.true_count < tc_threshold:
                     return action_below
-
-        # High positive count aggressive play
-        if self.true_count > 2:
-            return self.aggressive_strategy(player, dealer_up_card, game)
 
         # Default to basic strategy
         return super().decide_action(player, dealer_up_card, game)
 
-    def aggressive_strategy(self, player, dealer_up_card: Card, game) -> Action:
-        # More aggressive play decisions when the count is high
-        if (
-            self.true_count >= 4
-        ):  # Strongly positive count indicates more high cards are present
-            if player.current_hand.can_double and player.current_hand.value() in [
-                9,
-                10,
-                11,
-            ]:
-                return Action.DOUBLE
-            elif player.current_hand.value() <= 16:
-                return Action.HIT
-        return super().decide_action(
-            player, dealer_up_card, game
-        )  # Default to basic strategy otherwise
-
     def get_bet_amount(
         self, min_bet: float, max_bet: float, player_money: float
     ) -> float:
-        """
-        Determine bet amount based on current count.
-        This is called BEFORE cards are dealt.
-
-        With CSM, the count is meaningless but the strategy doesn't know this,
-        so it will bet high on false signals and lose more.
-        """
-        # Calculate true count before betting
+        """Determine bet amount based on current count."""
         self.calculate_true_count()
 
-        # Aggressive betting spread based on true count
-        # Professional counters use wider spreads for better advantage
-        if self.true_count <= -2:
-            # Very negative count - bet minimum or consider sitting out
-            bet_multiplier = 1
-        elif self.true_count <= -1:
-            # Slightly negative - still minimum
-            bet_multiplier = 1
-        elif self.true_count <= 0:
-            # Neutral count
+        if self.true_count <= 0:
             bet_multiplier = 1
         elif self.true_count <= 1:
-            # Slightly positive - small increase
             bet_multiplier = 2
         elif self.true_count <= 2:
-            # Moderately positive
             bet_multiplier = 4
         elif self.true_count <= 3:
-            # Good count
             bet_multiplier = 8
         elif self.true_count <= 4:
-            # Very good count
             bet_multiplier = 12
         else:
-            # Excellent count - maximum bet
-            bet_multiplier = min(20, self.true_count * 4)  # Cap at 20x
+            bet_multiplier = min(20, int(self.true_count * 4))
 
         bet = min_bet * bet_multiplier
-
-        # Ensure bet doesn't exceed limits
-        bet = min(bet, max_bet, player_money)
-
-        return bet
+        return min(bet, max_bet, player_money)
 
     def decide_insurance(self, player) -> bool:
         """Take insurance when true count >= 3."""
         self.calculate_true_count()
-        # Insurance becomes profitable at TC >= 3
         return self.true_count >= 3
 
     def notify_shuffle(self):
@@ -473,20 +302,15 @@ class CountingStrategy(BasicStrategy):
         self.reset_count()
 
     def update_decks_remaining(self, cards_played):
-        # Don't assume 6 decks - use initial deck count
-        total_cards = (
-            52 * self.decks_remaining if hasattr(self, "_initial_decks") else 52 * 6
-        )
-        self.decks_remaining = max(
-            0.5, (total_cards - cards_played) / 52
-        )  # Never go below 0.5 decks
+        total_cards = 52 * self.initial_decks
+        self.decks_remaining = max(0.5, (total_cards - cards_played) / 52)
 
     def reset_count(self):
         """Reset the count at the start of a new shoe."""
         self.count = 0
         self.true_count = 0.0
-        self.decks_remaining = 6  # Reset to initial number of decks
-        self.counted_cards.clear()  # Clear counted cards tracking
+        self.decks_remaining = float(self.initial_decks)
+        self.counted_cards.clear()
 
 
 class MartingaleStrategy(BasicStrategy):
@@ -494,45 +318,32 @@ class MartingaleStrategy(BasicStrategy):
         super().__init__()
         self.initial_bet = initial_bet
         self.current_bet = initial_bet
-        self.max_bet_override = max_bet_override  # None means use table max
+        self.max_bet_override = max_bet_override
         self.consecutive_losses = 0
-        self.last_money = 1000  # Track money to detect wins/losses
+        self.last_money = 1000
         self.last_bet = initial_bet
 
     def decide_action(self, player, dealer_up_card: Card, game=None) -> Action:
-        # Check result of previous hand by comparing money
         if hasattr(player, 'money'):
             money_change = player.money - self.last_money
-            
-            # Update bet based on result
-            if money_change > 0:  # Won
+
+            if money_change > 0:
                 self.current_bet = self.initial_bet
                 self.consecutive_losses = 0
-            elif money_change < -self.last_bet / 2:  # Lost (not just the bet deduction)
+            elif money_change < -self.last_bet / 2:
                 self.consecutive_losses += 1
                 self.current_bet = self.current_bet * 2
-            # Else pushed or new game - keep same bet
-            
+
             self.last_money = player.money
-        
-        # Use the BasicStrategy to decide the action
+
         return super().decide_action(player, dealer_up_card, game)
-    
+
     def get_bet_amount(self, min_bet: float, max_bet: float, player_money: float) -> float:
-        """
-        Implement Martingale betting system.
-        Double bet after loss, reset to initial after win.
-        """
-        # Use table max if no override specified
+        """Martingale: double bet after loss, reset to initial after win."""
         effective_max = self.max_bet_override if self.max_bet_override is not None else max_bet
-        
-        # Ensure bet is within all limits
         bet = max(min_bet, min(self.current_bet, effective_max, player_money))
-        
-        # Track this bet amount
         self.last_bet = bet
-        self.last_money = player_money - bet  # Money after bet is placed
-        
+        self.last_money = player_money - bet
         return bet
 
     def reset_bet(self):
@@ -541,40 +352,22 @@ class MartingaleStrategy(BasicStrategy):
 
 
 class AggressiveStrategy(BasicStrategy):
-    """
-    An aggressive blackjack strategy that takes more risks, hits more often,
-    and doubles down more frequently.
-    """
+    """An aggressive strategy that hits more often and doubles down more frequently."""
 
     def decide_action(self, player, dealer_up_card: Card, game=None) -> Action:
-        """
-        Decides the action to take based on the player's hand and the dealer's up card.
-
-        Args:
-            player: The player instance.
-            dealer_up_card (Card): The dealer's up card.
-            game: The game instance (optional).
-
-        Returns:
-            Action: The action to take.
-        """
         current_hand = player.current_hand
         if current_hand.is_blackjack:
             return Action.STAND
 
-        actions = [
+        for action_method in (
             self._decide_on_split,
             self._decide_on_double,
-            self._decide_on_surrender,
             self._decide_on_stand_or_hit,
-        ]
-
-        for action_method in actions:
+        ):
             action = action_method(current_hand, dealer_up_card)
             if action is not None:
                 return action
 
-        # If no action was decided, default to hit
         return Action.HIT
 
     def _decide_on_split(self, current_hand, dealer_up_card: Card) -> Optional[Action]:
@@ -584,21 +377,12 @@ class AggressiveStrategy(BasicStrategy):
         player_rank = current_hand.cards[0].rank
         dealer_rank = get_blackjack_value(dealer_up_card.rank)
 
-        # Always split Aces and 8s
-        if player_rank in [Rank.ACE, Rank.EIGHT]:
+        if player_rank in (Rank.ACE, Rank.EIGHT):
             return Action.SPLIT
-
-        # Split 2s, 3s, 6s, 7s against dealer 2-7
-        if (
-            player_rank in [Rank.TWO, Rank.THREE, Rank.SIX, Rank.SEVEN]
-            and dealer_rank <= 7
-        ):
+        if player_rank in (Rank.TWO, Rank.THREE, Rank.SIX, Rank.SEVEN) and dealer_rank <= 7:
             return Action.SPLIT
-
-        # Split 9s against dealer 2-9, except 7
         if player_rank == Rank.NINE and dealer_rank <= 9 and dealer_rank != 7:
             return Action.SPLIT
-
         return None
 
     def _decide_on_double(self, current_hand, dealer_up_card: Card) -> Optional[Action]:
@@ -608,20 +392,10 @@ class AggressiveStrategy(BasicStrategy):
         hand_value = current_hand.value()
         dealer_rank = get_blackjack_value(dealer_up_card.rank)
 
-        # Double down on hard 9-11 against dealer 2-9
         if 9 <= hand_value <= 11 and dealer_rank <= 9:
             return Action.DOUBLE
-
-        # Double down on soft 13-18 against dealer 2-6
         if current_hand.is_soft and 13 <= hand_value <= 18 and dealer_rank <= 6:
             return Action.DOUBLE
-
-        return None
-
-    def _decide_on_surrender(
-        self, current_hand, dealer_up_card: Card
-    ) -> Optional[Action]:
-        # Aggressive strategy rarely surrenders
         return None
 
     def _decide_on_stand_or_hit(self, current_hand, dealer_up_card: Card) -> Action:
@@ -629,20 +403,14 @@ class AggressiveStrategy(BasicStrategy):
         dealer_rank = get_blackjack_value(dealer_up_card.rank)
 
         if current_hand.is_soft:
-            # Always hit soft 17 or lower
             if hand_value <= 17:
                 return Action.HIT
-            # Hit soft 18 against dealer 9, 10, or Ace
-            elif hand_value == 18 and dealer_rank >= 9:
+            if hand_value == 18 and dealer_rank >= 9:
                 return Action.HIT
-            else:
-                return Action.STAND
+            return Action.STAND
         else:
-            # Always hit 11 or lower
             if hand_value <= 11:
                 return Action.HIT
-            # Hit 12-16 against dealer 7 or higher
-            elif 12 <= hand_value <= 16 and dealer_rank >= 7:
+            if 12 <= hand_value <= 16 and dealer_rank >= 7:
                 return Action.HIT
-            else:
-                return Action.STAND
+            return Action.STAND
