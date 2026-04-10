@@ -14,6 +14,7 @@ For example, `--console` runs the game in interactive console mode,
 """
 
 import argparse
+import logging
 import multiprocessing
 import time
 import cProfile
@@ -21,14 +22,12 @@ import pstats
 import io
 import matplotlib.pyplot as plt
 import threading
-from copy import deepcopy
 import os
 
 from cardsharp.blackjack.actor import Dealer, Player
 from cardsharp.blackjack.state import (
     STATE_END_ROUND,
     STATE_WAITING,
-    PlacingBetsState,
     _state_waiting,
     _state_placing_bets,
 )
@@ -46,6 +45,7 @@ from cardsharp.common.io_interface import (
     LoggingIOInterface,
 )
 from cardsharp.blackjack.rules import Rules
+from cardsharp.blackjack.decision_logger import decision_logger
 from typing import Optional
 
 
@@ -430,8 +430,7 @@ def play_game(
     Function to play a single game of Blackjack, to be executed in a separate process.
     Now accepts an optional shoe parameter and initial bankroll.
     """
-    # Track initial cut card state
-    initial_cut_card_state = shoe.is_cut_card_reached() if shoe else False
+    cards_before = shoe.cards_remaining if shoe else None
 
     players = [
         Player(name, io_interface, strategy, initial_money=initial_bankroll)
@@ -448,14 +447,24 @@ def play_game(
     net_earnings = sum(player.money - initial_bankroll for player in game.players)
     total_bets = sum(player.total_bets for player in game.players)
 
-    if isinstance(strategy, CountingStrategy):
-        strategy.update_decks_remaining(len(game.visible_cards))
+    if isinstance(strategy, CountingStrategy) and game.shoe:
+        # Detect reshuffle: cards_remaining goes UP when shoe reshuffles.
+        # cards_before is None when no shoe was passed (first game).
+        reshuffled = cards_before is not None and game.shoe.cards_remaining > cards_before
 
-        # Check if shoe shuffled during this game (cut card was reached then reset)
-        final_cut_card_state = game.shoe.is_cut_card_reached() if game.shoe else False
-        if initial_cut_card_state and not final_cut_card_state:
-            # Shoe was shuffled during the game
+        if reshuffled:
             strategy.reset_count()
+
+        # Always count visible cards from this round (including dealer
+        # hits that happen after decide_action). After a reshuffle,
+        # these are the first cards from the fresh deck.
+        for card in game.visible_cards:
+            card_id = id(card)
+            if card_id not in strategy.counted_cards:
+                strategy.update_count(card)
+                strategy.counted_cards.add(card_id)
+
+        strategy.decks_remaining = max(0.5, game.shoe.cards_remaining / 52)
 
     game.reset()
 
@@ -524,91 +533,44 @@ def play_game_batch(
     return results, earnings, total_bets
 
 
-def play_game_and_record(
-    rules,
-    io_interface,
-    player_names,
-    strategy,
-    shoe: Optional[Shoe] = None,
-    initial_bankroll: int = 1000,
-):
-    """
-    Play a single game of Blackjack and record the card sequence.
-    Now accepts an optional shoe parameter and initial bankroll.
-    """
-    players = [
-        Player(name, io_interface, strategy, initial_money=initial_bankroll)
-        for name in player_names
-    ]
-    game = BlackjackGame(rules, io_interface, shoe)
-
-    for player in players:
-        game.add_player(player)
-
-    game.set_state(PlacingBetsState())
-
-    game.play_round()
-
-    earnings = sum(player.money - initial_bankroll for player in game.players)
-    total_bets = sum(sum(player.bets) for player in game.players)
-
-    return earnings, total_bets, game.stats.report(), game.shoe
-
-
-def replay_game_with_strategy(
-    rules, io_interface, player_names, strategy, shoe, initial_bankroll: int = 1000
-):
-    """
-    Replay a game with a specific strategy and shoe state.
-    """
-    players = [
-        Player(name, io_interface, strategy, initial_money=initial_bankroll)
-        for name in player_names
-    ]
-    game = BlackjackGame(rules, io_interface, shoe)
-
-    for player in players:
-        game.add_player(player)
-
-    game.set_state(_state_placing_bets)
-    game.play_round()
-
-    earnings = sum(player.money - initial_bankroll for player in game.players)
-    total_bets = sum(sum(player.bets) for player in game.players)
-
-    return earnings, total_bets, game.stats.report()
-
-
 def run_strategy_analysis(args, rules, initial_bankroll: int = 1000):
+    # Silence decision logging in analysis mode (same as simulate)
+    os.environ["BLACKJACK_DISABLE_LOGGING"] = "1"
+    decision_logger.set_level(logging.ERROR)
+
     strategies = {
         "Basic": BasicStrategy(),
-        "Counting": CountingStrategy(),
+        "Counting": CountingStrategy(num_decks=rules.num_decks),
         "Aggressive": AggressiveStrategy(),
         "Martingale": MartingaleStrategy(),
     }
 
     results = {
-        strategy: {
+        name: {
             "net_earnings": 0,
             "total_bets": 0,
             "wins": 0,
             "losses": 0,
             "draws": 0,
         }
-        for strategy in strategies
+        for name in strategies
     }
     player_names = generate_player_names(args.num_players)
 
-    # Initialize shoe once here instead of per game
-    initial_shoe = Shoe(
-        num_decks=rules.num_decks,
-        penetration=rules.penetration,
-        use_csm=rules.is_using_csm(),
-        burn_cards=rules.burn_cards,
-        deck_factory=rules.variant.create_deck if rules.variant else None,
-        shuffle_type=args.shuffle_type,
-        shuffle_count=args.shuffle_count,
-    )
+    def make_shoe():
+        return Shoe(
+            num_decks=rules.num_decks,
+            penetration=rules.penetration,
+            use_csm=rules.is_using_csm(),
+            burn_cards=rules.burn_cards,
+            deck_factory=rules.variant.create_deck if rules.variant else None,
+            shuffle_type=args.shuffle_type,
+            shuffle_count=args.shuffle_count,
+        )
+
+    # Each strategy gets its own shoe so stateful strategies (counting)
+    # see the correct card history for their count.
+    shoes = {name: make_shoe() for name in strategies}
 
     graph = (
         MultiStrategyBlackjackGraph(args.num_games, strategies.keys())
@@ -617,28 +579,13 @@ def run_strategy_analysis(args, rules, initial_bankroll: int = 1000):
     )
 
     for game_number in range(args.num_games):
-        print(f"\nPlaying game {game_number + 1}")
-
-        # Record game with base strategy using the shared shoe
-        _, _, _, current_shoe_state = play_game_and_record(
-            rules,
-            DummyIOInterface(),
-            player_names,
-            BasicStrategy(),
-            initial_shoe,
-            initial_bankroll,
-        )
-
-        # Reset shoe to state after recording
-        initial_shoe = deepcopy(current_shoe_state)
-
         for strategy_name, strategy in strategies.items():
-            earnings, total_bets, result = replay_game_with_strategy(
+            earnings, total_bets, result, shoes[strategy_name] = play_game(
                 rules,
                 DummyIOInterface(),
                 player_names,
                 strategy,
-                deepcopy(current_shoe_state),  # Use the recorded shoe state
+                shoes[strategy_name],
                 initial_bankroll,
             )
 
