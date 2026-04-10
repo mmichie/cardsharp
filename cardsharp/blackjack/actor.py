@@ -63,6 +63,7 @@ class Player(SimplePlayer):
         self.strategy = strategy
         self.game = None
         self.bets = []
+        self.original_bets = []  # Pre-double/split bet per hand (for OBO rule)
         self.insurance = 0
         self.total_bets = 0
         self.initial_bets = 0
@@ -169,6 +170,7 @@ class Player(SimplePlayer):
         self.hand_done.append(False)
         self.split_hands.append(True)
         self.bets.append(bet_for_current_hand)
+        self.original_bets.append(bet_for_current_hand)
 
         self.action_history.append([])
 
@@ -287,6 +289,7 @@ class Player(SimplePlayer):
 
         self.money -= amount
         self.bets = [amount]
+        self.original_bets = [amount]
         self.total_bets += amount
         self.initial_bets += amount
 
@@ -334,6 +337,7 @@ class Player(SimplePlayer):
         """Resets the player's state."""
         self.hands = [BlackjackHand()]
         self.bets = []
+        self.original_bets = []
         self.done = False
         self.blackjack = False
         self.winner = []

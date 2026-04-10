@@ -412,17 +412,29 @@ class TestTwentyOneVsBlackjack:
         assert result.player_value == 21
         assert not result.player_blackjack
 
-    def test_dealer_blackjack_ends_round_immediately(self, scenario):
-        """Dealer natural blackjack ends round; player never plays."""
+    def test_dealer_blackjack_ends_round_with_peek(self, scenario):
+        """With peek, dealer BJ ends round immediately; player never plays."""
         result = scenario(
             player=["7h", "4d"],
             dealer=["As", "Kh"],
+            rules={"dealer_peek": True},
         )
         assert result.dealer_blackjack
         assert result.dealer_won
-        # Player was dealt 11 but never got to hit
         assert result.player_value == 11
         assert result.actions_taken == []
+
+    def test_dealer_blackjack_no_peek_player_plays(self, scenario):
+        """Without peek, player plays normally before dealer BJ is revealed."""
+        result = scenario(
+            player=["7h", "4d"],
+            dealer=["As", "Kh"],
+            extra=["Th"],  # player hits to 21
+            rules={"dealer_peek": False},
+        )
+        assert result.dealer_blackjack
+        assert result.dealer_won
+        assert result.player_value == 21
 
 
 # ---------------------------------------------------------------------------
@@ -888,6 +900,68 @@ class TestDealerPeek:
         )
         assert result.player_blackjack
         # 3:2 payout: net +1.5. If double-processed, would be +3.0.
+        assert result.money_change == 1.5
+
+
+# ---------------------------------------------------------------------------
+# European no-peek / OBO (Original Bets Only)
+# ---------------------------------------------------------------------------
+
+
+class TestOBO:
+
+    def test_obo_double_vs_dealer_blackjack(self, scenario):
+        """Player doubles, dealer reveals BJ: lose only original bet."""
+        result = scenario(
+            player=["7h", "4s"],       # 11, will double
+            dealer=["Th", "As"],       # T+A = blackjack (revealed at end)
+            extra=["9c"],              # double card -> 20
+            rules={
+                "dealer_peek": False,  # European no-peek
+                "allow_double_down": True,
+            },
+        )
+        assert result.dealer_blackjack
+        assert result.dealer_won
+        # Bet=1, doubled to 2. OBO refunds the extra 1.
+        # Net loss = -1 (original bet only), not -2.
+        assert result.money_change == -1
+
+    def test_obo_no_refund_on_regular_loss(self, scenario):
+        """Without dealer BJ, doubled bet is fully lost (no OBO)."""
+        result = scenario(
+            player=["Th", "3s"],       # 13, hits
+            dealer=["Th", "8d"],       # 18
+            extra=["Kc"],              # hit -> bust (23)
+            rules={
+                "dealer_peek": False,
+                "allow_surrender": False,
+            },
+        )
+        assert not result.dealer_blackjack
+        assert result.player_bust
+        # Normal loss: full bet lost
+        assert result.money_change == -1
+
+    def test_obo_push_both_blackjack(self, scenario):
+        """Both have blackjack in no-peek: push."""
+        result = scenario(
+            player=["As", "Kh"],
+            dealer=["Ah", "Kd"],
+            rules={"dealer_peek": False},
+        )
+        assert result.is_push
+        assert result.money_change == 0
+
+    def test_obo_player_blackjack_wins(self, scenario):
+        """Player BJ vs non-BJ dealer in no-peek: player wins 3:2."""
+        result = scenario(
+            player=["As", "Kh"],
+            dealer=["Th", "7d"],
+            rules={"dealer_peek": False, "blackjack_payout": 1.5},
+        )
+        assert result.player_blackjack
+        assert result.player_won
         assert result.money_change == 1.5
 
 

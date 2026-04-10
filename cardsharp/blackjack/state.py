@@ -169,45 +169,23 @@ class DealingState(GameState):
                 game.output(f"Dealt {card} to {player.name}.")
 
     def check_blackjack(self, game):
-        """Handle blackjack detection for no-peek mode.
+        """Handle blackjack detection.
 
-        When dealer peek is enabled, OfferInsuranceState handles all blackjack
-        resolution after insurance is offered and the peek is performed. This
-        avoids double-processing payouts.
+        Peek mode: OfferInsuranceState handles everything after insurance/peek.
+        No-peek mode (European/ENHC): player plays normally without knowing
+        if dealer has blackjack. Resolved at EndRound with OBO rule.
         """
         if game.rules.should_dealer_peek():
             return  # OfferInsuranceState handles everything after insurance/peek
 
-        # No-peek mode: resolve blackjacks immediately
-        dealer_has_blackjack = game.dealer.current_hand.is_blackjack
-
-        if dealer_has_blackjack:
-            game.output("Dealer got a blackjack!")
-            for player in game.players:
-                if player.current_hand.is_blackjack:
-                    bet = player.bets[0]
-                    player.payout(0, bet)
-                    player.winner = ["draw"]
-                    player.hand_done[player.current_hand_index] = True
-                    game.output(
-                        f"{player.name} and dealer both have blackjack. Push."
-                    )
-                else:
-                    player.winner = ["dealer"]
-                    player.hand_done[player.current_hand_index] = True
-                    game.output(
-                        f"{player.name} loses to dealer's blackjack."
-                    )
-        else:
-            for player in game.players:
-                if player.current_hand.is_blackjack:
-                    game.output(f"{player.name} got a blackjack!")
-                    bet = player.bets[0]
-                    payout_amount = bet + (bet * game._blackjack_payout)
-                    player.payout(0, payout_amount)
-                    player.blackjack = True
-                    player.winner = ["player"]
-                    player.hand_done[player.current_hand_index] = True
+        # No-peek mode: flag player blackjacks so they stand automatically,
+        # but do NOT resolve dealer blackjack -- player must play first.
+        # Dealer BJ is discovered at EndRound where OBO applies.
+        for player in game.players:
+            if player.current_hand.is_blackjack:
+                player.blackjack = True
+                player.hand_done[player.current_hand_index] = True
+                game.output(f"{player.name} has blackjack!")
 
 
 class OfferInsuranceState(GameState):
@@ -262,16 +240,18 @@ class OfferInsuranceState(GameState):
                 # Insurance bet was already deducted when bought; reset insurance amount
                 player.insurance = 0  # Reset insurance bet
 
-        # Check for player blackjacks
-        for player in game.players:
-            if player.current_hand.is_blackjack:
-                # Player wins immediately
-                bet = player.bets[0]
-                payout_amount = bet + (bet * game._blackjack_payout)
-                player.payout(0, payout_amount)
-                player.blackjack = True
-                player.winner = ["player"]
-                player.hand_done[player.current_hand_index] = True
+        # Check for player blackjacks -- only pay immediately if we've
+        # confirmed dealer doesn't have BJ (peek mode). In no-peek mode,
+        # player BJs are deferred to EndRound where both BJ = push.
+        if game.rules.should_dealer_peek():
+            for player in game.players:
+                if player.current_hand.is_blackjack:
+                    bet = player.bets[0]
+                    payout_amount = bet + (bet * game._blackjack_payout)
+                    player.payout(0, payout_amount)
+                    player.blackjack = True
+                    player.winner = ["player"]
+                    player.hand_done[player.current_hand_index] = True
                 game.output(f"{player.name} got a blackjack!")
 
         # Proceed to players' turns
@@ -697,12 +677,35 @@ class EndRoundState(GameState):
 
     def handle_payouts(self, game):
         """Handles the payouts for the round."""
+        dealer_blackjack = game.dealer.current_hand.is_blackjack
+        is_no_peek = not game.rules.should_dealer_peek()
+
         for player in game.players:
             for hand_index, hand in enumerate(player.hands):
                 winner = player.winner[hand_index]
                 bet_for_hand = player.bets[hand_index]
                 if bet_for_hand == 0:
                     continue  # Skip hands with no bet
+
+                # OBO (Original Bets Only): in no-peek mode, if dealer has
+                # blackjack, player loses only the original bet. Refund any
+                # extra from doubles or splits.
+                if (
+                    is_no_peek
+                    and dealer_blackjack
+                    and winner == "dealer"
+                    and hand_index < len(player.original_bets)
+                ):
+                    original = player.original_bets[hand_index]
+                    extra = bet_for_hand - original
+                    if extra > 0:
+                        player.money += extra
+                        player.bets[hand_index] = original
+                        bet_for_hand = original
+                        game.output(
+                            f"{player.name}'s hand {hand_index + 1}: "
+                            f"OBO refund of ${extra:.2f} (dealer blackjack)."
+                        )
 
                 # Use variant's payout system if available
                 if game.payout_calculator and game.variant:
