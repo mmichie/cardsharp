@@ -521,6 +521,268 @@ class TestBasicStrategyEdgeCases:
 
 
 # ---------------------------------------------------------------------------
+# Payout scenarios
+# ---------------------------------------------------------------------------
+
+
+class TestPayouts:
+
+    def test_regular_win_pays_even_money(self, scenario):
+        """Player wins with 20 vs dealer 18: net +1 bet."""
+        result = scenario(player=["Th", "Kh"], dealer=["9d", "9c"])
+        assert result.player_won
+        assert result.money_change > 0
+
+    def test_blackjack_pays_3_to_2(self, scenario):
+        """Natural blackjack pays 3:2 (1.5x bet)."""
+        result = scenario(
+            player=["As", "Kh"],
+            dealer=["Th", "7d"],
+            rules={"blackjack_payout": 1.5},
+        )
+        assert result.player_blackjack
+        # Bet=1. Payout = 1 + 1*1.5 = 2.5. Net = +1.5.
+        assert result.money_change == 1.5
+
+    def test_blackjack_pays_6_to_5(self, scenario):
+        """6:5 blackjack pays 1.2x bet."""
+        result = scenario(
+            player=["As", "Kh"],
+            dealer=["Th", "7d"],
+            rules={"blackjack_payout": 1.2},
+        )
+        assert result.player_blackjack
+        # Bet=1. Payout = 1 + 1*1.2 = 2.2. Net = +1.2.
+        assert result.money_change == pytest.approx(1.2)
+
+    def test_push_returns_bet(self, scenario):
+        """Push: player gets bet back, net change is 0."""
+        result = scenario(player=["Th", "8h"], dealer=["9d", "9c"])
+        assert result.is_push
+        assert result.money_change == 0
+
+    def test_loss_costs_one_bet(self, scenario):
+        """Player loses: net -1 bet."""
+        result = scenario(
+            player=["Th", "6s"],
+            dealer=["Kh", "9d"],
+            extra=["Kc"],  # bust: 16+K=26
+            rules={"allow_surrender": False},
+        )
+        assert result.player_bust
+        assert result.money_change == -1
+
+    def test_surrender_returns_half_bet(self, scenario):
+        """Surrender: player loses half bet."""
+        result = scenario(
+            player=["Th", "6s"],
+            dealer=["As", "9d"],
+        )
+        assert result.is_surrender
+        assert result.money_change == -0.5
+
+    def test_double_down_win_pays_double(self, scenario):
+        """Double down win: bet is doubled, payout is 2x original bet."""
+        result = scenario(
+            player=["7h", "4s"],
+            dealer=["6h", "Td"],
+            extra=["9c", "Kh"],  # player doubles to 20, dealer 16 hits K -> bust
+            rules={"allow_double_down": True},
+        )
+        assert "double" in result.actions_taken
+        assert result.player_won
+        # Doubled bet = 2, win = +2.
+        assert result.money_change == 2
+
+    def test_double_down_loss_costs_double(self, scenario):
+        """Double down loss: lose twice the original bet."""
+        result = scenario(
+            player=["7h", "4s"],
+            dealer=["Th", "8d"],
+            extra=["2c"],  # 7+4+2=13, dealer has 18
+            rules={"allow_double_down": True, "allow_surrender": False},
+        )
+        assert "double" in result.actions_taken
+        assert result.dealer_won
+        # Doubled bet = 2, loss = -2.
+        assert result.money_change == -2
+
+
+# ---------------------------------------------------------------------------
+# Insurance scenarios
+# ---------------------------------------------------------------------------
+
+
+class TestInsurance:
+
+    def test_insurance_declined_by_basic_strategy(self, scenario):
+        """Basic strategy always declines insurance."""
+        result = scenario(
+            player=["Th", "9h"],
+            dealer=["As", "7d"],
+            rules={"allow_insurance": True, "dealer_peek": True},
+        )
+        # Player stands on 19, dealer has 18, player wins
+        assert result.player_won
+
+    def test_insurance_accepted_dealer_has_blackjack(self, scenario):
+        """Insurance pays 2:1 when dealer has blackjack -- break even."""
+        result = scenario(
+            player=["Th", "9h"],
+            dealer=["As", "Kd"],
+            rules={"allow_insurance": True, "dealer_peek": True},
+            accept_insurance=True,
+        )
+        assert result.dealer_blackjack
+        # Bet=1, insurance=0.5. Lost bet=-1, insurance pays 0.5*3=1.5.
+        # Net: -1 (bet) - 0.5 (insurance cost) + 1.5 (insurance payout) = 0
+        # Insurance is a perfect hedge: break even when dealer has BJ.
+        assert result.money_change == 0
+
+    def test_insurance_accepted_dealer_no_blackjack(self, scenario):
+        """Insurance is lost when dealer doesn't have blackjack."""
+        result = scenario(
+            player=["Th", "9h"],
+            dealer=["As", "7d"],
+            rules={"allow_insurance": True, "dealer_peek": True},
+            accept_insurance=True,
+        )
+        # Player wins hand (19 > 18), but loses insurance bet of 0.5
+        # Win=+1, insurance lost=-0.5. Net = +0.5.
+        assert result.player_won
+        assert result.money_change == 0.5
+
+
+# ---------------------------------------------------------------------------
+# Dealer basic behavior
+# ---------------------------------------------------------------------------
+
+
+class TestDealerBasicBehavior:
+
+    def test_dealer_stands_on_hard_17(self, scenario):
+        """Dealer has hard 17 (T+7), must stand."""
+        result = scenario(
+            player=["Th", "8h"],
+            dealer=["7d", "Td"],
+        )
+        assert result.dealer_value == 17
+        assert result.player_won  # 18 > 17
+
+    def test_dealer_hits_on_16(self, scenario):
+        """Dealer has 16 (T+6), must hit."""
+        result = scenario(
+            player=["Th", "9h"],
+            dealer=["6d", "Td"],
+            extra=["5c"],  # dealer hits 6+T+5=21
+        )
+        assert result.dealer_value == 21
+        assert result.dealer_won
+
+
+# ---------------------------------------------------------------------------
+# Re-splitting
+# ---------------------------------------------------------------------------
+
+
+class TestResplitting:
+
+    def test_resplit_eights(self, scenario):
+        """Split 8s, get another 8, resplit to 3 hands."""
+        result = scenario(
+            player=["8h", "8d"],
+            dealer=["6h", "Td"],
+            # Split: hand0=8h, hand1=8d
+            # hand0 gets 8c (pair again!), hand1 gets Th -> 18
+            # Resplit hand0: hand0=8h, hand2=8c
+            # hand0 gets 2h -> 10, hand2 gets 3h -> 11
+            # hand0: 10 vs 6, double? hit? Let's provide enough cards
+            # hand0: 8h+2h=10, hit Th -> 20. stand.
+            # hand2: 8c+3h=11, hit 9c -> 20. stand.
+            # hand1: 8d+Th=18. stand.
+            # Dealer: 6+T=16, hit Kc -> bust.
+            extra=["8c", "Th", "2h", "3h", "Th", "9c", "Kc"],
+            rules={
+                "allow_split": True,
+                "allow_resplitting": True,
+                "max_splits": 3,
+            },
+        )
+        assert result.actions_taken.count("split") == 2
+        assert result.player_won
+
+    def test_cannot_resplit_when_disabled(self, scenario):
+        """With resplitting disabled, second pair can't be split."""
+        result = scenario(
+            player=["8h", "8d"],
+            dealer=["6h", "Td"],
+            # Split: hand0=8h gets 8c=pair, hand1=8d gets Th=18
+            # Can't resplit, so hand0 has 8+8=16, hits
+            extra=["8c", "Th", "5h", "Kc"],  # hand0: 16+5=21, dealer busts
+            rules={
+                "allow_split": True,
+                "allow_resplitting": False,
+            },
+        )
+        assert result.actions_taken.count("split") == 1
+        assert result.player_won
+
+
+# ---------------------------------------------------------------------------
+# Split hand restrictions
+# ---------------------------------------------------------------------------
+
+
+class TestSplitHandRestrictions:
+
+    def test_cannot_surrender_split_hands(self, scenario):
+        """After splitting, surrender is not available on resulting hands."""
+        result = scenario(
+            player=["8h", "8d"],
+            dealer=["Th", "9d"],
+            # Split: hand0=8h+6c=14, hand1=8d+7c=15
+            # 14 vs T and 15 vs T would normally warrant surrender
+            # but split hands can't surrender, so must hit
+            extra=["6c", "7c", "Kh", "Kd"],  # both bust on hit
+            rules={"allow_split": True, "allow_surrender": True},
+        )
+        assert "split" in result.actions_taken
+        assert "surrender" not in result.actions_taken
+
+
+# ---------------------------------------------------------------------------
+# Early surrender
+# ---------------------------------------------------------------------------
+
+
+class TestEarlySurrender:
+
+    def test_early_surrender_allowed(self, scenario):
+        """Early surrender available before dealer peeks."""
+        result = scenario(
+            player=["Th", "6s"],
+            dealer=["As", "9d"],
+            rules={"allow_early_surrender": True},
+        )
+        assert result.is_surrender
+
+    def test_all_surrender_disabled(self, scenario):
+        """With all surrender types disabled, player must hit 16 vs A."""
+        result = scenario(
+            player=["Th", "6s"],
+            dealer=["As", "9d"],
+            extra=["3h"],  # 16+3=19, dealer A+9=20
+            rules={
+                "allow_surrender": False,
+                "allow_early_surrender": False,
+                "allow_late_surrender": False,
+            },
+        )
+        assert not result.is_surrender
+        assert result.player_value == 19
+
+
+# ---------------------------------------------------------------------------
 # RiggedShoe unit tests
 # ---------------------------------------------------------------------------
 

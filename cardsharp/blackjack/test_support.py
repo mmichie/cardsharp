@@ -111,10 +111,14 @@ class GameRecord:
 class RecordingStrategy(BasicStrategy):
     """Strategy wrapper that records all decisions."""
 
-    def __init__(self):
+    def __init__(self, accept_insurance: bool = False):
         super().__init__()
         self.action_records: List[ActionRecord] = []
         self.current_dealer_upcard: Optional[Card] = None
+        self._accept_insurance = accept_insurance
+
+    def decide_insurance(self, player) -> bool:
+        return self._accept_insurance
 
     def decide_action(self, player, dealer_up_card: Card, game=None):
         """Record the decision before returning it."""
@@ -287,10 +291,12 @@ class TestableBlackjackGame:
         self.test_player = None
         self.test_dealer = None
 
-    def add_test_player(self, name: str = "TestPlayer") -> TestPlayer:
+    def add_test_player(
+        self, name: str = "TestPlayer", strategy=None
+    ) -> TestPlayer:
         """Add a test player to the game."""
         io = self.game.io_interface
-        self.test_player = TestPlayer(name, io)
+        self.test_player = TestPlayer(name, io, strategy=strategy)
         self.game.add_player(self.test_player)
         return self.test_player
 
@@ -341,6 +347,13 @@ class ScenarioResult:
     player_bust: bool
     dealer_bust: bool
     game_record: GameRecord
+    initial_money: float = 1000.0
+    final_money: float = 1000.0
+
+    @property
+    def money_change(self) -> float:
+        """Net change in player's money (positive = won, negative = lost)."""
+        return self.final_money - self.initial_money
 
     @property
     def player_won(self) -> bool:
@@ -393,12 +406,14 @@ class BlackjackScenario:
         extra: Optional[List[str]] = None,
         players: Optional[List[List[str]]] = None,
         rules: Optional[Dict[str, Any]] = None,
+        accept_insurance: bool = False,
     ):
         self.player_spec = player
         self.dealer_spec = dealer
         self.extra_spec = extra
         self.players_spec = players
         self.rules_kwargs = rules or {}
+        self.accept_insurance = accept_insurance
 
     def play(self) -> ScenarioResult:
         """Play the scenario and return results."""
@@ -419,7 +434,10 @@ class BlackjackScenario:
         game = BlackjackGame(rules, io, shoe)
 
         testable = TestableBlackjackGame(game)
-        test_player = testable.add_test_player()
+        strategy = RecordingStrategy(accept_insurance=self.accept_insurance)
+        test_player = testable.add_test_player(strategy=strategy)
+
+        initial_money = test_player.money
 
         game.set_state(_state_placing_bets)
         testable.play_round()
@@ -442,4 +460,6 @@ class BlackjackScenario:
             player_bust=primary.is_bust,
             dealer_bust=record.dealer_bust,
             game_record=record,
+            initial_money=initial_money,
+            final_money=test_player.money,
         )

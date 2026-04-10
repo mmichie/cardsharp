@@ -168,6 +168,7 @@ def scenario():
         extra: Optional[List[str]] = None,
         players: Optional[List[List[str]]] = None,
         rules: Optional[Dict[str, Any]] = None,
+        accept_insurance: bool = False,
     ) -> ScenarioResult:
         return BlackjackScenario(
             player=player,
@@ -175,6 +176,7 @@ def scenario():
             extra=extra,
             players=players,
             rules=rules,
+            accept_insurance=accept_insurance,
         ).play()
 
     return _run
