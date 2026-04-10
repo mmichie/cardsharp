@@ -36,17 +36,19 @@ class Strategy(ABC):
 
 
 class DealerStrategy(Strategy):
-    """Dealer plays by fixed rules: hit below 17, hit soft 17, stand otherwise.
+    """Dealer plays by fixed rules, respecting the game's dealer_hit_soft_17 setting.
 
-    Note: actual dealer play in the engine uses rules.should_dealer_hit()
-    which respects the dealer_hit_soft_17 setting. This strategy is only
-    used when a Dealer actor is treated as a regular player.
+    When a game reference is available, delegates to rules.should_dealer_hit().
+    Otherwise falls back to hitting soft 17 (the most common house rule).
     """
 
     def decide_action(self, player, dealer_up_card=None, game=None) -> Action:
         if player.is_busted():
             return Action.STAND
         hand = player.current_hand
+        if game is not None:
+            return Action.HIT if game.rules.should_dealer_hit(hand) else Action.STAND
+        # Fallback: hit below 17, hit soft 17
         if hand.value() < 17 or (hand.value() == 17 and hand.is_soft):
             return Action.HIT
         return Action.STAND

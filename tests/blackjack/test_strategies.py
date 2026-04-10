@@ -57,7 +57,8 @@ class TestDealerStrategy:
         p = _make_player([_card(Rank.TEN), _card(Rank.SEVEN)])
         assert s.decide_action(p) == Action.STAND
 
-    def test_hit_soft_17(self):
+    def test_hit_soft_17_fallback(self):
+        """Without game reference, always hits soft 17."""
         s = DealerStrategy()
         p = _make_player([_card(Rank.ACE), _card(Rank.SIX)])
         assert s.decide_action(p) == Action.HIT
@@ -77,6 +78,26 @@ class TestDealerStrategy:
     def test_never_insures(self):
         s = DealerStrategy()
         assert s.decide_insurance(MagicMock()) is False
+
+    def test_hit_soft_17_with_rules_enabled(self):
+        """With game.rules.dealer_hit_soft_17=True, hits soft 17."""
+        from cardsharp.blackjack.rules import Rules
+
+        s = DealerStrategy()
+        p = _make_player([_card(Rank.ACE), _card(Rank.SIX)])
+        game = MagicMock()
+        game.rules = Rules(dealer_hit_soft_17=True)
+        assert s.decide_action(p, game=game) == Action.HIT
+
+    def test_stand_soft_17_with_rules_disabled(self):
+        """With game.rules.dealer_hit_soft_17=False, stands on soft 17."""
+        from cardsharp.blackjack.rules import Rules
+
+        s = DealerStrategy()
+        p = _make_player([_card(Rank.ACE), _card(Rank.SIX)])
+        game = MagicMock()
+        game.rules = Rules(dealer_hit_soft_17=False)
+        assert s.decide_action(p, game=game) == Action.STAND
 
 
 # -------------------------------------------------------------------
