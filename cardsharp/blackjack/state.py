@@ -605,7 +605,9 @@ class EndRoundState(GameState):
         self.output_results(game)
         self.handle_payouts(game)
         game.stats.update(game)
-        game.visible_cards = []
+        # visible_cards is cleared in BlackjackGame.reset(), not here.
+        # Counting strategies need to see all cards (including dealer hits)
+        # after the round ends.
 
         # Check if cut card was reached and we need to reshuffle
         if game.shoe.is_cut_card_reached():
