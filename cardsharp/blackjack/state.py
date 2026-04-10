@@ -179,9 +179,8 @@ class DealingState(GameState):
             # Handle insurance bets
             for player in game.players:
                 if player.insurance > 0:
-                    # Calculate winnings at 2:1 odds
-                    winnings = player.insurance * 2
-                    # Total payout includes the original insurance bet plus winnings
+                    insurance_multiplier = game.rules.get_insurance_payout()
+                    winnings = player.insurance * insurance_multiplier
                     total_payout = player.insurance + winnings
                     player.payout_insurance(total_payout)
                     game.output(
@@ -313,7 +312,8 @@ class OfferInsuranceState(GameState):
         # Handle insurance payouts
         for player in game.players:
             if player.insurance > 0:
-                total_payout = player.insurance * 3  # Original bet + 2:1 payout
+                insurance_multiplier = game.rules.get_insurance_payout()
+                total_payout = player.insurance * (1 + insurance_multiplier)
                 player.payout_insurance(total_payout)
                 game.output(
                     f"{player.name} wins insurance bet of ${total_payout:.2f}."

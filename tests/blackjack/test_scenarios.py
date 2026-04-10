@@ -639,6 +639,23 @@ class TestInsurance:
         # Insurance is a perfect hedge: break even when dealer has BJ.
         assert result.money_change == 0
 
+    def test_insurance_payout_uses_configured_multiplier(self, scenario):
+        """Non-default insurance_payout is respected, not hardcoded 2:1."""
+        result = scenario(
+            player=["Th", "9h"],
+            dealer=["As", "Kd"],
+            rules={
+                "allow_insurance": True,
+                "dealer_peek": True,
+                "insurance_payout": 3.0,  # 3:1 instead of default 2:1
+            },
+            accept_insurance=True,
+        )
+        assert result.dealer_blackjack
+        # Bet=1, insurance=0.5. Insurance pays 0.5*(1+3)=2.0.
+        # Net: -1 (bet) - 0.5 (insurance) + 2.0 (payout) = +0.5
+        assert result.money_change == 0.5
+
     def test_insurance_accepted_dealer_no_blackjack(self, scenario):
         """Insurance is lost when dealer doesn't have blackjack."""
         result = scenario(
