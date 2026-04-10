@@ -966,6 +966,178 @@ class TestOBO:
 
 
 # ---------------------------------------------------------------------------
+# Engine edge cases -- scenarios that could hide real bugs
+# ---------------------------------------------------------------------------
+
+
+class TestPlayerBustBeforeDealer:
+
+    def test_both_would_bust_player_loses(self, scenario):
+        """Player busts first, dealer also busts, but player still loses.
+
+        This is fundamental: bust order matters, not final hand values.
+        """
+        result = scenario(
+            player=["Th", "6h"],       # 16, hits (surrender disabled)
+            dealer=["Td", "5d"],       # 15, must hit
+            extra=["Kd", "Kc"],        # player busts (26), dealer busts (25)
+            rules={"allow_surrender": False},
+        )
+        assert result.player_bust
+        assert result.dealer_won
+        assert result.money_change == -1
+
+
+class TestMultiCardSoft17Dealer:
+
+    def test_h17_hits_multi_card_soft_17(self, scenario):
+        """Dealer with A+3+3 (soft 17) must hit under H17 rules.
+
+        Existing tests only use A+6. This verifies multi-card soft detection.
+        """
+        result = scenario(
+            player=["Th", "8h"],       # 18, stands
+            dealer=["Ah", "3d"],       # soft 14
+            extra=["3h", "3s"],        # dealer: 14→17(soft)→20(soft)
+            rules={"dealer_hit_soft_17": True},
+        )
+        assert result.dealer_value == 20
+        assert result.dealer_won
+        assert result.money_change == -1
+
+    def test_s17_stands_multi_card_soft_17(self, scenario):
+        """Dealer with A+3+3 (soft 17) stands under S17 rules.
+
+        Same cards as above, but S17 makes the dealer stop at soft 17.
+        Player's 18 beats dealer's 17.
+        """
+        result = scenario(
+            player=["Th", "8h"],       # 18, stands
+            dealer=["Ah", "3d"],       # soft 14
+            extra=["3h"],              # dealer: 14→17(soft), stands
+            rules={"dealer_hit_soft_17": False},
+        )
+        assert result.dealer_value == 17
+        assert result.player_won
+        assert result.money_change == 1
+
+
+class TestSplitMoneyTracking:
+
+    def test_split_double_both_win(self, scenario):
+        """Split 8s, double one hand, both win. Verify aggregate money.
+
+        Hand 1: 8+T=18 (stand, wins 1:1)
+        Hand 2: 8+3=11 (double, gets T=21, wins 2:1 on doubled bet)
+        Dealer: 6+T=16, hits 7=23 (bust)
+
+        Money: -1(bet) -1(split) -1(double) +2(hand1) +4(hand2) = +3
+        """
+        result = scenario(
+            player=["8h", "8d"],       # pair 8s vs 6 → split
+            dealer=["6h", "Td"],       # 16
+            extra=[
+                "Td", "3h",            # split cards → 18, 11
+                "Tc",                   # hand 2 double card → 21
+                "7d",                   # dealer hit → 23 bust
+            ],
+            rules={"allow_double_after_split": True},
+        )
+        assert result.money_change == 3
+
+    def test_split_one_bust_one_win(self, scenario):
+        """Split 8s, hand 1 doubles to 21 (wins), hand 2 busts.
+
+        Hand 1: 8+3=11 (double, gets T=21, wins)
+        Hand 2: 8+7=15 (hits T=25, bust)
+        Dealer: 7+T=17, stands
+
+        Money: -1(bet) -1(split) -1(double) +4(hand1 wins) = +1
+        """
+        result = scenario(
+            player=["8h", "8d"],       # pair 8s vs 7 → split
+            dealer=["7h", "Td"],       # 17
+            extra=[
+                "3d", "7d",            # split cards → 11, 15
+                "Tc",                   # hand 1 double card → 21
+                "Ts",                   # hand 2 hit card → 25 bust
+            ],
+            rules={"allow_double_after_split": True},
+        )
+        assert result.money_change == 1
+
+
+class TestInsuranceInteractions:
+
+    def test_insurance_both_bj(self, scenario):
+        """Player BJ + insurance, dealer also BJ.
+
+        BJ pushes (bet returned), insurance wins.
+        Money: -1(bet) -0.5(ins) +1.5(ins payout) +1(push) = +1
+        """
+        result = scenario(
+            player=["As", "Kh"],
+            dealer=["Ah", "Td"],
+            rules={
+                "dealer_peek": True,
+                "allow_insurance": True,
+            },
+            accept_insurance=True,
+        )
+        assert result.is_push
+        assert result.money_change == 1.0
+
+    def test_insurance_player_bj_dealer_no_bj(self, scenario):
+        """Player BJ + insurance, dealer doesn't have BJ.
+
+        BJ pays 3:2, insurance lost.
+        Money: -1(bet) -0.5(ins) +2.5(BJ payout) = +1
+        """
+        result = scenario(
+            player=["As", "Kh"],
+            dealer=["Ah", "7d"],
+            rules={
+                "dealer_peek": True,
+                "allow_insurance": True,
+            },
+            accept_insurance=True,
+        )
+        assert result.player_blackjack
+        assert result.player_won
+        assert result.money_change == 1.0
+
+
+class TestOBOSplitHands:
+
+    def test_obo_refunds_split_double_on_dealer_bj(self, scenario):
+        """European no-peek: split + double, dealer has BJ.
+
+        OBO refunds the double extra but not the split bet.
+        Hand 1: 8+T=18, bet=1, original=1, no extra → loses 1
+        Hand 2: 8+3=11, doubled to bet=2, original=1, extra=1 → refund 1, loses 1
+        Dealer: A+K = BJ
+
+        Money: -1(bet) -1(split) -1(double) +1(OBO refund) = -2
+        """
+        result = scenario(
+            player=["8h", "8d"],       # pair 8s vs A → surrender→split fallback
+            dealer=["Ah", "Kd"],       # BJ (no peek)
+            extra=[
+                "Td", "3h",            # split cards → 18, 11
+                "Tc",                   # hand 2 double card → 21
+            ],
+            rules={
+                "dealer_peek": False,
+                "allow_surrender": False,
+                "allow_double_after_split": True,
+            },
+        )
+        assert result.dealer_blackjack
+        assert result.dealer_won
+        assert result.money_change == -2
+
+
+# ---------------------------------------------------------------------------
 # RiggedShoe unit tests
 # ---------------------------------------------------------------------------
 
