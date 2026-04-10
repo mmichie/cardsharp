@@ -403,7 +403,7 @@ def create_io_interface(args):
         decision_logger.set_level(logging.ERROR)
         if args.strat:
             if args.strat == "count":
-                strategy = CountingStrategy()
+                strategy = CountingStrategy(num_decks=args.num_decks)
             elif args.strat == "aggro":
                 strategy = AggressiveStrategy()
             elif args.strat == "martin":
