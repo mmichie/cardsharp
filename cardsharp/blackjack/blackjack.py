@@ -535,6 +535,55 @@ def play_game_batch(
     return results, earnings, total_bets
 
 
+def run_solver(args, rules):
+    """Run the exact probabilistic solver and display results."""
+    from cardsharp.blackjack.solver import solve
+
+    print(f"Solving for: {rules.num_decks}-deck "
+          f"{'H17' if rules.dealer_hit_soft_17 else 'S17'}, "
+          f"{'DAS' if rules.allow_double_after_split else 'no-DAS'}, "
+          f"{'surrender' if rules.allow_surrender else 'no-surrender'}, "
+          f"{'peek' if rules.dealer_peek else 'no-peek'}, "
+          f"double on {rules.double_on}")
+    print(f"(Solver uses infinite-deck probabilities)\n")
+
+    result = solve(rules)
+    result.print_strategy()
+
+    if args.diff_strategy:
+        csv_path = os.path.join(os.path.dirname(__file__), "basic_strategy.csv")
+        diffs = result.diff_strategy(csv_path)
+        if diffs:
+            print(f"\n{len(diffs)} differences vs basic_strategy.csv:")
+            for d in diffs:
+                print(f"  {d}")
+        else:
+            print("\nSolver matches basic_strategy.csv exactly.")
+
+    # Show a few notable EV breakdowns
+    print("\nNotable EV breakdowns:")
+    notable = [
+        ((6, 10, 10), "Hard 16 vs 10"),
+        ((1, 7, 3), "Soft 18 vs 3"),
+        ((8, 8, 10), "Pair 8 vs 10"),
+    ]
+    for key, label in notable:
+        if key in result.ev_table:
+            sev = result.ev_table[key]
+            parts = []
+            if sev.hit == sev.hit:  # not nan
+                parts.append(f"hit={sev.hit:+.4f}")
+            if sev.stand == sev.stand:
+                parts.append(f"stand={sev.stand:+.4f}")
+            if sev.double == sev.double:
+                parts.append(f"double={sev.double:+.4f}")
+            if sev.split == sev.split:
+                parts.append(f"split={sev.split:+.4f}")
+            if sev.surrender == sev.surrender:
+                parts.append(f"surrender={sev.surrender:+.4f}")
+            print(f"  {label}: {', '.join(parts)} -> {sev.best_action.value}")
+
+
 def run_strategy_analysis(args, rules, initial_bankroll: int = 1000):
     # Silence decision logging in analysis mode (same as simulate)
     os.environ["BLACKJACK_DISABLE_LOGGING"] = "1"
@@ -739,6 +788,18 @@ def main():
         help="Analyze every strategy, compare results",
         default=False,
     )
+    parser.add_argument(
+        "--solve",
+        action="store_true",
+        help="Compute exact house edge and optimal strategy using the probabilistic solver (infinite deck)",
+        default=False,
+    )
+    parser.add_argument(
+        "--diff_strategy",
+        action="store_true",
+        help="With --solve, diff optimal strategy against basic_strategy.csv",
+        default=False,
+    )
     parser.add_argument("--min_bet", type=int, default=10, help="Minimum bet amount")
     parser.add_argument("--max_bet", type=int, default=1000, help="Maximum bet amount")
     parser.add_argument(
@@ -864,6 +925,8 @@ def main():
             game.play_round()
             shoe = game.shoe  # Update shoe state for next game
 
+    elif args.solve:
+        run_solver(args, rules)
     elif args.analysis:
         run_strategy_analysis(args, rules, args.bankroll)
     elif args.simulate:
