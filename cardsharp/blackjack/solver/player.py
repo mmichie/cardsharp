@@ -86,20 +86,28 @@ def ev_surrender() -> float:
 def ev_split(pair_value: int, dealer_probs: dict, allow_das: bool,
              deck: Deck, allow_resplit: bool = False,
              max_hands: int = 4, resplit_aces: bool = False) -> float:
-    """EV of splitting a pair, with optional resplit support.
+    """EV of splitting a pair with correlated hand evaluation.
 
-    max_hands: maximum total hands from splitting (default 4).
-    For infinite deck with resplitting, uses algebraic solution:
-      E = (S - p_same) / (1 - 2*p_same)
-    For finite deck, uses recursive approach with depth tracking.
+    For finite deck, enumerates cards dealt to BOTH split hands,
+    tracking deck depletion between them. This captures the correlation
+    that the first hand's draws reduce the deck for the second hand.
+
+    For infinite deck, hands are independent (probabilities don't change),
+    so the simpler 2*ev_one formula is used.
     """
-    return _ev_split_inner(
-        pair_value, dealer_probs, allow_das, deck,
-        allow_resplit, max_hands, resplit_aces, current_hands=2,
-    )
+    if deck._is_infinite:
+        return _ev_split_independent(
+            pair_value, dealer_probs, allow_das, deck,
+            allow_resplit, max_hands, resplit_aces,
+        )
+    else:
+        return _ev_split_correlated(
+            pair_value, dealer_probs, allow_das, deck,
+            allow_resplit, max_hands, resplit_aces,
+        )
 
 
-def _ev_one_split_hand(pair_value, card_val, card_idx, deck_after, dealer_probs,
+def _ev_one_split_hand(pair_value, card_val, deck_after, dealer_probs,
                        allow_das):
     """EV of playing one split hand after receiving a card."""
     hit_memo = {}
@@ -129,75 +137,81 @@ def _ev_one_split_hand(pair_value, card_val, card_idx, deck_after, dealer_probs,
     return max(candidates)
 
 
-def _ev_split_inner(pair_value, dealer_probs, allow_das, deck,
-                    allow_resplit, max_hands, resplit_aces, current_hands):
-    """Compute EV of splitting, handling resplits."""
-    pair_idx = CARD_VALUES.index(pair_value)
-
-    can_resplit = (
-        allow_resplit
-        and current_hands < max_hands
-        and (pair_value != 1 or resplit_aces)
-    )
-
-    # Accumulate EV over non-resplit draws
-    ev_normal = 0.0
-    p_same = 0.0
-
+def _ev_split_independent(pair_value, dealer_probs, allow_das, deck,
+                          allow_resplit, max_hands, resplit_aces):
+    """Split EV for infinite deck (hands independent). 2 * ev_one."""
+    ev_one = 0.0
     for card_idx, card_val in enumerate(CARD_VALUES):
         p, deck_after = deck.draw(card_idx)
         if p == 0:
             continue
-
-        if card_val == pair_value and can_resplit:
-            p_same = p
-            continue  # handled below
-
-        ev_normal += p * _ev_one_split_hand(
-            pair_value, card_val, card_idx, deck_after, dealer_probs, allow_das
+        ev_one += p * _ev_one_split_hand(
+            pair_value, card_val, deck_after, dealer_probs, allow_das
         )
-
-    if p_same > 0:
-        # Always compute EV of playing the pair as a normal hand
-        _, deck_after_same = deck.draw(pair_idx)
-        ev_play_pair = _ev_one_split_hand(
-            pair_value, pair_value, pair_idx, deck_after_same,
-            dealer_probs, allow_das
-        )
-
-        if can_resplit:
-            if deck._is_infinite:
-                # Algebraic: assuming resplit, E = (S - p) / (1 - 2p)
-                denom = 1.0 - 2.0 * p_same
-                if abs(denom) > 1e-15:
-                    ev_one_if_resplit = (ev_normal - p_same) / denom
-                    ev_resplit_action = 2.0 * ev_one_if_resplit - 1.0
-                else:
-                    ev_resplit_action = ev_play_pair
-
-                # Only resplit if it's actually better than playing
-                if ev_resplit_action > ev_play_pair:
-                    ev_one = ev_one_if_resplit
-                else:
-                    ev_one = ev_normal + p_same * ev_play_pair
-            else:
-                # Finite deck: compute resplit EV recursively
-                ev_resplit_pair = _ev_split_inner(
-                    pair_value, dealer_probs, allow_das, deck_after_same,
-                    allow_resplit, max_hands, resplit_aces, current_hands + 1,
-                )
-                ev_resplit_action = ev_resplit_pair - 1.0
-
-                if ev_resplit_action > ev_play_pair:
-                    ev_one = ev_normal + p_same * ev_resplit_action
-                else:
-                    ev_one = ev_normal + p_same * ev_play_pair
-        else:
-            ev_one = ev_normal + p_same * ev_play_pair
-    else:
-        ev_one = ev_normal
-
     return 2.0 * ev_one
+
+
+def _ev_split_correlated(pair_value, dealer_probs, allow_das, deck,
+                         allow_resplit, max_hands, resplit_aces):
+    """Split EV for finite deck with correlated hand evaluation.
+
+    Enumerates the card dealt to hand 1, then for each, enumerates
+    the card dealt to hand 2 from the REDUCED deck. This captures
+    the correlation between split hands sharing a finite shoe.
+    """
+    pair_idx = CARD_VALUES.index(pair_value)
+    can_resplit = (
+        allow_resplit
+        and max_hands > 2
+        and (pair_value != 1 or resplit_aces)
+    )
+
+    total_ev = 0.0
+
+    for ci1, cv1 in enumerate(CARD_VALUES):
+        p1, deck1 = deck.draw(ci1)
+        if p1 == 0:
+            continue
+
+        # Hand 1 draws cv1. Compute hand 1's best play.
+        if cv1 == pair_value and can_resplit:
+            # Hand 1 drew same value → option to resplit
+            ev_play_h1 = _ev_one_split_hand(
+                pair_value, cv1, deck1, dealer_probs, allow_das
+            )
+            ev_resplit_h1 = _ev_split_correlated(
+                pair_value, dealer_probs, allow_das, deck1,
+                allow_resplit, max_hands - 1, resplit_aces,
+            ) - 1.0  # extra bet
+            ev_h1 = max(ev_play_h1, ev_resplit_h1)
+        else:
+            ev_h1 = _ev_one_split_hand(
+                pair_value, cv1, deck1, dealer_probs, allow_das
+            )
+
+        # Now enumerate hand 2's draw from the REDUCED deck (deck1)
+        for ci2, cv2 in enumerate(CARD_VALUES):
+            p2, deck2 = deck1.draw(ci2)
+            if p2 == 0:
+                continue
+
+            if cv2 == pair_value and can_resplit:
+                ev_play_h2 = _ev_one_split_hand(
+                    pair_value, cv2, deck2, dealer_probs, allow_das
+                )
+                ev_resplit_h2 = _ev_split_correlated(
+                    pair_value, dealer_probs, allow_das, deck2,
+                    allow_resplit, max_hands - 1, resplit_aces,
+                ) - 1.0
+                ev_h2 = max(ev_play_h2, ev_resplit_h2)
+            else:
+                ev_h2 = _ev_one_split_hand(
+                    pair_value, cv2, deck2, dealer_probs, allow_das
+                )
+
+            total_ev += p1 * p2 * (ev_h1 + ev_h2)
+
+    return total_ev
 
 
 def compute_state_ev(
