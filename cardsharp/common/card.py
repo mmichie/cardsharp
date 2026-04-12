@@ -94,7 +94,7 @@ class Card:
     Joker
     """
 
-    __slots__ = ("suit", "rank", "str_rep")
+    __slots__ = ("suit", "rank", "str_rep", "bj_value")
 
     def __init__(self, suit: Suit, rank: Rank):
         """
@@ -103,11 +103,14 @@ class Card:
         :param suit: Suit of the card (one of the Suit enums, or None for Jokers)
         :param rank: Rank of the card (one of the Rank enums)
         """
+        # Precompute blackjack value (avoids repeated enum lookups in hot path)
+        _BJ_VALUES = (0, 11, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10)
         match rank:
             case Rank.JOKER:
                 self.suit = None
                 self.rank = rank
                 self.str_rep = f"{self.rank.rank_str}"
+                self.bj_value = 0
             case _:
                 if not isinstance(suit, Suit):
                     raise TypeError(f"Invalid suit: {suit}")
@@ -116,6 +119,7 @@ class Card:
                 self.suit = suit
                 self.rank = rank
                 self.str_rep = f"{self.rank.rank_str} of {str(self.suit)}"
+                self.bj_value = _BJ_VALUES[rank.value]
 
     def __eq__(self, other):
         """

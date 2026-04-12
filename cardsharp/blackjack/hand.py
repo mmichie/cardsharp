@@ -11,12 +11,13 @@ from cardsharp.blackjack.constants import get_blackjack_value
 class BlackjackHand(Hand):
     """A hand in the game of Blackjack with optimized caching."""
 
-    __slots__ = ("_cards", "_cache", "_is_split")
+    __slots__ = ("_cards", "_cache", "_is_split", "_card_count")
 
     def __init__(self, *args, is_split: bool = False, **kwargs):
         """Initialize a BlackjackHand with an optimized cache system."""
         super().__init__(*args, **kwargs)
         self._is_split = is_split
+        self._card_count = 0
         # Cache structure holds multiple computed properties
         self._cache: Dict[str, Any] = {
             "value": None,
@@ -24,24 +25,19 @@ class BlackjackHand(Hand):
             "num_aces": None,
             "is_soft": None,
             "is_blackjack": None,
-            "last_card_count": 0,
         }
 
     def _invalidate_cache(self) -> None:
-        """Invalidate only necessary cache entries."""
-        self._cache.update(
-            {
-                "value": None,
-                "is_soft": None,
-                "is_blackjack": None,
-                "last_card_count": len(self._cards),
-            }
-        )
-        # Don't invalidate 'num_aces' and 'non_ace_value' unless necessary
+        """Invalidate computed cache entries (num_aces/non_ace_value are incremental)."""
+        c = self._cache
+        c["value"] = None
+        c["is_soft"] = None
+        c["is_blackjack"] = None
 
     def add_card(self, card: Card) -> None:
         """Add a card to the hand with selective cache invalidation."""
         super().add_card(card)
+        self._card_count += 1
 
         # Update cached values for 'num_aces' and 'non_ace_value'
         if card.rank == Rank.ACE:
@@ -49,7 +45,7 @@ class BlackjackHand(Hand):
                 self._cache["num_aces"] += 1
         else:
             if self._cache["non_ace_value"] is not None:
-                self._cache["non_ace_value"] += get_blackjack_value(card.rank)
+                self._cache["non_ace_value"] += card.bj_value
 
         # Invalidate computed values that depend on the entire hand
         self._invalidate_cache()
@@ -57,9 +53,9 @@ class BlackjackHand(Hand):
     def remove_card(self, card: Card) -> None:
         """Remove a card from the hand with full cache invalidation."""
         super().remove_card(card)
+        self._card_count -= 1
         # Full cache invalidation on removal as it's less common
         self._cache = {key: None for key in self._cache}
-        self._cache["last_card_count"] = len(self._cards)
 
     @property
     def _num_aces(self) -> int:
@@ -81,7 +77,7 @@ class BlackjackHand(Hand):
             total = 0
             for card in self._cards:
                 if card.rank != Rank.ACE:
-                    total += get_blackjack_value(card.rank)
+                    total += card.bj_value
             self._cache["non_ace_value"] = total
         return self._cache["non_ace_value"]
 
@@ -128,13 +124,13 @@ class BlackjackHand(Hand):
         if self._cache["is_blackjack"] is not None:
             return self._cache["is_blackjack"]
 
-        if len(self._cards) != 2 or self._is_split:
+        if self._card_count != 2 or self._is_split:
             self._cache["is_blackjack"] = False
             return False
 
         ranks = {card.rank for card in self._cards}
         has_ace = Rank.ACE in ranks
-        has_ten_value = any(get_blackjack_value(rank) == 10 for rank in ranks)
+        has_ten_value = any(c.bj_value == 10 for c in self._cards)
 
         self._cache["is_blackjack"] = has_ace and has_ten_value
         return self._cache["is_blackjack"]
@@ -142,12 +138,12 @@ class BlackjackHand(Hand):
     @property
     def can_split(self) -> bool:
         """Check if the hand can be split."""
-        return len(self._cards) == 2 and self._cards[0].rank == self._cards[1].rank
+        return self._card_count == 2 and self._cards[0].rank == self._cards[1].rank
 
     @property
     def can_double(self) -> bool:
         """Check if the hand can be doubled down."""
-        return len(self._cards) == 2
+        return self._card_count == 2
 
     @property
     def is_split(self) -> bool:

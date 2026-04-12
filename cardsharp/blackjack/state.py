@@ -223,7 +223,7 @@ class OfferInsuranceState(GameState):
         if game.rules.should_dealer_peek():
             if (
                 dealer_up_card.rank == Rank.ACE
-                or get_blackjack_value(dealer_up_card.rank) == 10
+                or dealer_up_card.bj_value == 10
             ):
                 if game.dealer.current_hand.is_blackjack:
                     self.handle_dealer_blackjack(game)

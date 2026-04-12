@@ -121,13 +121,12 @@ class FastBasicStrategy(Strategy):
             8: Cards 10/J/Q/K
             9: Ace
         """
-        rank = dealer_up_card.rank
-        if rank == Rank.ACE:
+        bj = dealer_up_card.bj_value
+        if bj == 11:  # Ace
             return 9
-        value = get_blackjack_value(rank)
-        if value >= 10:
+        if bj >= 10:
             return 8
-        return value - 2  # Cards 2-9 map to indices 0-7
+        return bj - 2  # Cards 2-9 map to indices 0-7
 
     def decide_action(self, player, dealer_up_card: Card, game=None) -> Action:
         """
@@ -147,13 +146,13 @@ class FastBasicStrategy(Strategy):
         # Determine hand type and lookup action
         if hand.can_split:
             # Pairs
-            rank = hand.cards[0].rank
-            if rank == Rank.ACE:
+            bj = hand.cards[0].bj_value
+            if bj == 11:  # Ace
                 pair_index = 10
-            elif get_blackjack_value(rank) == 10:
+            elif bj == 10:
                 pair_index = 9
             else:
-                pair_index = get_blackjack_value(rank) - 1
+                pair_index = bj - 1
 
             action = self.pair_table[pair_index][dealer_index]
 

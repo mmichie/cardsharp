@@ -199,9 +199,20 @@ class BlackjackGame:
         # Cache IO check for performance (avoid repeated isinstance checks)
         self._is_dummy_io = isinstance(io_interface, DummyIOInterface)
 
+        # Track whether any player needs visible card tracking (counting strategies)
+        self._track_visible_cards = True  # Updated in add_player
+
+    def _update_visible_card_tracking(self):
+        """Check if any player strategy needs visible card tracking."""
+        self._track_visible_cards = any(
+            hasattr(p, "strategy") and hasattr(p.strategy, "update_count")
+            for p in self.players
+        )
+
     def add_visible_card(self, card):
-        """Add a card to the list of visible cards."""
-        self.visible_cards.append(card)
+        """Add a card to the list of visible cards (skipped if no counter)."""
+        if self._track_visible_cards:
+            self.visible_cards.append(card)
 
     def output(self, message):
         """
@@ -233,6 +244,7 @@ class BlackjackGame:
         player.game = self
         if self.current_state is not None:
             self.current_state.add_player(self, player)
+        self._update_visible_card_tracking()
 
     def play_round(self):
         """Play a round of the game until it reaches the end state."""

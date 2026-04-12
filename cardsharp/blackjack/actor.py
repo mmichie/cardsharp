@@ -90,7 +90,7 @@ class Player(SimplePlayer):
         if self.hand_done[self.current_hand_index] or self.done:
             return []
 
-        cards_len = len(self.current_hand.cards)
+        cards_len = self.current_hand._card_count
 
         if not cards_len:
             return []
