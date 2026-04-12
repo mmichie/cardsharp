@@ -339,7 +339,10 @@ class PlayersTurnState(GameState):
                 while not player.hand_done[hand_index]:
                     valid_actions = self.get_valid_actions(game, player, hand_index)
 
+                    # Cache valid_actions so strategy doesn't recompute
+                    player._cached_valid_actions = valid_actions
                     action = player.decide_action(dealer_up_card=dealer_up_card)
+                    player._cached_valid_actions = None
 
                     if action in valid_actions:
                         # Only create decision context if logging is enabled

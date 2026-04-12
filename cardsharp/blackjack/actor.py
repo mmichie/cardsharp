@@ -77,6 +77,7 @@ class Player(SimplePlayer):
         self.split_hands = [False]
         self.must_stand_after_hit = False
         self.action_history = [[]]
+        self._cached_valid_actions = None
 
     @property
     def current_hand(self):
@@ -86,6 +87,10 @@ class Player(SimplePlayer):
     @property
     def valid_actions(self) -> list[Action]:
         """Returns a list of valid actions for the player."""
+        # Return cached value if set by state machine (avoids recomputation)
+        if self._cached_valid_actions is not None:
+            return self._cached_valid_actions
+
         # Fast path checks
         if self.hand_done[self.current_hand_index] or self.done:
             return []
@@ -350,6 +355,7 @@ class Player(SimplePlayer):
         self.must_stand_after_hit = False
         self.insurance = 0
         self.action_history = [[]]
+        self._cached_valid_actions = None
 
 
 class Dealer(SimplePlayer):
