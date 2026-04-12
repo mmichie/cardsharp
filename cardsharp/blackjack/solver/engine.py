@@ -126,29 +126,33 @@ def solve(rules: Rules) -> SolverResult:
         or rules.allow_surrender
     )
     peek = rules.dealer_peek
+    allow_resplit = rules.allow_resplitting
+    max_hands = rules.max_splits + 1
+    resplit_aces = rules.resplit_aces
+
+    split_kw = dict(allow_resplit=allow_resplit, max_hands=max_hands,
+                    resplit_aces=resplit_aces)
 
     if use_finite:
         return _solve_finite(
             deck, hit_soft_17, bj_payout, allow_double, allow_split,
-            allow_das, allow_surrender, peek,
+            allow_das, allow_surrender, peek, split_kw,
         )
     else:
         return _solve_infinite(
             deck, hit_soft_17, bj_payout, allow_double, allow_split,
-            allow_das, allow_surrender, peek,
+            allow_das, allow_surrender, peek, split_kw,
         )
 
 
 def _solve_infinite(deck, hit_soft_17, bj_payout, allow_double,
-                    allow_split, allow_das, allow_surrender, peek):
+                    allow_split, allow_das, allow_surrender, peek, split_kw):
     """Solve with infinite-deck probabilities (fast path)."""
-    # Single dealer table for all deals
     if peek:
         dealer_table = compute_conditional_dealer_table(hit_soft_17, deck)
     else:
         dealer_table = compute_dealer_table(hit_soft_17, deck)
 
-    # Compute EV for every initial state
     ev_table = {}
     for upcard in CARD_VALUES:
         dp = dealer_table[upcard]
@@ -159,7 +163,7 @@ def _solve_infinite(deck, hit_soft_17, bj_payout, allow_double,
                 sev = compute_state_ev(
                     hard, usable, is_pair, pair_value, dp,
                     allow_double, allow_split, allow_das, allow_surrender,
-                    deck,
+                    deck, **split_kw,
                 )
                 ev_table[(cv1, cv2, upcard)] = sev
 
@@ -170,12 +174,8 @@ def _solve_infinite(deck, hit_soft_17, bj_payout, allow_double,
 
 
 def _solve_finite(deck, hit_soft_17, bj_payout, allow_double,
-                  allow_split, allow_das, allow_surrender, peek):
-    """Solve with finite-deck composition-dependent probabilities.
-
-    For each initial deal (c1, c2, upcard), removes those cards from the
-    shoe before computing dealer probs and player EVs.
-    """
+                  allow_split, allow_das, allow_surrender, peek, split_kw):
+    """Solve with finite-deck composition-dependent probabilities."""
     ev_table = {}
 
     for upcard in CARD_VALUES:
@@ -184,10 +184,8 @@ def _solve_finite(deck, hit_soft_17, bj_payout, allow_double,
                 hard, usable, _, is_pair = hand_state_from_cards(cv1, cv2)
                 pair_value = cv1 if is_pair else 0
 
-                # Remove dealt cards from shoe
                 remaining = deck.remove_card(cv1).remove_card(cv2).remove_card(upcard)
 
-                # Compute dealer probs for this specific deal
                 if peek:
                     if upcard == 1:
                         dp = _cond_dealer_for_deal(upcard, remaining, hit_soft_17, 10)
@@ -209,7 +207,7 @@ def _solve_finite(deck, hit_soft_17, bj_payout, allow_double,
                 sev = compute_state_ev(
                     hard, usable, is_pair, pair_value, dp,
                     allow_double, allow_split, allow_das, allow_surrender,
-                    remaining,
+                    remaining, **split_kw,
                 )
                 ev_table[(cv1, cv2, upcard)] = sev
 

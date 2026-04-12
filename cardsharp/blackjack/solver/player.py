@@ -84,55 +84,118 @@ def ev_surrender() -> float:
 
 
 def ev_split(pair_value: int, dealer_probs: dict, allow_das: bool,
-             deck: Deck) -> float:
-    """EV of splitting a pair (no resplit).
+             deck: Deck, allow_resplit: bool = False,
+             max_hands: int = 4, resplit_aces: bool = False) -> float:
+    """EV of splitting a pair, with optional resplit support.
 
-    With infinite deck, the two split hands are independent.
-    With finite deck, the second hand sees a slightly different
-    composition than the first. For simplicity (and following standard
-    practice), we treat split hands as independent even for finite deck
-    -- the error is negligible (<0.001%).
-
-    EV = 2 * EV(one split hand).
+    max_hands: maximum total hands from splitting (default 4).
+    For infinite deck with resplitting, uses algebraic solution:
+      E = (S - p_same) / (1 - 2*p_same)
+    For finite deck, uses recursive approach with depth tracking.
     """
+    return _ev_split_inner(
+        pair_value, dealer_probs, allow_das, deck,
+        allow_resplit, max_hands, resplit_aces, current_hands=2,
+    )
+
+
+def _ev_one_split_hand(pair_value, card_val, card_idx, deck_after, dealer_probs,
+                       allow_das):
+    """EV of playing one split hand after receiving a card."""
     hit_memo = {}
-    ev_one = 0.0
+    hard = pair_value + card_val
+    usable = False
+    if pair_value == 1 and hard + 10 <= 21:
+        usable = True
+    elif card_val == 1 and hard + 10 <= 21:
+        usable = True
+
+    disp = hard + 10 if usable else hard
+    if disp > 21 and usable:
+        usable = False
+        disp = hard
+
+    if pair_value == 1:
+        return ev_stand(disp, dealer_probs)
+    if disp > 21:
+        return -1.0
+
+    s = ev_stand(disp, dealer_probs)
+    h = _ev_hit(hard, usable, dealer_probs, deck_after, hit_memo)
+    candidates = [s, h]
+    if allow_das:
+        d = ev_double(hard, usable, dealer_probs, deck_after)
+        candidates.append(d)
+    return max(candidates)
+
+
+def _ev_split_inner(pair_value, dealer_probs, allow_das, deck,
+                    allow_resplit, max_hands, resplit_aces, current_hands):
+    """Compute EV of splitting, handling resplits."""
+    pair_idx = CARD_VALUES.index(pair_value)
+
+    can_resplit = (
+        allow_resplit
+        and current_hands < max_hands
+        and (pair_value != 1 or resplit_aces)
+    )
+
+    # Accumulate EV over non-resplit draws
+    ev_normal = 0.0
+    p_same = 0.0
 
     for card_idx, card_val in enumerate(CARD_VALUES):
-        p, deck_after_draw = deck.draw(card_idx)
+        p, deck_after = deck.draw(card_idx)
         if p == 0:
             continue
 
-        hard = pair_value + card_val
-        usable = False
-        if pair_value == 1 and hard + 10 <= 21:
-            usable = True
-        elif card_val == 1 and hard + 10 <= 21:
-            usable = True
+        if card_val == pair_value and can_resplit:
+            p_same = p
+            continue  # handled below
 
-        disp = hard + 10 if usable else hard
-        if disp > 21 and usable:
-            usable = False
-            disp = hard
+        ev_normal += p * _ev_one_split_hand(
+            pair_value, card_val, card_idx, deck_after, dealer_probs, allow_das
+        )
 
-        # Split aces: forced to stand after one card
-        if pair_value == 1:
-            ev_one += p * ev_stand(disp, dealer_probs)
-            continue
+    if p_same > 0:
+        # Always compute EV of playing the pair as a normal hand
+        _, deck_after_same = deck.draw(pair_idx)
+        ev_play_pair = _ev_one_split_hand(
+            pair_value, pair_value, pair_idx, deck_after_same,
+            dealer_probs, allow_das
+        )
 
-        if disp > 21:
-            ev_one += p * (-1.0)
-            continue
+        if can_resplit:
+            if deck._is_infinite:
+                # Algebraic: assuming resplit, E = (S - p) / (1 - 2p)
+                denom = 1.0 - 2.0 * p_same
+                if abs(denom) > 1e-15:
+                    ev_one_if_resplit = (ev_normal - p_same) / denom
+                    ev_resplit_action = 2.0 * ev_one_if_resplit - 1.0
+                else:
+                    ev_resplit_action = ev_play_pair
 
-        s = ev_stand(disp, dealer_probs)
-        h = _ev_hit(hard, usable, dealer_probs, deck_after_draw, hit_memo)
-        candidates = [s, h]
+                # Only resplit if it's actually better than playing
+                if ev_resplit_action > ev_play_pair:
+                    ev_one = ev_one_if_resplit
+                else:
+                    ev_one = ev_normal + p_same * ev_play_pair
+            else:
+                # Finite deck: compute resplit EV recursively
+                ev_resplit_pair = _ev_split_inner(
+                    pair_value, dealer_probs, allow_das, deck_after_same,
+                    allow_resplit, max_hands, resplit_aces, current_hands + 1,
+                )
+                ev_resplit_action = ev_resplit_pair - 1.0
 
-        if allow_das:
-            d = ev_double(hard, usable, dealer_probs, deck_after_draw)
-            candidates.append(d)
-
-        ev_one += p * max(candidates)
+                if ev_resplit_action > ev_play_pair:
+                    ev_one = ev_normal + p_same * ev_resplit_action
+                else:
+                    ev_one = ev_normal + p_same * ev_play_pair
+        else:
+            ev_one = ev_normal + p_same * ev_play_pair
+    else:
+        ev_one = ev_normal
 
     return 2.0 * ev_one
 
@@ -148,6 +211,9 @@ def compute_state_ev(
     allow_das: bool,
     allow_surrender: bool,
     deck: Deck,
+    allow_resplit: bool = False,
+    max_hands: int = 4,
+    resplit_aces: bool = False,
 ) -> StateEV:
     """Compute EV for all actions at a given state, pick best."""
     disp = display_value(hard_total, usable_ace)
@@ -157,7 +223,8 @@ def compute_state_ev(
     ev_h = _ev_hit(hard_total, usable_ace, dealer_probs, deck, hit_memo)
     ev_d = ev_double(hard_total, usable_ace, dealer_probs, deck) if allow_double else math.nan
     ev_sp = (
-        ev_split(pair_value, dealer_probs, allow_das, deck)
+        ev_split(pair_value, dealer_probs, allow_das, deck,
+                 allow_resplit, max_hands, resplit_aces)
         if (is_pair and allow_split)
         else math.nan
     )
