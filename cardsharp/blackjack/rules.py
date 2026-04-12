@@ -30,6 +30,9 @@ class Rules:
         penetration: float = 0.75,
         burn_cards: int = 0,
         variant: str = "classic",
+        double_on: str = "any",
+        resplit_aces: bool = False,
+        hit_split_aces: bool = False,
     ):
         self.allow_double_after_split = allow_double_after_split
         self.allow_double_down = allow_double_down
@@ -54,6 +57,9 @@ class Rules:
         self.penetration = penetration
         self.burn_cards = burn_cards
         self.variant_name = variant
+        self.double_on = double_on  # "any", "9-11", or "10-11"
+        self.resplit_aces = resplit_aces
+        self.hit_split_aces = hit_split_aces
 
         # Initialize variant
         variant_class = VariantRegistry.get(variant)
@@ -89,6 +95,9 @@ class Rules:
             "penetration": self.penetration,
             "burn_cards": self.burn_cards,
             "variant": self.variant_name,
+            "double_on": self.double_on,
+            "resplit_aces": self.resplit_aces,
+            "hit_split_aces": self.hit_split_aces,
         }
 
     def should_dealer_hit(self, hand: BlackjackHand) -> bool:
@@ -120,9 +129,9 @@ class Rules:
             if not self.allow_resplitting and hand.is_split:
                 return False
 
-            # Special case for Aces that are already split - cannot resplit Aces
+            # Aces that are already split: check resplit_aces rule
             if hand.cards[0].rank == Rank.ACE and hand.is_split:
-                return False
+                return self.resplit_aces
 
             return True
 
@@ -173,8 +182,16 @@ class Rules:
         if hand.is_split and not self.allow_double_after_split:
             return False
 
-        # Most casinos allow doubling on any two-card hand
-        # This matches basic strategy which includes soft hand doubles
+        # Check double_on restriction
+        if self.double_on == "9-11":
+            v = hand.value()
+            if v < 9 or v > 11:
+                return False
+        elif self.double_on == "10-11":
+            v = hand.value()
+            if v < 10 or v > 11:
+                return False
+
         return True
 
     def can_insure(
@@ -304,9 +321,9 @@ class Rules:
 
         # Check if hand has exactly two cards of the same rank
         if len(hand.cards) == 2 and hand.cards[0].rank == hand.cards[1].rank:
-            # Special rule: Aces cannot be resplit in most casino blackjack games
+            # Aces: check resplit_aces rule
             if hand.cards[0].rank == Rank.ACE and hand.is_split:
-                return False
+                return self.resplit_aces
             return True
 
         return False

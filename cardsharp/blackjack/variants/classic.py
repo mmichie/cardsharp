@@ -22,12 +22,25 @@ class ClassicActionValidator(ActionValidator):
     def can_double_down(
         self, hand: BlackjackHand, num_cards: int, is_split: bool
     ) -> bool:
-        """Classic: Can only double on 2 cards."""
-        if num_cards != 2:
+        """Classic: Can only double on 2 cards, subject to double_on restriction."""
+        if not self.rules.allow_double_down or num_cards != 2:
             return False
         if is_split and not self.rules.allow_double_after_split:
             return False
-        return self.rules.allow_double_down
+
+        # Check double_on restriction
+        double_on = self.rules.double_on
+        if double_on == "9-11":
+            v = hand.value()
+            if v < 9 or v > 11:
+                return False
+        elif double_on == "10-11":
+            v = hand.value()
+            if v < 10 or v > 11:
+                return False
+        # "any" = no restriction
+
+        return True
 
     def can_surrender(
         self, hand: BlackjackHand, after_double: bool, is_first_action: bool
@@ -42,12 +55,12 @@ class ClassicActionValidator(ActionValidator):
         return self.rules.allow_surrender
 
     def can_split_aces_again(self) -> bool:
-        """Classic: Cannot re-split aces."""
-        return False
+        """Whether aces can be re-split (controlled by rules.resplit_aces)."""
+        return self.rules.resplit_aces
 
     def can_hit_split_aces(self) -> bool:
-        """Classic: Cannot hit split aces."""
-        return False
+        """Whether split aces can be hit (controlled by rules.hit_split_aces)."""
+        return self.rules.hit_split_aces
 
     def max_hands_after_split(self) -> int:
         """Classic: Use rules max_splits."""

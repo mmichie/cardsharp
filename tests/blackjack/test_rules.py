@@ -346,3 +346,83 @@ class TestFiveCardCharlie:
         assert Rules(five_card_charlie=True).is_five_card_charlie(
             _hand("2h", "2d", "2s", "2c", "3s", "3h")
         )
+
+
+# -------------------------------------------------------------------
+# double_on restriction
+# -------------------------------------------------------------------
+
+
+class TestDoubleOn:
+    def _rules(self, double_on, **kw):
+        r = Rules(double_on=double_on, **kw)
+        r._action_validator = None  # Test fallback path
+        return r
+
+    def test_any_allows_all(self):
+        r = self._rules("any")
+        assert r.can_double_down(_hand("As", "7h"))  # soft 18
+        assert r.can_double_down(_hand("5h", "3d"))   # hard 8
+        assert r.can_double_down(_hand("6h", "5d"))   # hard 11
+
+    def test_9_11_blocks_low(self):
+        r = self._rules("9-11")
+        assert not r.can_double_down(_hand("5h", "3d"))  # hard 8
+        assert r.can_double_down(_hand("5h", "4d"))      # hard 9
+        assert r.can_double_down(_hand("6h", "5d"))      # hard 11
+
+    def test_10_11_blocks_nine(self):
+        r = self._rules("10-11")
+        assert not r.can_double_down(_hand("5h", "4d"))  # hard 9
+        assert r.can_double_down(_hand("5h", "5d"))      # hard 10
+        assert r.can_double_down(_hand("6h", "5d"))      # hard 11
+
+    def test_variant_validator_respects_double_on(self):
+        """The classic variant validator should also enforce double_on."""
+        r = Rules(double_on="10-11")
+        assert not r.can_double_down(_hand("5h", "4d"))  # hard 9
+        assert r.can_double_down(_hand("5h", "5d"))      # hard 10
+
+
+# -------------------------------------------------------------------
+# resplit_aces / hit_split_aces
+# -------------------------------------------------------------------
+
+
+class TestAceSplitRules:
+    def test_resplit_aces_blocked_by_default(self):
+        """Default: cannot resplit aces."""
+        r = Rules(allow_resplitting=True, resplit_aces=False)
+        assert not r.can_split(_split_hand("As", "Ad"))
+
+    def test_resplit_aces_allowed(self):
+        r = Rules(allow_resplitting=True, resplit_aces=True)
+        assert r.can_split(_split_hand("As", "Ad"))
+
+    def test_can_resplit_aces(self):
+        r = Rules(allow_resplitting=True, resplit_aces=True)
+        assert r.can_resplit(_split_hand("As", "Ad"))
+
+    def test_can_resplit_aces_blocked(self):
+        r = Rules(allow_resplitting=True, resplit_aces=False)
+        assert not r.can_resplit(_split_hand("As", "Ad"))
+
+    def test_hit_split_aces_default_false(self):
+        """Default: cannot hit split aces."""
+        r = Rules(hit_split_aces=False)
+        assert not r.variant.get_action_validator().can_hit_split_aces()
+
+    def test_hit_split_aces_enabled(self):
+        r = Rules(hit_split_aces=True)
+        assert r.variant.get_action_validator().can_hit_split_aces()
+
+    def test_resplit_aces_via_validator(self):
+        r = Rules(resplit_aces=True)
+        assert r.variant.get_action_validator().can_split_aces_again()
+
+    def test_to_dict_includes_new_rules(self):
+        r = Rules(double_on="9-11", resplit_aces=True, hit_split_aces=True)
+        d = r.to_dict()
+        assert d["double_on"] == "9-11"
+        assert d["resplit_aces"] is True
+        assert d["hit_split_aces"] is True
