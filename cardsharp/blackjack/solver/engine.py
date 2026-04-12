@@ -1,25 +1,21 @@
 """Solver orchestrator: Rules -> house edge + optimal strategy table.
 
-This is the main entry point. It consumes a Rules object and produces
-exact house edge, per-state EVs, and an optimal strategy table.
+Supports both infinite-deck (fast, constant probabilities) and
+finite-deck (exact, composition-dependent probabilities).
 """
 
 import csv
-import io
 from typing import NamedTuple
 
 from cardsharp.blackjack.action import Action
 from cardsharp.blackjack.rules import Rules
 
-from .types import (
-    CARD_VALUES,
-    INF_DECK_PROBS,
-    StateEV,
-    hand_state_from_cards,
-)
+from .types import CARD_VALUES, CARD_IDX, StateEV, Deck, hand_state_from_cards
 from .dealer import (
     compute_dealer_table,
     compute_conditional_dealer_table,
+    compute_dealer_probs_for_deal,
+    compute_conditional_dealer_probs_for_deal,
     dealer_blackjack_prob,
 )
 from .player import compute_state_ev
@@ -41,7 +37,7 @@ class SolverResult(NamedTuple):
         print(header)
         print("-" * len(header))
 
-        for section, prefix, start, end in [
+        for _, prefix, start, end in [
             ("Hard", "Hard", 4, 22),
             ("Soft", "Soft", 13, 22),
             ("Pair", "Pair", 0, 10),
@@ -86,7 +82,7 @@ class SolverResult(NamedTuple):
         diffs = []
         with open(csv_path, "r") as f:
             reader = csv.reader(f)
-            header = next(reader)
+            next(reader)
             for row in reader:
                 label = row[0].strip()
                 if label not in self.strategy:
@@ -108,9 +104,17 @@ class SolverResult(NamedTuple):
 def solve(rules: Rules) -> SolverResult:
     """Compute exact house edge and optimal strategy for a rule set.
 
-    Currently supports infinite-deck (CSM) mode only.
+    Uses infinite-deck when num_decks is not set or very large,
+    finite-deck otherwise. Finite-deck computes per-deal EVs with
+    composition-dependent probabilities.
     """
-    probs = INF_DECK_PROBS
+    # Choose deck mode
+    use_finite = hasattr(rules, "num_decks") and rules.num_decks <= 8
+    if use_finite:
+        deck = Deck.finite(rules.num_decks)
+    else:
+        deck = Deck.infinite()
+
     hit_soft_17 = rules.dealer_hit_soft_17
     bj_payout = rules.blackjack_payout
     allow_double = rules.allow_double_down
@@ -123,67 +127,139 @@ def solve(rules: Rules) -> SolverResult:
     )
     peek = rules.dealer_peek
 
-    # Step 1: Dealer probability tables
-    if peek:
-        dealer_table = compute_conditional_dealer_table(hit_soft_17, probs)
+    if use_finite:
+        return _solve_finite(
+            deck, hit_soft_17, bj_payout, allow_double, allow_split,
+            allow_das, allow_surrender, peek,
+        )
     else:
-        dealer_table = compute_dealer_table(hit_soft_17, probs)
+        return _solve_infinite(
+            deck, hit_soft_17, bj_payout, allow_double, allow_split,
+            allow_das, allow_surrender, peek,
+        )
 
-    # Step 2: Compute EV for every initial player state vs every upcard
+
+def _solve_infinite(deck, hit_soft_17, bj_payout, allow_double,
+                    allow_split, allow_das, allow_surrender, peek):
+    """Solve with infinite-deck probabilities (fast path)."""
+    # Single dealer table for all deals
+    if peek:
+        dealer_table = compute_conditional_dealer_table(hit_soft_17, deck)
+    else:
+        dealer_table = compute_dealer_table(hit_soft_17, deck)
+
+    # Compute EV for every initial state
     ev_table = {}
     for upcard in CARD_VALUES:
         dp = dealer_table[upcard]
         for i, cv1 in enumerate(CARD_VALUES):
             for cv2 in CARD_VALUES[i:]:
-                hard, usable, disp, is_pair = hand_state_from_cards(cv1, cv2)
+                hard, usable, _, is_pair = hand_state_from_cards(cv1, cv2)
                 pair_value = cv1 if is_pair else 0
-
                 sev = compute_state_ev(
-                    hard_total=hard,
-                    usable_ace=usable,
-                    is_pair=is_pair,
-                    pair_value=pair_value,
-                    dealer_probs=dp,
-                    allow_double=allow_double,
-                    allow_split=allow_split,
-                    allow_das=allow_das,
-                    allow_surrender=allow_surrender,
-                    probs=probs,
+                    hard, usable, is_pair, pair_value, dp,
+                    allow_double, allow_split, allow_das, allow_surrender,
+                    deck,
                 )
                 ev_table[(cv1, cv2, upcard)] = sev
 
-    # Step 3: Compute house edge
-    house_edge = _compute_house_edge(
-        ev_table, probs, bj_payout, peek, dealer_table
-    )
+    house_edge = _compute_house_edge(ev_table, deck, bj_payout, peek)
+    strategy = _generate_strategy(ev_table, allow_double)
 
-    # Step 4: Generate strategy table
-    strategy = _generate_strategy(ev_table, probs, allow_double)
-
-    return SolverResult(
-        house_edge=house_edge,
-        ev_table=ev_table,
-        strategy=strategy,
-    )
+    return SolverResult(house_edge=house_edge, ev_table=ev_table, strategy=strategy)
 
 
-def _compute_house_edge(ev_table, probs, bj_payout, peek, dealer_table):
-    """Compute exact house edge by summing over all initial deals."""
+def _solve_finite(deck, hit_soft_17, bj_payout, allow_double,
+                  allow_split, allow_das, allow_surrender, peek):
+    """Solve with finite-deck composition-dependent probabilities.
+
+    For each initial deal (c1, c2, upcard), removes those cards from the
+    shoe before computing dealer probs and player EVs.
+    """
+    ev_table = {}
+
+    for upcard in CARD_VALUES:
+        for i, cv1 in enumerate(CARD_VALUES):
+            for cv2 in CARD_VALUES[i:]:
+                hard, usable, _, is_pair = hand_state_from_cards(cv1, cv2)
+                pair_value = cv1 if is_pair else 0
+
+                # Remove dealt cards from shoe
+                remaining = deck.remove_card(cv1).remove_card(cv2).remove_card(upcard)
+
+                # Compute dealer probs for this specific deal
+                if peek:
+                    if upcard == 1:
+                        dp = _cond_dealer_for_deal(upcard, remaining, hit_soft_17, 10)
+                    elif upcard == 10:
+                        dp = _cond_dealer_for_deal(upcard, remaining, hit_soft_17, 1)
+                    else:
+                        d_hard = upcard
+                        d_usable = False
+                        memo = {}
+                        from .dealer import _recurse
+                        dp = _recurse(d_hard, d_usable, hit_soft_17, remaining, memo)
+                else:
+                    d_hard = upcard
+                    d_usable = upcard == 1 and d_hard + 10 <= 21
+                    memo = {}
+                    from .dealer import _recurse
+                    dp = _recurse(d_hard, d_usable, hit_soft_17, remaining, memo)
+
+                sev = compute_state_ev(
+                    hard, usable, is_pair, pair_value, dp,
+                    allow_double, allow_split, allow_das, allow_surrender,
+                    remaining,
+                )
+                ev_table[(cv1, cv2, upcard)] = sev
+
+    house_edge = _compute_house_edge(ev_table, deck, bj_payout, peek)
+    strategy = _generate_strategy(ev_table, allow_double)
+
+    return SolverResult(house_edge=house_edge, ev_table=ev_table, strategy=strategy)
+
+
+def _cond_dealer_for_deal(upcard, remaining, hit_soft_17, exclude_hole):
+    """Compute conditional dealer probs for a specific deal."""
+    from .dealer import _conditional_probs
+    return _conditional_probs(upcard, hit_soft_17, remaining, exclude_hole)
+
+
+def _compute_house_edge(ev_table, deck, bj_payout, peek):
+    """Compute exact house edge by summing over all initial deals.
+
+    For finite deck, accounts for card removal: P(card2|card1) and
+    P(upcard|card1,card2) use conditional probabilities.
+    """
     total_ev = 0.0
 
-    for i, (cv1, p1) in enumerate(zip(CARD_VALUES, probs)):
-        for j, (cv2, p2) in enumerate(zip(CARD_VALUES, probs)):
+    for i, cv1 in enumerate(CARD_VALUES):
+        p1, _ = deck.draw(i)
+        if p1 == 0:
+            continue
+        deck1 = deck.remove_card(cv1)
+
+        for j, cv2 in enumerate(CARD_VALUES):
             if j < i:
                 continue
-            # Probability of this player hand
-            p_pair = p1 * p2 if i == j else 2 * p1 * p2
+            p2_cond, _ = deck1.draw(j)
+            if p2_cond == 0:
+                continue
+            p_pair = p1 * p2_cond if i == j else 2 * p1 * p2_cond
+            deck12 = deck1.remove_card(cv2)
 
             _, _, disp, _ = hand_state_from_cards(cv1, cv2)
-            is_player_bj = disp == 21 and (cv1 == 1 or cv2 == 1) and len({cv1, cv2}) == 2
+            is_player_bj = disp == 21 and (cv1 == 1 or cv2 == 1) and cv1 != cv2
 
-            for k, (upcard, p_up) in enumerate(zip(CARD_VALUES, probs)):
-                p_deal = p_pair * p_up
-                p_dbj = dealer_blackjack_prob(upcard, probs)
+            for k, upcard in enumerate(CARD_VALUES):
+                p_up_cond, _ = deck12.draw(k)
+                if p_up_cond == 0:
+                    continue
+                p_deal = p_pair * p_up_cond
+
+                # Dealer BJ prob from remaining deck (after 3 cards dealt)
+                deck123 = deck12.remove_card(upcard)
+                p_dbj = dealer_blackjack_prob(upcard, deck123)
 
                 if peek:
                     ev = _ev_with_peek(
@@ -202,74 +278,49 @@ def _compute_house_edge(ev_table, probs, bj_payout, peek, dealer_table):
 
 
 def _ev_with_peek(cv1, cv2, upcard, is_player_bj, p_dbj, bj_payout, ev_table):
-    """EV of a deal with peek (US rules)."""
     if is_player_bj:
-        # Player BJ vs dealer BJ = push; vs no BJ = win bj_payout
         return p_dbj * 0.0 + (1 - p_dbj) * bj_payout
-
-    # Player no BJ vs dealer BJ = lose; vs no BJ = play optimally
     key = (min(cv1, cv2), max(cv1, cv2), upcard)
     optimal_ev = ev_table[key].best_ev
     return p_dbj * (-1.0) + (1 - p_dbj) * optimal_ev
 
 
 def _ev_no_peek(cv1, cv2, upcard, is_player_bj, p_dbj, bj_payout, ev_table):
-    """EV of a deal without peek (European rules).
-
-    Player plays first without knowing if dealer has BJ.
-    OBO not modeled in MVP -- player loses full bet to dealer BJ.
-    """
     if is_player_bj:
-        # Player BJ: if dealer also BJ = push, else win
         return p_dbj * 0.0 + (1 - p_dbj) * bj_payout
-
-    # Player plays optimally, then dealer reveals
     key = (min(cv1, cv2), max(cv1, cv2), upcard)
     optimal_ev = ev_table[key].best_ev
-
-    # If dealer has BJ, player loses regardless of their play
-    # (simplified: no OBO in MVP)
     return p_dbj * (-1.0) + (1 - p_dbj) * optimal_ev
 
 
-def _generate_strategy(ev_table, probs, allow_double):
-    """Generate strategy table from EV data.
-
-    Returns dict mapping hand labels to lists of action codes.
-    """
+def _generate_strategy(ev_table, allow_double):
+    """Generate strategy table from EV data."""
     strategy = {}
-    dealer_order = [2, 3, 4, 5, 6, 7, 8, 9, 10, 1]  # columns: 2-10, A
+    dealer_order = [2, 3, 4, 5, 6, 7, 8, 9, 10, 1]
 
-    # Hard totals: 4-21
     for total in range(4, 22):
         label = f"Hard{total}"
         actions = []
         for upcard in dealer_order:
-            action = _best_action_for_hard(total, upcard, ev_table, probs, allow_double)
-            actions.append(action)
+            actions.append(_best_action_for_hard(total, upcard, ev_table, allow_double))
         strategy[label] = actions
 
-    # Soft totals: 13-21
     for total in range(13, 22):
         label = f"Soft{total}"
         actions = []
         for upcard in dealer_order:
-            action = _best_action_for_soft(total, upcard, ev_table, probs, allow_double)
-            actions.append(action)
+            actions.append(_best_action_for_soft(total, upcard, ev_table, allow_double))
         strategy[label] = actions
 
-    # Pairs: 2-10, A
     for pair_val in range(2, 11):
-        label = f"Pair{pair_val}" if pair_val <= 10 else "PairA"
+        label = f"Pair{pair_val}"
         actions = []
         for upcard in dealer_order:
-            cv = pair_val
-            key = (min(cv, cv), max(cv, cv), upcard)
+            key = (pair_val, pair_val, upcard)
             sev = ev_table[key]
             actions.append(_action_code(sev, allow_double))
         strategy[label] = actions
 
-    # Pair A
     label = "PairA"
     actions = []
     for upcard in dealer_order:
@@ -281,48 +332,31 @@ def _generate_strategy(ev_table, probs, allow_double):
     return strategy
 
 
-def _best_action_for_hard(total, upcard, ev_table, probs, allow_double):
-    """Find the best action code for a hard total.
-
-    A hard total can come from multiple card combinations. We use the
-    canonical pair that produces this hard total (doesn't matter for
-    infinite deck since EV only depends on total, not specific cards).
-    """
-    # Trivial: always stand on 17+ (hitting can only hurt or bust)
+def _best_action_for_hard(total, upcard, ev_table, allow_double):
     if total >= 17:
         return "S"
-
-    # Pick a canonical non-pair, non-Ace card pair for this hard total
     for cv1 in CARD_VALUES:
         cv2 = total - cv1
         if cv2 < 1 or cv2 > 10:
             continue
         if cv1 == 1 or cv2 == 1:
-            continue  # Ace makes it soft, not hard
+            continue
         if cv1 == cv2:
-            continue  # Pairs have their own row
+            continue
         key = (min(cv1, cv2), max(cv1, cv2), upcard)
         if key in ev_table:
             return _action_code(ev_table[key], allow_double)
-
-    # Fallback for hard totals only reachable as pairs (e.g., hard 4 = 2+2)
     for cv1 in CARD_VALUES:
         cv2 = total - cv1
         if 1 <= cv2 <= 10:
             key = (min(cv1, cv2), max(cv1, cv2), upcard)
             if key in ev_table:
                 return _action_code(ev_table[key], allow_double)
-
     return "H"
 
 
-def _best_action_for_soft(total, upcard, ev_table, probs, allow_double):
-    """Find the best action code for a soft total.
-
-    Soft totals have an Ace counting as 11. E.g., soft 18 = A+7.
-    """
-    # Soft total = Ace(1) + other card. Display = total, hard = total - 10.
-    other = total - 11  # e.g., soft 18 = A + 7, other = 7
+def _best_action_for_soft(total, upcard, ev_table, allow_double):
+    other = total - 11
     if other < 1 or other > 10:
         return "S"
     cv1, cv2 = min(1, other), max(1, other)
@@ -333,18 +367,15 @@ def _best_action_for_soft(total, upcard, ev_table, probs, allow_double):
 
 
 def _action_code(sev: StateEV, allow_double: bool) -> str:
-    """Convert a StateEV to a CSV action code (H/S/D/DS/P/R)."""
     action = sev.best_action
-
     if action == Action.HIT:
         return "H"
     elif action == Action.STAND:
         return "S"
     elif action == Action.DOUBLE:
-        # Determine fallback: is stand or hit better without double?
         if sev.stand >= sev.hit:
-            return "DS"  # double, else stand
-        return "D"  # double, else hit
+            return "DS"
+        return "D"
     elif action == Action.SPLIT:
         return "P"
     elif action == Action.SURRENDER:

@@ -21,6 +21,71 @@ INF_DECK_PROBS = (
     4 / 13,  # 10/J/Q/K
 )
 
+# Card value index: CARD_VALUES[idx] = value, idx used for composition arrays
+CARD_IDX = {v: i for i, v in enumerate(CARD_VALUES)}
+
+
+class Deck:
+    """Draw probability source for the solver.
+
+    Two modes: infinite deck (fixed probs) and finite deck (composition-
+    dependent, probabilities change as cards are drawn).
+    """
+
+    __slots__ = ("_counts", "_total", "_is_infinite", "_key")
+
+    def __init__(self, counts: tuple, is_infinite: bool = False):
+        self._counts = counts
+        self._total = sum(counts) if not is_infinite else 13  # arbitrary for inf
+        self._is_infinite = is_infinite
+        self._key = "inf" if is_infinite else counts
+
+    @classmethod
+    def infinite(cls):
+        """Create an infinite-deck source (constant probabilities)."""
+        return cls(counts=(), is_infinite=True)
+
+    @classmethod
+    def finite(cls, num_decks: int):
+        """Create a finite-deck composition.
+
+        Counts: (n_ace, n_2, n_3, ..., n_9, n_10value)
+        Each rank A-9 has 4*num_decks cards. 10-value has 16*num_decks.
+        """
+        counts = tuple(4 * num_decks for _ in range(9)) + (16 * num_decks,)
+        return cls(counts)
+
+    def draw(self, card_idx: int):
+        """Return (probability, new_deck_after_removing_card).
+
+        For infinite deck, returns (fixed_prob, self).
+        For finite deck, returns (count/total, decremented deck).
+        """
+        if self._is_infinite:
+            return INF_DECK_PROBS[card_idx], self
+
+        if self._total == 0 or self._counts[card_idx] == 0:
+            return 0.0, self
+
+        p = self._counts[card_idx] / self._total
+        new_counts = list(self._counts)
+        new_counts[card_idx] -= 1
+        return p, Deck(tuple(new_counts))
+
+    def remove_card(self, card_val: int):
+        """Remove a specific card value from the deck. Returns new Deck."""
+        if self._is_infinite:
+            return self
+        idx = CARD_IDX[card_val]
+        new_counts = list(self._counts)
+        new_counts[idx] -= 1
+        return Deck(tuple(new_counts))
+
+    @property
+    def key(self):
+        """Hashable key for memoization."""
+        return self._key
+
 
 class StateEV(NamedTuple):
     """EV for each action at a given player state vs dealer upcard."""

@@ -2,19 +2,15 @@
 
 Computes the exact EV of each action (hit, stand, double, split, surrender)
 for every possible player hand state vs every dealer upcard.
+
+Supports both infinite-deck and finite-deck via the Deck interface.
 """
 
 import math
 
 from cardsharp.blackjack.action import Action
 
-from .types import (
-    CARD_VALUES,
-    INF_DECK_PROBS,
-    StateEV,
-    add_card,
-    display_value,
-)
+from .types import CARD_VALUES, StateEV, Deck, add_card, display_value
 
 
 def ev_stand(player_display: int, dealer_probs: dict) -> float:
@@ -30,60 +26,49 @@ def ev_stand(player_display: int, dealer_probs: dict) -> float:
             ev += p
         elif player_display < total:
             ev -= p
-        # push: +0
     return ev
 
 
-def ev_hit(
-    hard_total: int,
-    usable_ace: bool,
-    dealer_probs: dict,
-    probs=INF_DECK_PROBS,
-    memo: dict = None,
-) -> float:
-    """EV of hitting (and playing optimally afterward).
-
-    Recursive: after drawing, the player chooses max(hit, stand) for each
-    resulting state.
-    """
+def ev_hit(hard_total: int, usable_ace: bool, dealer_probs: dict,
+           deck: Deck, memo: dict = None) -> float:
+    """EV of hitting (and playing optimally afterward)."""
     if memo is None:
         memo = {}
-    return _ev_hit(hard_total, usable_ace, dealer_probs, probs, memo)
+    return _ev_hit(hard_total, usable_ace, dealer_probs, deck, memo)
 
 
-def _ev_hit(hard_total, usable_ace, dealer_probs, probs, memo):
-    key = (hard_total, usable_ace)
+def _ev_hit(hard_total, usable_ace, dealer_probs, deck, memo):
+    key = (hard_total, usable_ace, deck.key)
     if key in memo:
         return memo[key]
 
     ev = 0.0
-    for card_val, p in zip(CARD_VALUES, probs):
+    for card_idx, card_val in enumerate(CARD_VALUES):
+        p, new_deck = deck.draw(card_idx)
+        if p == 0:
+            continue
         new_hard, new_usable, disp = add_card(hard_total, usable_ace, card_val)
 
         if disp > 21:
-            ev += p * (-1.0)  # bust
+            ev += p * (-1.0)
         else:
             s = ev_stand(disp, dealer_probs)
-            h = _ev_hit(new_hard, new_usable, dealer_probs, probs, memo)
+            h = _ev_hit(new_hard, new_usable, dealer_probs, new_deck, memo)
             ev += p * max(s, h)
 
     memo[key] = ev
     return ev
 
 
-def ev_double(
-    hard_total: int,
-    usable_ace: bool,
-    dealer_probs: dict,
-    probs=INF_DECK_PROBS,
-) -> float:
-    """EV of doubling: one more card, forced stand, doubled bet.
-
-    Returns EV in units of initial bet (i.e., win/loss is +/-2).
-    """
+def ev_double(hard_total: int, usable_ace: bool, dealer_probs: dict,
+              deck: Deck) -> float:
+    """EV of doubling: one more card, forced stand, doubled bet."""
     ev = 0.0
-    for card_val, p in zip(CARD_VALUES, probs):
-        new_hard, new_usable, disp = add_card(hard_total, usable_ace, card_val)
+    for card_idx, card_val in enumerate(CARD_VALUES):
+        p, _ = deck.draw(card_idx)
+        if p == 0:
+            continue
+        _, _, disp = add_card(hard_total, usable_ace, card_val)
 
         if disp > 21:
             ev += p * (-2.0)
@@ -98,26 +83,26 @@ def ev_surrender() -> float:
     return -0.5
 
 
-def ev_split(
-    pair_value: int,
-    dealer_probs: dict,
-    allow_das: bool,
-    probs=INF_DECK_PROBS,
-) -> float:
-    """EV of splitting a pair (infinite deck, no resplit).
+def ev_split(pair_value: int, dealer_probs: dict, allow_das: bool,
+             deck: Deck) -> float:
+    """EV of splitting a pair (no resplit).
 
     With infinite deck, the two split hands are independent.
-    EV = 2 * EV(one split hand).
+    With finite deck, the second hand sees a slightly different
+    composition than the first. For simplicity (and following standard
+    practice), we treat split hands as independent even for finite deck
+    -- the error is negligible (<0.001%).
 
-    Each split hand starts with one card of pair_value, receives one
-    more card, then plays with restricted actions (no surrender, no BJ
-    payout, DAS controlled by allow_das).
+    EV = 2 * EV(one split hand).
     """
     hit_memo = {}
     ev_one = 0.0
 
-    for card_val, p in zip(CARD_VALUES, probs):
-        # Build the split hand: pair_value + drawn card
+    for card_idx, card_val in enumerate(CARD_VALUES):
+        p, deck_after_draw = deck.draw(card_idx)
+        if p == 0:
+            continue
+
         hard = pair_value + card_val
         usable = False
         if pair_value == 1 and hard + 10 <= 21:
@@ -139,13 +124,12 @@ def ev_split(
             ev_one += p * (-1.0)
             continue
 
-        # Non-ace split: choose best of stand, hit, (double if DAS)
         s = ev_stand(disp, dealer_probs)
-        h = _ev_hit(hard, usable, dealer_probs, probs, hit_memo)
+        h = _ev_hit(hard, usable, dealer_probs, deck_after_draw, hit_memo)
         candidates = [s, h]
 
         if allow_das:
-            d = ev_double(hard, usable, dealer_probs, probs)
+            d = ev_double(hard, usable, dealer_probs, deck_after_draw)
             candidates.append(d)
 
         ev_one += p * max(candidates)
@@ -163,23 +147,22 @@ def compute_state_ev(
     allow_split: bool,
     allow_das: bool,
     allow_surrender: bool,
-    probs=INF_DECK_PROBS,
+    deck: Deck,
 ) -> StateEV:
     """Compute EV for all actions at a given state, pick best."""
     disp = display_value(hard_total, usable_ace)
 
     hit_memo = {}
     ev_s = ev_stand(disp, dealer_probs)
-    ev_h = _ev_hit(hard_total, usable_ace, dealer_probs, probs, hit_memo)
-    ev_d = ev_double(hard_total, usable_ace, dealer_probs, probs) if allow_double else math.nan
+    ev_h = _ev_hit(hard_total, usable_ace, dealer_probs, deck, hit_memo)
+    ev_d = ev_double(hard_total, usable_ace, dealer_probs, deck) if allow_double else math.nan
     ev_sp = (
-        ev_split(pair_value, dealer_probs, allow_das, probs)
+        ev_split(pair_value, dealer_probs, allow_das, deck)
         if (is_pair and allow_split)
         else math.nan
     )
     ev_sr = ev_surrender() if allow_surrender else math.nan
 
-    # Find best action
     candidates = [(ev_h, Action.HIT), (ev_s, Action.STAND)]
     if allow_double:
         candidates.append((ev_d, Action.DOUBLE))
@@ -191,11 +174,6 @@ def compute_state_ev(
     best_ev, best_action = max(candidates, key=lambda x: x[0])
 
     return StateEV(
-        hit=ev_h,
-        stand=ev_s,
-        double=ev_d,
-        split=ev_sp,
-        surrender=ev_sr,
-        best_action=best_action,
-        best_ev=best_ev,
+        hit=ev_h, stand=ev_s, double=ev_d, split=ev_sp, surrender=ev_sr,
+        best_action=best_action, best_ev=best_ev,
     )

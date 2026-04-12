@@ -9,9 +9,10 @@ from cardsharp.blackjack.rules import Rules
 
 class TestHouseEdge:
 
-    def test_h17_reasonable_range(self):
+    def test_infinite_h17_reasonable_range(self):
         """Infinite-deck H17 house edge should be in a reasonable range."""
         rules = Rules(
+            num_decks=99,  # triggers infinite-deck mode
             dealer_hit_soft_17=True,
             dealer_peek=True,
             allow_surrender=True,
@@ -19,14 +20,14 @@ class TestHouseEdge:
             allow_double_after_split=False,
         )
         result = solve(rules)
-        # Published infinite-deck H17 no-DAS: ~0.7-0.9%
         assert 0.005 < result.house_edge < 0.012, (
             f"H17 edge {result.house_edge:.4%} outside expected range"
         )
 
-    def test_s17_reasonable_range(self):
+    def test_infinite_s17_reasonable_range(self):
         """Infinite-deck S17 house edge should be lower than H17."""
         rules = Rules(
+            num_decks=99,
             dealer_hit_soft_17=False,
             dealer_peek=True,
             allow_surrender=True,
@@ -35,6 +36,24 @@ class TestHouseEdge:
         )
         result = solve(rules)
         assert 0.003 < result.house_edge < 0.010
+
+    def test_6deck_h17_matches_published(self):
+        """6-deck H17 DAS no-surrender should be close to WoO Appendix 9.
+
+        WoO: 0.6151% (with resplit-to-4). Our no-resplit adds ~0.07%.
+        """
+        rules = Rules(
+            num_decks=6,
+            dealer_hit_soft_17=True,
+            dealer_peek=True,
+            allow_surrender=False,
+            allow_double_after_split=True,
+        )
+        result = solve(rules)
+        # WoO: 0.6151% + ~0.07% no-resplit = ~0.685%
+        assert 0.005 < result.house_edge < 0.009, (
+            f"6d H17 edge {result.house_edge:.4%}"
+        )
 
     def test_s17_lower_than_h17(self):
         """S17 must have lower house edge than H17 (fundamental principle)."""
@@ -114,7 +133,7 @@ class TestStrategyGeneration:
 
     def test_strategy_has_all_rows(self):
         """Generated strategy should have all standard rows."""
-        result = solve(Rules(dealer_peek=True))
+        result = solve(Rules(num_decks=99, dealer_peek=True))
         s = result.strategy
         for total in range(4, 22):
             assert f"Hard{total}" in s
@@ -126,7 +145,7 @@ class TestStrategyGeneration:
 
     def test_strategy_always_stand_hard_20(self):
         """Hard 20 should always stand."""
-        result = solve(Rules(dealer_peek=True))
+        result = solve(Rules(num_decks=99, dealer_peek=True))
         assert all(a == "S" for a in result.strategy["Hard20"])
 
     def test_strategy_always_split_aces(self):
@@ -152,10 +171,12 @@ class TestStrategyGeneration:
     def test_csv_diff_minimal(self):
         """Solver strategy should closely match basic_strategy.csv.
 
-        A few differences are expected (infinite-deck vs finite-deck,
-        and some marginal plays). But gross disagreements indicate bugs.
+        Use infinite deck (num_decks=99) to match the CSV, which was
+        derived from infinite-deck analysis. A few differences are
+        expected for marginal plays.
         """
         rules = Rules(
+            num_decks=99,
             dealer_hit_soft_17=True,
             dealer_peek=True,
             allow_surrender=True,
@@ -180,7 +201,7 @@ class TestSolverResult:
 
     def test_print_strategy(self, capsys):
         """print_strategy should produce output without errors."""
-        result = solve(Rules(dealer_peek=True))
+        result = solve(Rules(num_decks=99, dealer_peek=True))
         result.print_strategy()
         captured = capsys.readouterr()
         assert "House edge" in captured.out
@@ -188,7 +209,7 @@ class TestSolverResult:
 
     def test_to_csv(self, tmp_path):
         """to_csv should write a valid CSV file."""
-        result = solve(Rules(dealer_peek=True))
+        result = solve(Rules(num_decks=99, dealer_peek=True))
         csv_file = tmp_path / "strategy.csv"
         result.to_csv(str(csv_file))
         assert csv_file.exists()
@@ -199,7 +220,7 @@ class TestSolverResult:
 
     def test_ev_table_populated(self):
         """EV table should have entries for all state combinations."""
-        result = solve(Rules(dealer_peek=True))
+        result = solve(Rules(num_decks=99, dealer_peek=True))
         # 55 player card combos × 10 upcards = 550
         assert len(result.ev_table) == 550
 
