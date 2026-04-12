@@ -458,19 +458,12 @@ class TestH17S17Adjustments:
 
 
 class TestBasicStrategyFallbacks:
-    def test_unknown_action_symbol(self):
-        """Unknown CSV symbol defaults to HIT."""
-        s = BasicStrategy()
-        s._get_action_from_strategy = lambda ht, dc: "X"
-        p = _make_player([_card(Rank.TEN), _card(Rank.FIVE)])
-        assert s.decide_action(p, _card(Rank.SIX)) == Action.HIT
-
     def test_last_resort_stand(self):
         """When desired action isn't valid, fall back to available actions."""
         s = BasicStrategy()
         p = _make_player([_card(Rank.TEN), _card(Rank.FIVE)])
         p.valid_actions = [Action.STAND]
-        result = s._get_valid_action(p, Action.HIT, "H")
+        result = s._get_valid_action(p, Action.HIT)
         assert result == Action.STAND
 
     def test_last_resort_first_available(self):
@@ -478,24 +471,22 @@ class TestBasicStrategyFallbacks:
         s = BasicStrategy()
         p = _make_player([_card(Rank.TEN), _card(Rank.FIVE)])
         p.valid_actions = [Action.SURRENDER]
-        # HIT action that isn't in valid_actions triggers last-resort path
-        result = s._get_valid_action(p, Action.HIT, "H")
-        # HIT not in valid, STAND not in valid, falls to valid_actions[0]
+        result = s._get_valid_action(p, Action.HIT)
         assert result == Action.SURRENDER
 
-    def test_split_fallback_keyerror(self):
-        """KeyError in split fallback hard-total lookup gracefully falls back."""
+    def test_split_fallback_to_hard_total(self):
+        """Can't split 9s → re-evaluate as Hard 18 → Stand."""
         s = BasicStrategy()
-        p = _make_player([_card(Rank.EIGHT), _card(Rank.EIGHT)])
+        p = _make_player([_card(Rank.NINE), _card(Rank.NINE)])
         p.valid_actions = [Action.HIT, Action.STAND]  # No SPLIT
-        # Monkey-patch to raise KeyError on hard lookup
-        original = s._get_action_from_strategy
+        # Dealer index 3 = dealer 5. Hard18 vs 5 = S.
+        result = s._get_valid_action(p, Action.SPLIT, dealer_idx=3)
+        assert result == Action.STAND
 
-        def bad_lookup(ht, dc):
-            if ht.startswith("Hard"):
-                return "ZZZZZ"  # Will cause KeyError in _map_action_symbol
-            return original(ht, dc)
-
-        s._get_action_from_strategy = bad_lookup
-        result = s._get_valid_action(p, Action.SPLIT, "P", "5")
-        assert result in (Action.HIT, Action.STAND)
+    def test_double_stand_fallback(self):
+        """DS action: double if allowed, otherwise stand."""
+        s = BasicStrategy()
+        p = _make_player([_card(Rank.ACE), _card(Rank.SEVEN)])
+        p.valid_actions = [Action.HIT, Action.STAND]  # No DOUBLE
+        result = s._get_valid_action(p, s._DOUBLE_STAND)
+        assert result == Action.STAND

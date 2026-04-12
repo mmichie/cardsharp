@@ -58,124 +58,132 @@ class DealerStrategy(Strategy):
 
 
 class BasicStrategy(Strategy):
-    # The CSV is the H17 (dealer hits soft 17) multi-deck strategy.
-    # When dealer stands on soft 17, these 3 cells change:
-    _S17_OVERRIDES = {
-        ("Hard11", 9): "H",    # Hard 11 vs A: D → H
-        ("Soft18", 0): "S",    # Soft 18 vs 2: DS → S
-        ("Pair8", 9): "P",     # Pair 8 vs A: R → P
-    }
+    """Basic strategy using integer-indexed lookup tables for speed.
+
+    Loads the CSV once into three 2D arrays (hard/soft/pair) indexed by
+    hand value and dealer upcard. All lookups are direct array access
+    with no string operations or dict lookups in the hot path.
+
+    The CSV is H17 (dealer hits soft 17). When S17 rules are detected,
+    three cells are patched at runtime.
+    """
+
+    # Action constants for array storage (avoids repeated enum construction)
+    _HIT = Action.HIT
+    _STAND = Action.STAND
+    _DOUBLE = Action.DOUBLE
+    _DOUBLE_STAND = object()  # Sentinel: double if allowed, otherwise stand
+    _SPLIT = Action.SPLIT
+    _SURRENDER = Action.SURRENDER
 
     def __init__(self, strategy_file=None):
         if strategy_file is None:
             strategy_file = os.path.join(
                 os.path.dirname(__file__), "basic_strategy.csv"
             )
-        self.strategy = self._load_strategy(strategy_file)
-        self.dealer_indexes = {
-            "2": 0, "3": 1, "4": 2, "5": 3, "6": 4,
-            "7": 5, "8": 6, "9": 7, "10": 8, "A": 9,
-        }
+        self._build_tables(strategy_file)
         self._s17_applied = False
 
-    def _load_strategy(self, strategy_file):
-        strategy = {}
+    def _build_tables(self, strategy_file):
+        """Build integer-indexed lookup tables from CSV."""
+        action_map = {
+            "H": self._HIT,
+            "S": self._STAND,
+            "D": self._DOUBLE,
+            "DS": self._DOUBLE_STAND,
+            "P": self._SPLIT,
+            "R": self._SURRENDER,
+        }
+
+        # hard_table[0..17][0..9] = Hard 4-21 vs dealer 2-A
+        self.hard_table = [[self._HIT] * 10 for _ in range(18)]
+        # soft_table[0..8][0..9] = Soft 13-21 vs dealer 2-A
+        self.soft_table = [[self._HIT] * 10 for _ in range(9)]
+        # pair_table[0..10][0..9] = Pair 2-A vs dealer 2-A
+        #   index 0=pair2, 1=pair3, ..., 8=pair10, 9=pairA
+        self.pair_table = [[self._HIT] * 10 for _ in range(10)]
+
         with open(strategy_file, "r") as f:
             reader = csv.reader(f)
-            next(reader)  # Skip header row
+            next(reader)
             for row in reader:
-                hand_type = row[0]
-                actions = [action.strip() for action in row[1:]]
-                strategy[hand_type] = actions
-        return strategy
+                hand_type = row[0].strip()
+                actions = [action_map.get(a.strip(), self._HIT) for a in row[1:]]
+                if hand_type.startswith("Hard"):
+                    v = int(hand_type[4:])
+                    if 4 <= v <= 21:
+                        self.hard_table[v - 4] = actions
+                elif hand_type.startswith("Soft"):
+                    v = int(hand_type[4:])
+                    if 13 <= v <= 21:
+                        self.soft_table[v - 13] = actions
+                elif hand_type.startswith("Pair"):
+                    p = hand_type[4:]
+                    if p == "A":
+                        self.pair_table[9] = actions
+                    elif p == "10":
+                        self.pair_table[8] = actions
+                    else:
+                        self.pair_table[int(p) - 2] = actions
 
-    def _get_hand_type(self, hand):
+    @staticmethod
+    def _dealer_index(dealer_up_card) -> int:
+        """Dealer upcard to table column index (0-9)."""
+        bj = dealer_up_card.bj_value
+        if bj == 11:  # Ace
+            return 9
+        if bj >= 10:
+            return 8
+        return bj - 2
+
+    def _lookup(self, hand, dealer_idx):
+        """Look up raw action from the tables."""
         if hand.can_split:
-            rank = hand.cards[0].rank
-            if rank == Rank.ACE:
-                return "PairA"
-            elif get_blackjack_value(rank) == 10:
-                return "Pair10"
-            else:
-                return f"Pair{get_blackjack_value(rank)}"
-        elif hand.is_soft:
-            return f"Soft{hand.value()}"
-        else:
-            return f"Hard{hand.value()}"
+            bj = hand.cards[0].bj_value
+            if bj == 11:  # Ace pair
+                return self.pair_table[9][dealer_idx]
+            if bj == 10:
+                return self.pair_table[8][dealer_idx]
+            return self.pair_table[bj - 2][dealer_idx]
 
-    def _get_dealer_card(self, dealer_up_card):
-        rank = dealer_up_card.rank
-        if rank == Rank.ACE:
-            return "A"
-        elif get_blackjack_value(rank) >= 10:
-            return "10"
-        else:
-            return str(get_blackjack_value(rank))
-
-    def _get_action_from_strategy(self, hand_type, dealer_card):
-        dealer_index = self.dealer_indexes[dealer_card]
-        actions = self.strategy.get(hand_type, [])
-        if actions and dealer_index < len(actions):
-            return actions[dealer_index]
-        return "H"  # Default to Hit if hand type not found or index out of bounds
-
-    def _map_action_symbol(self, symbol):
-        mapping = {
-            "H": Action.HIT,
-            "S": Action.STAND,
-            "D": Action.DOUBLE,
-            "DS": Action.DOUBLE,
-            "P": Action.SPLIT,
-            "R": Action.SURRENDER,
-        }
-        return mapping[symbol]
+        v = hand.value()
+        if hand.is_soft and 13 <= v <= 21:
+            return self.soft_table[v - 13][dealer_idx]
+        if 4 <= v <= 21:
+            return self.hard_table[v - 4][dealer_idx]
+        return self._HIT
 
     def _apply_s17_overrides(self):
-        """Patch the strategy table for S17 (dealer stands on soft 17)."""
-        for (hand_type, dealer_idx), action in self._S17_OVERRIDES.items():
-            if hand_type in self.strategy:
-                self.strategy[hand_type][dealer_idx] = action
+        """Patch the 3 cells that differ between H17 and S17."""
+        self.hard_table[11 - 4][9] = self._HIT       # Hard 11 vs A: D → H
+        self.soft_table[18 - 13][0] = self._STAND     # Soft 18 vs 2: DS → S
+        self.pair_table[8 - 2][9] = self._SPLIT       # Pair 8 vs A: R → P
         self._s17_applied = True
 
     def decide_action(self, player, dealer_up_card: Card, game=None) -> Action:
         if game is not None and not self._s17_applied:
             if not game.rules.dealer_hit_soft_17:
                 self._apply_s17_overrides()
-            self._s17_applied = True  # Only check once
+            self._s17_applied = True
 
-        current_hand = player.current_hand
-        hand_type = self._get_hand_type(current_hand)
-        dealer_card = self._get_dealer_card(dealer_up_card)
-        action_symbol = self._get_action_from_strategy(hand_type, dealer_card)
+        hand = player.current_hand
+        dealer_idx = self._dealer_index(dealer_up_card)
+        action = self._lookup(hand, dealer_idx)
 
-        decision_logger.log_strategy_lookup(hand_type, dealer_card, action_symbol)
+        return self._get_valid_action(player, action, dealer_idx)
 
-        try:
-            action = self._map_action_symbol(action_symbol)
-        except KeyError:
-            decision_logger.logger.warning(
-                f"Unknown action symbol: {action_symbol}, defaulting to HIT"
-            )
-            action = Action.HIT
-
-        final_action = self._get_valid_action(player, action, action_symbol, dealer_card)
-
-        if final_action != action:
-            decision_logger.logger.info(
-                f"Action adjusted from {action.value} to {final_action.value} based on valid actions"
-            )
-
-        return final_action
-
-    def _get_valid_action(self, player, action, action_symbol, dealer_card=None):
+    def _get_valid_action(self, player, action, dealer_idx=None):
         valid_actions = player.valid_actions
+
+        if action is self._DOUBLE_STAND:
+            # DS = Double if allowed, otherwise Stand
+            if Action.DOUBLE in valid_actions:
+                return Action.DOUBLE
+            return Action.STAND if Action.STAND in valid_actions else Action.HIT
 
         if action == Action.DOUBLE:
             if Action.DOUBLE in valid_actions:
                 return Action.DOUBLE
-            # DS = Double if allowed, otherwise Stand
-            if action_symbol == "DS":
-                return Action.STAND if Action.STAND in valid_actions else Action.HIT
             return Action.HIT if Action.HIT in valid_actions else Action.STAND
 
         if action == Action.SURRENDER:
@@ -192,15 +200,12 @@ class BasicStrategy(Strategy):
                 return Action.SPLIT
             # Can't split -- re-evaluate as the hard total.
             # E.g., 9,9 = Hard18 -> Stand, not Hit.
-            if dealer_card is not None:
-                hard_type = f"Hard{player.current_hand.value()}"
-                hard_symbol = self._get_action_from_strategy(hard_type, dealer_card)
-                try:
-                    hard_action = self._map_action_symbol(hard_symbol)
+            if dealer_idx is not None:
+                v = player.current_hand.value()
+                if 4 <= v <= 21:
+                    hard_action = self.hard_table[v - 4][dealer_idx]
                     if hard_action in valid_actions:
                         return hard_action
-                except KeyError:
-                    pass
             return Action.HIT if Action.HIT in valid_actions else Action.STAND
 
         if action in valid_actions:
