@@ -1,6 +1,6 @@
 [project]
 name = "cardsharp"
-version = "0.5.0"
+version = "0.6.0"
 description = "Card Playing Simulator focused on Blackjack"
 authors = [
     { name = "Matt Michie", email = "mmichie@gmail.com" }
