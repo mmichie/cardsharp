@@ -101,12 +101,16 @@ class SolverResult(NamedTuple):
         return diffs
 
 
-def solve(rules: Rules) -> SolverResult:
+def solve(rules: Rules, mode: str = "fast") -> SolverResult:
     """Compute exact house edge and optimal strategy for a rule set.
 
-    Uses infinite-deck when num_decks is not set or very large,
-    finite-deck otherwise. Finite-deck computes per-deal EVs with
-    composition-dependent probabilities.
+    mode:
+        "fast"  - Static dealer probs, ~1-2s for finite deck. (default)
+        "exact" - Dynamic dealer probs recomputed after player draws.
+                  Captures player-dealer shoe correlation. ~5-10min.
+                  ~0.02% more accurate for finite deck.
+
+    Infinite-deck is always fast (no card depletion effect).
     """
     # Choose deck mode
     use_finite = hasattr(rules, "num_decks") and rules.num_decks <= 8
@@ -130,8 +134,9 @@ def solve(rules: Rules) -> SolverResult:
     max_hands = rules.max_splits + 1
     resplit_aces = rules.resplit_aces
 
+    exact = mode == "exact"
     split_kw = dict(allow_resplit=allow_resplit, max_hands=max_hands,
-                    resplit_aces=resplit_aces)
+                    resplit_aces=resplit_aces, exact=exact)
 
     if use_finite:
         return _solve_finite(

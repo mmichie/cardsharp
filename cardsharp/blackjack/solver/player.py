@@ -29,6 +29,67 @@ def ev_stand(player_display: int, dealer_probs: dict) -> float:
     return ev
 
 
+def _compute_dealer_probs(upcard: int, deck: Deck, hit_soft_17: bool,
+                          peek: bool, memo: dict):
+    """Compute dealer outcome probs from current deck state (cached)."""
+    key = ("dlr", upcard, peek, deck.key)
+    if key in memo:
+        return memo[key]
+    if peek and upcard in (1, 10):
+        from .dealer import _conditional_probs
+        exclude = 10 if upcard == 1 else 1
+        result = _conditional_probs(upcard, hit_soft_17, deck, exclude)
+    else:
+        from .dealer import _recurse as dealer_recurse
+        hard = upcard
+        usable = upcard == 1 and hard + 10 <= 21
+        result = dealer_recurse(hard, usable, hit_soft_17, deck, {})
+    memo[key] = result
+    return result
+
+
+def _ev_stand_dynamic(player_display, upcard, deck, hit_soft_17, peek, memo):
+    """EV of standing with dealer probs from the CURRENT deck state."""
+    dp = _compute_dealer_probs(upcard, deck, hit_soft_17, peek, memo)
+    return ev_stand(player_display, dp)
+
+
+def _ev_hit_dynamic(hard_total, usable_ace, upcard, hit_soft_17, peek, deck, memo):
+    """EV of hitting with dynamic dealer probs."""
+    key = ("hit_dyn", hard_total, usable_ace, deck.key)
+    if key in memo:
+        return memo[key]
+    ev = 0.0
+    for card_idx, card_val in enumerate(CARD_VALUES):
+        p, new_deck = deck.draw(card_idx)
+        if p == 0:
+            continue
+        new_hard, new_usable, disp = add_card(hard_total, usable_ace, card_val)
+        if disp > 21:
+            ev += p * (-1.0)
+        else:
+            s = _ev_stand_dynamic(disp, upcard, new_deck, hit_soft_17, peek, memo)
+            h = _ev_hit_dynamic(new_hard, new_usable, upcard, hit_soft_17, peek, new_deck, memo)
+            ev += p * max(s, h)
+    memo[key] = ev
+    return ev
+
+
+def _ev_double_dynamic(hard_total, usable_ace, upcard, hit_soft_17, peek, deck, memo):
+    """EV of doubling with dynamic dealer probs."""
+    ev = 0.0
+    for card_idx, card_val in enumerate(CARD_VALUES):
+        p, new_deck = deck.draw(card_idx)
+        if p == 0:
+            continue
+        _, _, disp = add_card(hard_total, usable_ace, card_val)
+        if disp > 21:
+            ev += p * (-2.0)
+        else:
+            ev += p * 2.0 * _ev_stand_dynamic(disp, upcard, new_deck, hit_soft_17, peek, memo)
+    return ev
+
+
 def ev_hit(hard_total: int, usable_ace: bool, dealer_probs: dict,
            deck: Deck, memo: dict = None) -> float:
     """EV of hitting (and playing optimally afterward)."""
@@ -228,19 +289,29 @@ def compute_state_ev(
     allow_resplit: bool = False,
     max_hands: int = 4,
     resplit_aces: bool = False,
-    **_kwargs,
+    exact: bool = False,
+    upcard: int = 0,
+    hit_soft_17: bool = True,
+    peek: bool = True,
 ) -> StateEV:
     """Compute EV for all actions at a given state, pick best.
 
-    For finite deck, uses dynamic dealer probs (computed at each
-    terminal player state from the exact remaining deck). For infinite
-    deck, uses pre-computed dealer probs (no card depletion effect).
+    exact=True: recomputes dealer probs at each terminal player state
+    from the exact remaining deck (player-dealer shoe correlation).
+    Slower but ~0.02% more accurate for finite decks.
     """
     disp = display_value(hard_total, usable_ace)
-    hit_memo = {}
-    ev_s = ev_stand(disp, dealer_probs)
-    ev_h = _ev_hit(hard_total, usable_ace, dealer_probs, deck, hit_memo)
-    ev_d = ev_double(hard_total, usable_ace, dealer_probs, deck) if allow_double else math.nan
+
+    if exact and not deck._is_infinite and upcard > 0:
+        dyn_memo = {}
+        ev_s = _ev_stand_dynamic(disp, upcard, deck, hit_soft_17, peek, dyn_memo)
+        ev_h = _ev_hit_dynamic(hard_total, usable_ace, upcard, hit_soft_17, peek, deck, dyn_memo)
+        ev_d = _ev_double_dynamic(hard_total, usable_ace, upcard, hit_soft_17, peek, deck, dyn_memo) if allow_double else math.nan
+    else:
+        hit_memo = {}
+        ev_s = ev_stand(disp, dealer_probs)
+        ev_h = _ev_hit(hard_total, usable_ace, dealer_probs, deck, hit_memo)
+        ev_d = ev_double(hard_total, usable_ace, dealer_probs, deck) if allow_double else math.nan
 
     ev_sp = (
         ev_split(pair_value, dealer_probs, allow_das, deck,
