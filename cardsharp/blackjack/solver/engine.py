@@ -109,13 +109,25 @@ def solve(rules: Rules, mode: str = "fast") -> SolverResult:
         "exact"         - Dynamic dealer probs for non-split hands. ~1-5min.
         "combinatorial" - Single-pass enumeration with inline dealer eval
                           for ALL hands including splits. Matches WoO
-                          Appendix 9 within rounding. ~1-10min.
+                          Appendix 9 within rounding. ~10-30s for 1-2 decks.
+                          Automatically routes to "exact" for 4+ decks
+                          (combinatorial memo space is too large for 6-deck).
 
     Infinite-deck is always fast (no card depletion effect).
     """
     if mode == "combinatorial":
-        from .combinatorial import solve_combinatorial
-        return solve_combinatorial(rules)
+        num_decks = getattr(rules, "num_decks", None)
+        if num_decks is not None and num_decks > 2:
+            import sys
+            print(
+                f"Warning: combinatorial mode is too memory-intensive for "
+                f"{num_decks}-deck games. Falling back to exact mode.",
+                file=sys.stderr,
+            )
+            mode = "exact"
+        else:
+            from .combinatorial import solve_combinatorial
+            return solve_combinatorial(rules)
     # Choose deck mode
     use_finite = hasattr(rules, "num_decks") and rules.num_decks <= 8
     if use_finite:

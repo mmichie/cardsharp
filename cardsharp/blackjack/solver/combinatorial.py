@@ -13,6 +13,7 @@ Usage:
 """
 
 import math
+import multiprocessing
 
 from cardsharp.blackjack.action import Action
 from cardsharp.blackjack.rules import Rules
@@ -309,8 +310,74 @@ def _ev_split(pair_value, upcard, deck, allow_das, hit_soft_17, peek,
 # ---------------------------------------------------------------------------
 
 
+def _solve_one_upcard(args):
+    """Worker: solve all initial deals for one dealer upcard.
+
+    Must be a module-level function so multiprocessing can pickle it.
+    Returns {(cv1, cv2, upcard): StateEV} for this upcard.
+    """
+    (upcard, deck_counts, is_infinite,
+     hit_soft_17, allow_double, allow_split, allow_das,
+     allow_surrender, peek, allow_resplit, max_hands, resplit_aces) = args
+
+    deck = Deck.infinite() if is_infinite else Deck(tuple(deck_counts))
+    memo = {}
+    ev_entries = {}
+
+    for i, cv1 in enumerate(CARD_VALUES):
+        for cv2 in CARD_VALUES[i:]:
+            hard, usable, _, is_pair = hand_state_from_cards(cv1, cv2)
+            pair_value = cv1 if is_pair else 0
+
+            remaining = deck.remove_card(cv1).remove_card(cv2).remove_card(upcard)
+            disp = display_value(hard, usable)
+
+            ev_s = _ev_stand(disp, upcard, remaining, hit_soft_17, peek, memo)
+            ev_h = _ev_hit(hard, usable, upcard, remaining, hit_soft_17, peek, memo)
+            ev_d = (
+                _ev_double(hard, usable, upcard, remaining, hit_soft_17, peek, memo)
+                if allow_double else math.nan
+            )
+            ev_sp = (
+                _ev_split(pair_value, upcard, remaining, allow_das, hit_soft_17,
+                          peek, allow_resplit, max_hands, resplit_aces, memo)
+                if (is_pair and allow_split) else math.nan
+            )
+            ev_sr = -0.5 if allow_surrender else math.nan
+
+            candidates = [(ev_h, Action.HIT), (ev_s, Action.STAND)]
+            if allow_double:
+                candidates.append((ev_d, Action.DOUBLE))
+            if is_pair and allow_split:
+                candidates.append((ev_sp, Action.SPLIT))
+            if allow_surrender:
+                candidates.append((ev_sr, Action.SURRENDER))
+
+            best_ev, best_action = max(candidates, key=lambda x: x[0])
+
+            ev_entries[(cv1, cv2, upcard)] = StateEV(
+                hit=ev_h, stand=ev_s, double=ev_d, split=ev_sp,
+                surrender=ev_sr, best_action=best_action, best_ev=best_ev,
+            )
+
+    return ev_entries
+
+
 def solve_combinatorial(rules: Rules) -> SolverResult:
-    """Compute exact house edge using single-pass combinatorial analysis."""
+    """Compute exact house edge using single-pass combinatorial analysis.
+
+    Parallelizes over the 10 dealer upcards for ~10x speedup on multi-core.
+    Raises ValueError for 4+ deck games: the memo state space exhausts RAM.
+    Use solve(rules, mode="exact") instead for large shoe configurations.
+    """
+    num_decks = getattr(rules, "num_decks", None)
+    if num_decks is not None and num_decks > 2:
+        raise ValueError(
+            f"combinatorial mode does not support {num_decks}-deck games "
+            f"(memo state space exceeds available RAM). "
+            f"Use solve(rules, mode='exact') instead."
+        )
+
     use_finite = hasattr(rules, "num_decks") and rules.num_decks <= 8
     deck = Deck.finite(rules.num_decks) if use_finite else Deck.infinite()
 
@@ -328,56 +395,20 @@ def solve_combinatorial(rules: Rules) -> SolverResult:
     max_hands = rules.max_splits + 1
     resplit_aces = rules.resplit_aces
 
-    # Compute EV for every initial deal
+    worker_args = [
+        (upcard, deck._counts, deck._is_infinite,
+         hit_soft_17, allow_double, allow_split, allow_das,
+         allow_surrender, peek, allow_resplit, max_hands, resplit_aces)
+        for upcard in CARD_VALUES
+    ]
+
+    num_workers = min(len(CARD_VALUES), max(1, multiprocessing.cpu_count() - 2))
+    with multiprocessing.Pool(num_workers) as pool:
+        results = pool.map(_solve_one_upcard, worker_args)
+
     ev_table = {}
-
-    for upcard in CARD_VALUES:
-        # Share memo across all player hands for the same upcard.
-        # Dealer sub-computations from overlapping deck states are reused.
-        upcard_memo = {}
-
-        for i, cv1 in enumerate(CARD_VALUES):
-            for cv2 in CARD_VALUES[i:]:
-                hard, usable, _, is_pair = hand_state_from_cards(cv1, cv2)
-                pair_value = cv1 if is_pair else 0
-
-                remaining = deck.remove_card(cv1).remove_card(cv2).remove_card(upcard)
-                memo = upcard_memo
-
-                # Compute EVs for each action
-                disp = display_value(hard, usable)
-
-                ev_s = _ev_stand(disp, upcard, remaining, hit_soft_17, peek, memo)
-                ev_h = _ev_hit(hard, usable, upcard, remaining, hit_soft_17,
-                               peek, memo)
-                ev_d = (
-                    _ev_double(hard, usable, upcard, remaining, hit_soft_17,
-                               peek, memo)
-                    if allow_double else math.nan
-                )
-                ev_sp = (
-                    _ev_split(pair_value, upcard, remaining, allow_das,
-                              hit_soft_17, peek, allow_resplit, max_hands,
-                              resplit_aces, memo)
-                    if (is_pair and allow_split) else math.nan
-                )
-                ev_sr = -0.5 if allow_surrender else math.nan
-
-                candidates = [(ev_h, Action.HIT), (ev_s, Action.STAND)]
-                if allow_double:
-                    candidates.append((ev_d, Action.DOUBLE))
-                if is_pair and allow_split:
-                    candidates.append((ev_sp, Action.SPLIT))
-                if allow_surrender:
-                    candidates.append((ev_sr, Action.SURRENDER))
-
-                best_ev, best_action = max(candidates, key=lambda x: x[0])
-
-                sev = StateEV(
-                    hit=ev_h, stand=ev_s, double=ev_d, split=ev_sp,
-                    surrender=ev_sr, best_action=best_action, best_ev=best_ev,
-                )
-                ev_table[(cv1, cv2, upcard)] = sev
+    for entries in results:
+        ev_table.update(entries)
 
     house_edge = _compute_house_edge(ev_table, deck, bj_payout, peek)
     strategy = _generate_strategy(ev_table, allow_double)
