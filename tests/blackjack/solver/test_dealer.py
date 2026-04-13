@@ -71,8 +71,8 @@ class TestDealerBlackjackProb:
         assert abs(dealer_blackjack_prob(10, Deck.infinite()) - 1 / 13) < 1e-10
 
     def test_ace_up_finite_1d(self):
-        d = Deck.finite(1)
-        # After dealing Ace up: 51 remaining, 16 ten-values
+        d = Deck.finite(1).remove_card(1)  # upcard Ace already removed
+        # 51 remaining, 16 ten-values
         p = dealer_blackjack_prob(1, d)
         assert abs(p - 16 / 51) < 1e-10
 

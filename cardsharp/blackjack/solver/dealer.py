@@ -92,13 +92,14 @@ def compute_conditional_dealer_probs_for_deal(
 
 
 def dealer_blackjack_prob(upcard: int, deck: Deck) -> float:
-    """Probability that dealer has blackjack given upcard."""
+    """Probability that dealer has blackjack given upcard.
+
+    The deck must already have the upcard removed.
+    """
     if upcard == 1:
-        _, p_ten = deck.remove_card(upcard).draw(CARD_IDX[10])
-        # Wait, draw returns (prob, new_deck). We just need the prob.
-        return deck.remove_card(upcard).draw(CARD_IDX[10])[0]
+        return deck.draw(CARD_IDX[10])[0]
     if upcard == 10:
-        return deck.remove_card(upcard).draw(CARD_IDX[1])[0]
+        return deck.draw(CARD_IDX[1])[0]
     return 0.0
 
 

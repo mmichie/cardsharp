@@ -266,8 +266,8 @@ def _compute_house_edge(ev_table, deck, bj_payout, peek):
                 p_deal = p_pair * p_up_cond
 
                 # Dealer BJ prob from remaining deck (after 3 cards dealt)
-                deck123 = deck12.remove_card(upcard)
-                p_dbj = dealer_blackjack_prob(upcard, deck123)
+                deck3 = deck12.remove_card(upcard)
+                p_dbj = dealer_blackjack_prob(upcard, deck3)
 
                 if peek:
                     ev = _ev_with_peek(
