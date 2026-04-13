@@ -228,14 +228,20 @@ def compute_state_ev(
     allow_resplit: bool = False,
     max_hands: int = 4,
     resplit_aces: bool = False,
+    **_kwargs,
 ) -> StateEV:
-    """Compute EV for all actions at a given state, pick best."""
-    disp = display_value(hard_total, usable_ace)
+    """Compute EV for all actions at a given state, pick best.
 
+    For finite deck, uses dynamic dealer probs (computed at each
+    terminal player state from the exact remaining deck). For infinite
+    deck, uses pre-computed dealer probs (no card depletion effect).
+    """
+    disp = display_value(hard_total, usable_ace)
     hit_memo = {}
     ev_s = ev_stand(disp, dealer_probs)
     ev_h = _ev_hit(hard_total, usable_ace, dealer_probs, deck, hit_memo)
     ev_d = ev_double(hard_total, usable_ace, dealer_probs, deck) if allow_double else math.nan
+
     ev_sp = (
         ev_split(pair_value, dealer_probs, allow_das, deck,
                  allow_resplit, max_hands, resplit_aces)

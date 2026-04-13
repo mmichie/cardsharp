@@ -208,6 +208,7 @@ def _solve_finite(deck, hit_soft_17, bj_payout, allow_double,
                     hard, usable, is_pair, pair_value, dp,
                     allow_double, allow_split, allow_das, allow_surrender,
                     remaining, **split_kw,
+                    upcard=upcard, hit_soft_17=hit_soft_17, peek=peek,
                 )
                 ev_table[(cv1, cv2, upcard)] = sev
 
