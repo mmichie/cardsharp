@@ -539,7 +539,7 @@ def run_solver(args, rules):
     """Run the exact probabilistic solver and display results."""
     from cardsharp.blackjack.solver import solve
 
-    mode = "exact" if args.exact else "fast"
+    mode = args.solver_mode
     print(f"Solving for: {rules.num_decks}-deck "
           f"{'H17' if rules.dealer_hit_soft_17 else 'S17'}, "
           f"{'DAS' if rules.allow_double_after_split else 'no-DAS'}, "
@@ -803,10 +803,11 @@ def main():
         default=False,
     )
     parser.add_argument(
-        "--exact",
-        action="store_true",
-        help="With --solve, use exact mode (dynamic dealer probs, slower but ~0.02%% more accurate)",
-        default=False,
+        "--solver_mode",
+        type=str,
+        choices=["fast", "exact", "combinatorial"],
+        default="fast",
+        help="Solver mode: fast (~1s), exact (~1-5min), combinatorial (~1-10min, matches WoO)",
     )
     parser.add_argument("--min_bet", type=int, default=10, help="Minimum bet amount")
     parser.add_argument("--max_bet", type=int, default=1000, help="Maximum bet amount")

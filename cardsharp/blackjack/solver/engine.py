@@ -105,13 +105,17 @@ def solve(rules: Rules, mode: str = "fast") -> SolverResult:
     """Compute exact house edge and optimal strategy for a rule set.
 
     mode:
-        "fast"  - Static dealer probs, ~1-2s for finite deck. (default)
-        "exact" - Dynamic dealer probs recomputed after player draws.
-                  Captures player-dealer shoe correlation. ~5-10min.
-                  ~0.02% more accurate for finite deck.
+        "fast"          - Static dealer probs, ~1-2s. (default)
+        "exact"         - Dynamic dealer probs for non-split hands. ~1-5min.
+        "combinatorial" - Single-pass enumeration with inline dealer eval
+                          for ALL hands including splits. Matches WoO
+                          Appendix 9 within rounding. ~1-10min.
 
     Infinite-deck is always fast (no card depletion effect).
     """
+    if mode == "combinatorial":
+        from .combinatorial import solve_combinatorial
+        return solve_combinatorial(rules)
     # Choose deck mode
     use_finite = hasattr(rules, "num_decks") and rules.num_decks <= 8
     if use_finite:
