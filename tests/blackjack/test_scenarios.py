@@ -681,6 +681,43 @@ class TestInsurance:
         assert result.player_won
         assert result.money_change == 0.5
 
+    def test_insurance_no_peek_dealer_blackjack_pays(self, scenario):
+        """Insurance must pay 2:1 in no-peek mode when dealer has BJ.
+
+        Regression: in no-peek mode the insurance-loss block in
+        OfferInsuranceState.handle used to run unconditionally, zeroing
+        the insurance bet before the dealer's hand was revealed --
+        making insurance never pay out in no-peek games.
+        """
+        result = scenario(
+            player=["Th", "9h"],
+            dealer=["As", "Kd"],
+            rules={
+                "allow_insurance": True,
+                "dealer_peek": False,
+            },
+            accept_insurance=True,
+        )
+        assert result.dealer_blackjack
+        # Bet=1, insurance=0.5. Lost bet=-1, insurance pays 0.5*3=1.5.
+        # Net: -1 (bet) - 0.5 (insurance) + 1.5 (insurance payout) = 0
+        assert result.money_change == 0
+
+    def test_insurance_no_peek_dealer_no_blackjack_lost(self, scenario):
+        """Insurance is lost in no-peek mode when dealer doesn't have BJ."""
+        result = scenario(
+            player=["Th", "9h"],
+            dealer=["As", "7d"],
+            rules={
+                "allow_insurance": True,
+                "dealer_peek": False,
+            },
+            accept_insurance=True,
+        )
+        # Player wins 19 vs 18, loses 0.5 insurance.
+        assert result.player_won
+        assert result.money_change == 0.5
+
 
 # ---------------------------------------------------------------------------
 # Dealer basic behavior
@@ -825,6 +862,25 @@ class TestEarlySurrender:
         # Player surrenders before peek discovers dealer BJ
         assert result.is_surrender
         assert result.money_change == -0.5  # half bet returned
+
+    def test_early_surrender_no_peek_vs_dealer_blackjack(self, scenario):
+        """Early surrender in no-peek mode also holds against dealer BJ.
+
+        Regression: the early-surrender offer in OfferInsuranceState was
+        gated on `should_dealer_peek()`, making it unreachable in no-peek
+        games -- exactly the games where early surrender is a real-world
+        feature. Removing the gate enables the rule in both modes; the
+        EndRound void-surrender check is gated on
+        `not allow_early_surrender` so the half-bet refund holds against
+        dealer BJ when this rule is enabled.
+        """
+        result = scenario(
+            player=["Th", "6s"],
+            dealer=["As", "Kd"],
+            rules={"allow_early_surrender": True, "dealer_peek": False},
+        )
+        assert result.is_surrender
+        assert result.money_change == -0.5
 
     def test_late_surrender_blocked_by_dealer_blackjack(self, scenario):
         """Late surrender NOT available when dealer has blackjack (peek first)."""

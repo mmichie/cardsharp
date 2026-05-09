@@ -209,8 +209,13 @@ class OfferInsuranceState(GameState):
                 self.offer_insurance(game, player)
 
         # Early surrender: offered before dealer peeks, so player can
-        # surrender even against a dealer blackjack.
-        if game.rules.can_early_surrender() and game.rules.should_dealer_peek():
+        # surrender even against a dealer blackjack. Real casinos
+        # typically offer this in NO-PEEK games (it's an alternative
+        # to peeking) but the rule is also valid in peek games (the
+        # surrender just happens before the peek). The void-vs-hold
+        # against a dealer BJ is enforced at EndRound by gating on
+        # not allow_early_surrender.
+        if game.rules.can_early_surrender():
             for player in game.players:
                 if player.done or player.hand_done[0]:
                     continue
@@ -230,15 +235,19 @@ class OfferInsuranceState(GameState):
                     game.set_state(_state_end_round)
                     return
 
-        # Dealer does not have blackjack
-        # Handle loss of insurance bets
-        for player in game.players:
-            if player.insurance > 0:
-                game.output(
-                    f"{player.name} loses insurance bet of ${player.insurance:.2f}."
-                )
-                # Insurance bet was already deducted when bought; reset insurance amount
-                player.insurance = 0  # Reset insurance bet
+        # Insurance resolution. In peek mode we now know the dealer
+        # doesn't have BJ (peek branch above returned), so any
+        # outstanding insurance is lost. In no-peek mode the dealer's
+        # BJ status is still unknown, so insurance must wait until
+        # EndRound where it is resolved by EndRoundState.
+        if game.rules.should_dealer_peek():
+            for player in game.players:
+                if player.insurance > 0:
+                    game.output(
+                        f"{player.name} loses insurance bet of ${player.insurance:.2f}."
+                    )
+                    # Insurance bet was already deducted when bought; reset insurance amount
+                    player.insurance = 0  # Reset insurance bet
 
         # Check for player blackjacks -- only pay immediately if we've
         # confirmed dealer doesn't have BJ (peek mode). In no-peek mode,
@@ -586,6 +595,7 @@ class EndRoundState(GameState):
         """
         self.calculate_winner(game)
         self.output_results(game)
+        self.resolve_no_peek_insurance(game)
         self.handle_payouts(game)
         game.stats.update(game)
         # visible_cards is cleared in BlackjackGame.reset(), not here.
@@ -600,6 +610,35 @@ class EndRoundState(GameState):
             # The shoe will automatically reshuffle on the next deal
 
         game.set_state(_state_placing_bets)
+
+    def resolve_no_peek_insurance(self, game):
+        """Pay or void insurance bets in no-peek mode.
+
+        In peek mode, OfferInsuranceState resolves insurance immediately
+        after the dealer peeks (handle_dealer_blackjack pays out on BJ;
+        the post-peek branch zeroes the insurance otherwise). In no-peek
+        mode, the dealer's BJ status is unknown until the dealer plays,
+        so insurance is held open and resolved here.
+        """
+        if game.rules.should_dealer_peek():
+            return  # peek mode already resolved insurance
+
+        dealer_blackjack = game.dealer.current_hand.is_blackjack
+        for player in game.players:
+            if player.insurance <= 0:
+                continue
+            if dealer_blackjack:
+                multiplier = game.rules.get_insurance_payout()
+                payout = player.insurance * (1 + multiplier)
+                player.payout_insurance(payout)
+                game.output(
+                    f"{player.name} wins insurance bet of ${payout:.2f}."
+                )
+            else:
+                game.output(
+                    f"{player.name} loses insurance bet of ${player.insurance:.2f}."
+                )
+            player.insurance = 0
 
     def calculate_winner(self, game):
         """Calculates the winner of the round."""
