@@ -24,6 +24,8 @@ import matplotlib.pyplot as plt
 import threading
 import os
 
+import random
+
 from cardsharp.blackjack.actor import Dealer, Player
 from cardsharp.blackjack.state import (
     STATE_END_ROUND,
@@ -459,6 +461,12 @@ def play_game(
     total_bets = sum(player.total_bets for player in game.players)
     initial_bets = sum(player.initial_bets for player in game.players)
 
+    # Record this round's financial outcome for variance/CI estimation.
+    # Skip rounds with zero initial bet (broke player) so the ratio
+    # estimator's denominator stays positive.
+    if initial_bets > 0:
+        game.stats.record_round(net_earnings, initial_bets, total_bets)
+
     if isinstance(strategy, CountingStrategy) and game.shoe:
         # Detect reshuffle: cards_remaining goes UP when shoe reshuffles.
         # cards_before is None when no shoe was passed (first game).
@@ -492,8 +500,15 @@ def play_game_batch(
     initial_bankroll: int = 1000,
     shuffle_type: str = "perfect",
     shuffle_count: int = None,
+    seed: Optional[int] = None,
 ):
-    """Function to play a batch of games of Blackjack, to be executed in a separate process."""
+    """Function to play a batch of games of Blackjack, to be executed in a separate process.
+
+    If seed is provided, the worker's global random state is seeded for
+    reproducibility. Returns the batch-aggregated stats (as a dict),
+    a per-round earnings list (for graphing), and the batch's total
+    bet sum.
+    """
     # Ensure logging is disabled in worker processes
     import os
 
@@ -509,6 +524,9 @@ def play_game_batch(
     decision_logger.decision_history.clear()
     decision_logger.current_round_decisions.clear()
 
+    if seed is not None:
+        random.seed(seed)
+
     shoe = Shoe(
         num_decks=rules.num_decks,
         penetration=rules.penetration,
@@ -518,7 +536,7 @@ def play_game_batch(
         shuffle_type=shuffle_type,
         shuffle_count=shuffle_count,
     )
-    results = []
+    agg_stats = SimulationStats()
     earnings = []
     total_bets = 0
 
@@ -527,12 +545,12 @@ def play_game_batch(
             rules, io_interface, player_names, strategy, shoe, initial_bankroll
         )
         shoe = current_shoe
-        results.append(result)
+        agg_stats.merge(SimulationStats.from_dict(result))
         earnings.append(game_earnings)
         total_bets += game_bets
         # Shuffle detection and count updates are handled inside play_game.
 
-    return results, earnings, total_bets
+    return agg_stats.report(), earnings, total_bets
 
 
 def run_solver(args, rules):
@@ -898,6 +916,19 @@ def main():
         "Research shows 7 riffle shuffles needed for true randomness on 52 cards. "
         "Real dealers typically do 3-5 riffles (insufficient mixing).",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="RNG seed for reproducible simulation. If omitted, a seed "
+        "is generated and printed so the run can be replayed.",
+    )
+    parser.add_argument(
+        "--confidence",
+        type=float,
+        default=0.95,
+        help="Confidence level for reported intervals (default 0.95).",
+    )
     args = parser.parse_args()
 
     # Validate num_players
@@ -939,11 +970,20 @@ def main():
     elif args.analysis:
         run_strategy_analysis(args, rules, args.bankroll)
     elif args.simulate:
+        # Establish a master seed: if user didn't provide one, generate
+        # a fresh one from system entropy and print it so the run is
+        # reproducible by re-running with --seed <value>.
+        master_seed = args.seed
+        if master_seed is None:
+            master_seed = random.SystemRandom().randint(0, 2**63 - 1)
+        random.seed(master_seed)
+        print(f"Seed: {master_seed}")
+
         start_time = time.time()
         graph = BlackjackGraph(args.num_games) if args.vis else None
-        net_earnings = 0
+        agg_stats = SimulationStats()
+        running_net_earnings = 0
         total_bets = 0
-        results = []
         player_names = generate_player_names(args.num_players)
 
         if args.single_cpu:
@@ -967,17 +1007,21 @@ def main():
                     args.bankroll,
                 )
                 shoe = current_shoe  # Update shoe state for next game
-                net_earnings += earnings
+                agg_stats.merge(SimulationStats.from_dict(result))
+                running_net_earnings += earnings
                 total_bets += bets
                 if graph:
-                    graph.update(i + 1, net_earnings)
-                results.append(result)
+                    graph.update(i + 1, running_net_earnings)
         else:
             # For parallel processing, we still need separate shoes per process
             cpu_count = multiprocessing.cpu_count()
             games_per_cpu, remainder = divmod(args.num_games, cpu_count)
             game_batches = [
                 games_per_cpu + (1 if i < remainder else 0) for i in range(cpu_count)
+            ]
+            # Derive deterministic, independent worker seeds from the master.
+            worker_seeds = [
+                random.randint(0, 2**63 - 1) for _ in range(cpu_count)
             ]
 
             with multiprocessing.Pool() as pool:
@@ -991,60 +1035,64 @@ def main():
                         args.bankroll,
                         args.shuffle_type,
                         args.shuffle_count,
+                        worker_seeds[i],
                     )
-                    for game_count in game_batches
+                    for i, game_count in enumerate(game_batches)
                 ]
                 batch_results = pool.starmap(play_game_batch, batch_args)
                 game_number = 0
-                for batch_result, batch_earnings, batch_bets in batch_results:
+                for batch_dict, batch_earnings, batch_bets in batch_results:
+                    agg_stats.merge(SimulationStats.from_dict(batch_dict))
                     total_bets += batch_bets
-                    for result, earnings in zip(batch_result, batch_earnings):
+                    for earnings in batch_earnings:
                         game_number += 1
-                        net_earnings += earnings
+                        running_net_earnings += earnings
                         if graph:
-                            graph.update(game_number, net_earnings)
-                        results.append(result)
+                            graph.update(game_number, running_net_earnings)
 
         end_time = time.time()
         duration = end_time - start_time
         games_per_second = args.num_games / duration if duration > 0 else 0
 
-        # Initialize counters for aggregated statistics
-        total_games_played = 0
-        total_player_wins = 0
-        total_dealer_wins = 0
-        total_draws = 0
-
-        # Aggregate results
-        for result in results:
-            total_games_played += result["games_played"]
-            total_player_wins += result["player_wins"]
-            total_dealer_wins += result["dealer_wins"]
-            total_draws += result["draws"]
-
-        games_played_excluding_pushes = total_games_played - total_draws
-
-        if total_bets > 0:
-            house_edge = (
-                -net_earnings / total_bets
-            ) * 100  # Negative because player's net earnings are negative when the house wins
-        else:
-            house_edge = 0
+        games_played_excluding_pushes = agg_stats.games_played - agg_stats.draws
+        net_earnings = agg_stats.net_sum
 
         print("Simulation completed.")
         print(f"Games played (excluding pushes): {games_played_excluding_pushes:,}")
-        print(f"Player wins: {total_player_wins:,}")
-        print(f"Dealer wins: {total_dealer_wins:,}")
-        print(f"Draws: {total_draws:,}")
+        print(f"Player wins: {agg_stats.player_wins:,}")
+        print(f"Dealer wins: {agg_stats.dealer_wins:,}")
+        print(f"Draws: {agg_stats.draws:,}")
         print(f"Net Earnings: ${net_earnings:,.2f}")
         print(f"Total Bets: ${total_bets:,.2f}")
-        print(f"House Edge: {house_edge:.2f}%")
 
-        if games_played_excluding_pushes != 0:
-            player_win_rate = total_player_wins / games_played_excluding_pushes * 100
-            dealer_win_rate = total_dealer_wins / games_played_excluding_pushes * 100
-            print(f"Player win rate: {player_win_rate:.2f}%")
-            print(f"Dealer win rate: {dealer_win_rate:.2f}%")
+        # House edge per initial bet, with delta-method CI. This matches
+        # the convention used in published house-edge tables.
+        he_result = agg_stats.house_edge_with_ci(confidence=args.confidence)
+        ci_pct = int(round(args.confidence * 100))
+        if he_result is not None:
+            he, lo, hi, half = he_result
+            print(
+                f"House Edge: {he * 100:.4f}% +/- {half * 100:.4f}% "
+                f"({ci_pct}% CI: [{lo * 100:.4f}%, {hi * 100:.4f}%], "
+                f"n={agg_stats.n_rounds:,})"
+            )
+        # Edge over total action (legacy metric: includes doubles/splits
+        # in the denominator). Kept for backwards compatibility.
+        if total_bets > 0:
+            edge_total_action = (-net_earnings / total_bets) * 100
+            print(f"Edge vs total action: {edge_total_action:.4f}%")
+
+        wr_result = agg_stats.win_rate_with_ci(confidence=args.confidence)
+        if wr_result is not None:
+            p, lo, hi, half = wr_result
+            print(
+                f"Player win rate: {p * 100:.2f}% +/- {half * 100:.2f}% "
+                f"({ci_pct}% Wilson CI: [{lo * 100:.2f}%, {hi * 100:.2f}%])"
+            )
+            dealer_n = agg_stats.player_wins + agg_stats.dealer_wins
+            if dealer_n > 0:
+                dealer_p = agg_stats.dealer_wins / dealer_n * 100
+                print(f"Dealer win rate: {dealer_p:.2f}%")
 
         print(f"\nDuration of simulation: {duration:.2f} seconds")
         print(f"Games simulated per second: {games_per_second:,.2f}")
