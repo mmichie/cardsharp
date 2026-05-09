@@ -604,6 +604,50 @@ def run_solver(args, rules):
             print(f"  {label}: {', '.join(parts)} -> {sev.best_action.value}")
 
 
+def run_rule_comparison(args, baseline_rules):
+    """Run a CRN comparison of two named rule sets.
+
+    The two rule sets share every parameter from baseline_rules except
+    the one knob being toggled by --compare_rules. Reports per-rule
+    house edge plus a tightly-bounded paired-difference estimate.
+    """
+    # Match simulate-path noise suppression
+    os.environ["BLACKJACK_DISABLE_LOGGING"] = "1"
+    decision_logger.set_level(logging.ERROR)
+
+    from cardsharp.blackjack.comparison import compare_rules
+    from copy import copy
+
+    def with_override(**kwargs):
+        new = copy(baseline_rules)
+        for k, v in kwargs.items():
+            setattr(new, k, v)
+        return new
+
+    if args.compare_rules == "h17_vs_s17":
+        pair = {
+            "H17": with_override(dealer_hit_soft_17=True),
+            "S17": with_override(dealer_hit_soft_17=False),
+        }
+    elif args.compare_rules == "bj_3_2_vs_6_5":
+        pair = {
+            "3:2": with_override(blackjack_payout=1.5),
+            "6:5": with_override(blackjack_payout=1.2),
+        }
+    else:
+        raise ValueError(
+            f"Unknown comparison: {args.compare_rules}"
+        )
+
+    print(f"Comparing: {args.compare_rules}")
+    result = compare_rules(
+        rules_dict=pair,
+        num_rounds=args.num_games,
+        seed=args.seed,
+    )
+    result.print_report(confidence=args.confidence)
+
+
 def run_strategy_analysis(args, rules, initial_bankroll: int = 1000):
     # Silence decision logging in analysis mode (same as simulate)
     os.environ["BLACKJACK_DISABLE_LOGGING"] = "1"
@@ -924,6 +968,18 @@ def main():
         "is generated and printed so the run can be replayed.",
     )
     parser.add_argument(
+        "--compare_rules",
+        type=str,
+        default=None,
+        choices=["h17_vs_s17", "bj_3_2_vs_6_5"],
+        help="Run a Common Random Numbers (CRN) comparison of two rule "
+        "sets. Reports per-rule house edge plus the much tighter paired "
+        "difference. Uses --num_games rounds. Only rule changes that "
+        "alter dealer behavior or payouts produce meaningful diffs with "
+        "BasicStrategy (CSV-based), since BasicStrategy does not switch "
+        "decisions on DAS / surrender / peek availability.",
+    )
+    parser.add_argument(
         "--confidence",
         type=float,
         default=0.95,
@@ -969,6 +1025,8 @@ def main():
         run_solver(args, rules)
     elif args.analysis:
         run_strategy_analysis(args, rules, args.bankroll)
+    elif args.compare_rules:
+        run_rule_comparison(args, rules)
     elif args.simulate:
         # Establish a master seed: if user didn't provide one, generate
         # a fresh one from system entropy and print it so the run is
