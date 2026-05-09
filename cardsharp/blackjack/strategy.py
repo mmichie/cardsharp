@@ -511,3 +511,86 @@ class AggressiveStrategy(BasicStrategy):
             if 12 <= hand_value <= 16 and dealer_rank >= 7:
                 return Action.HIT
             return Action.STAND
+
+
+# ---------------------------------------------------------------------------
+# Strategy factory
+# ---------------------------------------------------------------------------
+#
+# Central registry that maps a short name to a builder callable. A builder
+# takes (rules: Optional[Rules], **kwargs) and returns a Strategy instance.
+# The builder pattern (rather than just registering classes) handles the
+# fact that different strategies need different construction context: e.g.
+# CountingStrategy needs num_decks, SolverStrategy needs the full Rules to
+# call solve(), and the bet-ramp strategies are parameterless.
+
+
+def _build_basic(rules=None, **_):
+    return BasicStrategy()
+
+
+def _build_counting(rules=None, num_decks=None, **_):
+    n = num_decks
+    if n is None and rules is not None:
+        n = rules.num_decks
+    return CountingStrategy(num_decks=n if n is not None else 6)
+
+
+def _build_aggressive(rules=None, **_):
+    return AggressiveStrategy()
+
+
+def _build_martingale(rules=None, **kwargs):
+    return MartingaleStrategy(
+        initial_bet=kwargs.get("initial_bet", 10),
+        max_bet_override=kwargs.get("max_bet_override"),
+    )
+
+
+def _build_solver(rules=None, **_):
+    if rules is None:
+        raise ValueError(
+            "solver strategy requires a Rules object (it solves rules-aware "
+            "optimal play); pass rules=... to create_strategy."
+        )
+    # Local import avoids a hard solver dependency at module import time.
+    from cardsharp.blackjack.solver import solve
+    return SolverStrategy(solve(rules, mode="fast"))
+
+
+STRATEGY_FACTORIES = {
+    "basic": _build_basic,
+    "count": _build_counting,
+    "counting": _build_counting,
+    "aggro": _build_aggressive,
+    "aggressive": _build_aggressive,
+    "martin": _build_martingale,
+    "martingale": _build_martingale,
+    "solver": _build_solver,
+}
+
+
+def register_strategy(name, builder):
+    """Register a custom strategy builder.
+
+    builder is a callable accepting (rules=None, **kwargs) and returning a
+    Strategy instance. Useful for third-party strategies or tests.
+    """
+    STRATEGY_FACTORIES[name.lower()] = builder
+
+
+def create_strategy(name, *, rules=None, **kwargs):
+    """Build a Strategy instance by short name.
+
+    Built-in names: basic, count/counting, aggro/aggressive,
+    martin/martingale, solver. Pass rules=... when building solver (or
+    any future rules-aware strategy); pass num_decks=... to override the
+    deck count for counting strategies.
+    """
+    key = name.lower()
+    if key not in STRATEGY_FACTORIES:
+        raise ValueError(
+            f"Unknown strategy: {name!r}. "
+            f"Available: {sorted(set(STRATEGY_FACTORIES))}"
+        )
+    return STRATEGY_FACTORIES[key](rules=rules, **kwargs)

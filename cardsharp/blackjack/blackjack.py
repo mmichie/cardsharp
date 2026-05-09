@@ -397,8 +397,15 @@ def generate_player_names(num_players: int) -> list[str]:
     return [f"Player{i+1}" for i in range(num_players)]
 
 
-def create_io_interface(args):
-    """Create the IO interface based on the command line arguments."""
+def create_io_interface(args, rules=None):
+    """Create the IO interface and the player strategy.
+
+    rules is optional but required for strategies whose construction
+    depends on the rule set (currently: solver). All other built-in
+    strategies (basic/count/aggro/martin) ignore it.
+    """
+    from cardsharp.blackjack.strategy import create_strategy
+
     strategy = None
     if args.console:
         io_interface = ConsoleIOInterface()
@@ -412,20 +419,14 @@ def create_io_interface(args):
         import logging
 
         decision_logger.set_level(logging.ERROR)
-        if args.strat:
-            if args.strat == "count":
-                strategy = CountingStrategy(num_decks=args.num_decks)
-            elif args.strat == "aggro":
-                strategy = AggressiveStrategy()
-            elif args.strat == "martin":
-                strategy = MartingaleStrategy()
-            else:
-                strategy = BasicStrategy()  # Use optimized strategy for simulation
-        else:
-            strategy = BasicStrategy()  # Use optimized strategy for simulation
+        strategy = create_strategy(
+            args.strat or "basic",
+            rules=rules,
+            num_decks=args.num_decks,
+        )
     else:
         io_interface = ConsoleIOInterface()
-        strategy = BasicStrategy()
+        strategy = create_strategy("basic", rules=rules)
     return io_interface, strategy
 
 
@@ -980,9 +981,12 @@ def main():
     parser.add_argument(
         "--strat",
         type=str,
-        choices=["basic", "count", "aggro", "martin"],
+        choices=["basic", "count", "aggro", "martin", "solver"],
         default="basic",
-        help="Pick your strategy. 'basic' for basic strategy, 'count' for counting cards, 'aggro' for aggressive strategy",
+        help="Pick your strategy. 'basic' = static CSV basic strategy, "
+        "'count' = Hi-Lo card counter, 'aggro' = aggressive heuristic, "
+        "'martin' = Martingale bet ramp, 'solver' = optimal-per-rules "
+        "play computed from the solver at startup (~1s).",
     )
     parser.add_argument(
         "--vis",
@@ -1162,8 +1166,8 @@ def main():
             "--num_players must be between 1 and 7 (typical blackjack table limit)"
         )
 
-    io_interface, strategy = create_io_interface(args)
     rules = create_rules(args)
+    io_interface, strategy = create_io_interface(args, rules)
 
     profiler = None
     if args.profile:
