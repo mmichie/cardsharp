@@ -111,6 +111,7 @@ def compare_rules(
     seed: Optional[int] = None,
     initial_bankroll: int = 10_000_000,
     use_solver_strategy: bool = False,
+    num_players: int = 1,
 ) -> ComparisonResult:
     """Compare N rule sets via Common Random Numbers.
 
@@ -126,6 +127,11 @@ def compare_rules(
     -- the static CSV doesn't branch on DAS, so it would report a zero
     diff). Counting strategies need continuous shoe state, which CRN's
     per-round reset destroys, so they're not supported here either way.
+
+    With num_players > 1 the table seats num_players players each round,
+    all using the same strategy; per-round X is the bet-weighted mean
+    profit-per-bet across the table. The CRN guarantee still holds:
+    every rule set sees the same shoe and so the same per-position deal.
 
     Returns per-rule SimulationStats plus a PairedDiff for every ordered
     pair (a, b) with a appearing before b in dict iteration order.
@@ -161,6 +167,11 @@ def compare_rules(
 
     io = DummyIOInterface()
 
+    player_names = (
+        ["Sim"] if num_players == 1
+        else [f"Sim{i + 1}" for i in range(num_players)]
+    )
+
     for k in range(num_rounds):
         round_he: Dict[str, float] = {}
 
@@ -178,21 +189,22 @@ def compare_rules(
             )
 
             game = BlackjackGame(rules, io, shoe)
-            player = Player(
-                "Sim", io, strategy_for[label], initial_money=initial_bankroll
-            )
-            game.add_player(player)
+            players = [
+                Player(name, io, strategy_for[label],
+                       initial_money=initial_bankroll)
+                for name in player_names
+            ]
+            for player in players:
+                game.add_player(player)
             game.set_state(_state_placing_bets)
 
-            money_before = player.money
+            money_before = sum(p.money for p in players)
             game.play_round()
-            net = player.money - money_before
-            total_bet = player.total_bets
-            init_bet = (
-                player.initial_bets
-                if player.initial_bets > 0
-                else rules.min_bet
-            )
+            net = sum(p.money for p in players) - money_before
+            total_bet = sum(p.total_bets for p in players)
+            init_bet = sum(p.initial_bets for p in players)
+            if init_bet == 0:
+                init_bet = rules.min_bet * num_players
 
             per_rule_stats[label].record_round(net, init_bet, total_bet)
             round_he[label] = -net / init_bet if init_bet > 0 else 0.0

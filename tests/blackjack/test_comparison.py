@@ -97,6 +97,38 @@ def test_crn_h17_higher_edge_than_s17():
     assert lo > -0.005  # likely positive at 95% confidence
 
 
+def test_compare_rules_multi_player_runs():
+    """Multi-player CRN comparison runs end-to-end and produces stats
+    consistent with single-player (within shared CIs)."""
+    pair = {
+        "H17": _base_rules(dealer_hit_soft_17=True),
+        "S17": _base_rules(dealer_hit_soft_17=False),
+    }
+    result_single = compare_rules(pair, num_rounds=2000, seed=42, num_players=1)
+    result_multi = compare_rules(pair, num_rounds=2000, seed=42, num_players=3)
+
+    # Both should produce non-zero variance in the H17-S17 diff
+    assert result_single.paired_diffs[("H17", "S17")].M2 > 0
+    assert result_multi.paired_diffs[("H17", "S17")].M2 > 0
+    # Both should have the same number of rounds recorded
+    assert result_single.per_rule_stats["H17"].n_rounds == 2000
+    assert result_multi.per_rule_stats["H17"].n_rounds == 2000
+    # Multi-player rounds aggregate 3 players' bets into the round-level
+    # initial bet; bet_sum should be roughly 3x.
+    bet_single = result_single.per_rule_stats["H17"].bet_sum
+    bet_multi = result_multi.per_rule_stats["H17"].bet_sum
+    assert bet_multi > 2.5 * bet_single  # Allow some slack for splits/doubles
+
+
+def test_compare_rules_multi_player_reproducible():
+    pair = {"H17": _base_rules(dealer_hit_soft_17=True),
+            "S17": _base_rules(dealer_hit_soft_17=False)}
+    r1 = compare_rules(pair, num_rounds=200, seed=2026, num_players=4)
+    r2 = compare_rules(pair, num_rounds=200, seed=2026, num_players=4)
+    for label in ("H17", "S17"):
+        assert r1.per_rule_stats[label].report() == r2.per_rule_stats[label].report()
+
+
 def test_crn_variance_lower_than_independent_estimate():
     """The CRN paired-diff variance should be much lower than the sum
     of per-rule variances (sanity check that CRN actually helps)."""

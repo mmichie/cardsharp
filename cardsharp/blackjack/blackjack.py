@@ -766,11 +766,14 @@ def run_rule_comparison(args, baseline_rules):
     print(f"Comparing: {args.compare_rules}")
     if args.solver_strategy:
         print("  Using per-rule solver strategy")
+    if args.num_players > 1:
+        print(f"  Table size: {args.num_players} players")
     result = compare_rules(
         rules_dict=pair,
         num_rounds=args.num_games,
         seed=args.seed,
         use_solver_strategy=args.solver_strategy,
+        num_players=args.num_players,
     )
     result.print_report(confidence=args.confidence)
 
