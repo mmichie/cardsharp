@@ -46,6 +46,19 @@ class SimulationStats:
         self.bet_sum = 0.0
         self.total_bet_sum = 0.0
 
+        # Control-variate accumulators. Populated only when record_round is
+        # called with cv_y != None. X = per-round profit per initial bet
+        # (player's view). Y = solver's expected profit per initial bet for
+        # this round's deal state. mu_y = known E[Y] from solver, set
+        # externally before reporting.
+        self.cv_n = 0
+        self.cv_x_mean = 0.0
+        self.cv_x_M2 = 0.0
+        self.cv_y_mean = 0.0
+        self.cv_y_M2 = 0.0
+        self.cv_xy_C = 0.0
+        self.cv_mu_y = None
+
     def update(self, game):
         """Updates the statistics based on the current state of the game."""
         self.games_played += 1
@@ -64,11 +77,13 @@ class SimulationStats:
         for player in game.players:
             player.winner = []
 
-    def record_round(self, net, initial_bet, total_bet):
+    def record_round(self, net, initial_bet, total_bet, cv_y=None):
         """Record one round's financial outcome.
 
         Updates Welford state for net and initial_bet and the co-moment
-        between them; also accumulates aggregate sums.
+        between them; also accumulates aggregate sums. If cv_y (solver-
+        predicted EV for this round's deal state, in profit-per-bet units)
+        is provided, also updates control-variate accumulators.
         """
         self.n_rounds += 1
         n = self.n_rounds
@@ -85,6 +100,19 @@ class SimulationStats:
         self.net_sum += net
         self.bet_sum += initial_bet
         self.total_bet_sum += total_bet
+
+        if cv_y is not None and initial_bet > 0:
+            # X = per-round profit per dollar bet (player's view)
+            x = net / initial_bet
+            self.cv_n += 1
+            cn = self.cv_n
+            cdx = x - self.cv_x_mean
+            cdy = cv_y - self.cv_y_mean
+            self.cv_x_mean += cdx / cn
+            self.cv_y_mean += cdy / cn
+            self.cv_x_M2 += cdx * (x - self.cv_x_mean)
+            self.cv_y_M2 += cdy * (cv_y - self.cv_y_mean)
+            self.cv_xy_C += cdx * (cv_y - self.cv_y_mean)
 
     def merge(self, other):
         """Merge another SimulationStats into self (Chan parallel Welford)."""
@@ -128,6 +156,40 @@ class SimulationStats:
         self.bet_sum += other.bet_sum
         self.total_bet_sum += other.total_bet_sum
 
+        # Control-variate Welford merge (Chan parallel)
+        cn_a = self.cv_n
+        cn_b = other.cv_n
+        cn = cn_a + cn_b
+        if cn_b > 0:
+            if cn_a == 0:
+                self.cv_n = other.cv_n
+                self.cv_x_mean = other.cv_x_mean
+                self.cv_y_mean = other.cv_y_mean
+                self.cv_x_M2 = other.cv_x_M2
+                self.cv_y_M2 = other.cv_y_M2
+                self.cv_xy_C = other.cv_xy_C
+            else:
+                d_x = other.cv_x_mean - self.cv_x_mean
+                d_y = other.cv_y_mean - self.cv_y_mean
+                self.cv_x_M2 = (
+                    self.cv_x_M2 + other.cv_x_M2
+                    + d_x * d_x * cn_a * cn_b / cn
+                )
+                self.cv_y_M2 = (
+                    self.cv_y_M2 + other.cv_y_M2
+                    + d_y * d_y * cn_a * cn_b / cn
+                )
+                self.cv_xy_C = (
+                    self.cv_xy_C + other.cv_xy_C
+                    + d_x * d_y * cn_a * cn_b / cn
+                )
+                self.cv_x_mean = self.cv_x_mean + d_x * cn_b / cn
+                self.cv_y_mean = self.cv_y_mean + d_y * cn_b / cn
+                self.cv_n = cn
+        # mu_y is set externally; if both have it, prefer non-None
+        if other.cv_mu_y is not None:
+            self.cv_mu_y = other.cv_mu_y
+
     def report(self):
         """Returns a dictionary containing the current statistics."""
         return {
@@ -144,6 +206,13 @@ class SimulationStats:
             "net_sum": self.net_sum,
             "bet_sum": self.bet_sum,
             "total_bet_sum": self.total_bet_sum,
+            "cv_n": self.cv_n,
+            "cv_x_mean": self.cv_x_mean,
+            "cv_x_M2": self.cv_x_M2,
+            "cv_y_mean": self.cv_y_mean,
+            "cv_y_M2": self.cv_y_M2,
+            "cv_xy_C": self.cv_xy_C,
+            "cv_mu_y": self.cv_mu_y,
         }
 
     @classmethod
@@ -163,6 +232,13 @@ class SimulationStats:
         s.net_sum = d.get("net_sum", 0.0)
         s.bet_sum = d.get("bet_sum", 0.0)
         s.total_bet_sum = d.get("total_bet_sum", 0.0)
+        s.cv_n = d.get("cv_n", 0)
+        s.cv_x_mean = d.get("cv_x_mean", 0.0)
+        s.cv_x_M2 = d.get("cv_x_M2", 0.0)
+        s.cv_y_mean = d.get("cv_y_mean", 0.0)
+        s.cv_y_M2 = d.get("cv_y_M2", 0.0)
+        s.cv_xy_C = d.get("cv_xy_C", 0.0)
+        s.cv_mu_y = d.get("cv_mu_y", None)
         return s
 
     def house_edge_with_ci(self, confidence=0.95):
@@ -212,6 +288,65 @@ class SimulationStats:
         z = NormalDist().inv_cdf(0.5 + confidence / 2.0)
         half = z * se
         return self.net_mean, self.net_mean - half, self.net_mean + half, half
+
+    def control_variate_he_with_ci(self, confidence=0.95):
+        """Control-variate-adjusted house edge with CI.
+
+        Uses Y = solver-predicted profit-per-bet for each round's deal
+        state as a control variate. The estimator
+
+            theta_hat = X_bar - beta * (Y_bar - mu_Y)
+
+        is unbiased for E[X] for any beta; setting beta = Cov(X,Y)/Var(Y)
+        minimizes its variance. Returns a dict with the CV estimate, its
+        CI, the baseline (no-CV) estimate for comparison, the variance
+        reduction percentage achieved, and the estimated optimal beta.
+        Returns None if cv_mu_y is unset or n<2.
+        """
+        if self.cv_n < 2 or self.cv_mu_y is None:
+            return None
+
+        n = self.cv_n
+        var_x = self.cv_x_M2 / (n - 1)
+        var_y = self.cv_y_M2 / (n - 1)
+        cov_xy = self.cv_xy_C / (n - 1)
+        if var_y <= 0:
+            return None
+
+        beta = cov_xy / var_y
+        x_cv_mean = self.cv_x_mean - beta * (self.cv_y_mean - self.cv_mu_y)
+
+        var_cv = max(
+            0.0,
+            (var_x - 2.0 * beta * cov_xy + beta * beta * var_y) / n,
+        )
+        se = math.sqrt(var_cv)
+        z = NormalDist().inv_cdf(0.5 + confidence / 2.0)
+        half = z * se
+
+        # Sign flip: HE = -E[X] (X is profit-per-bet; HE is loss-per-bet)
+        he_cv = -x_cv_mean
+        baseline_he = -self.cv_x_mean
+        baseline_se = math.sqrt(var_x / n)
+        baseline_half = z * baseline_se
+
+        baseline_var = var_x / n
+        if baseline_var > 0:
+            reduction_pct = (1.0 - var_cv / baseline_var) * 100.0
+        else:
+            reduction_pct = 0.0
+
+        return {
+            "he": he_cv,
+            "lo": he_cv - half,
+            "hi": he_cv + half,
+            "half": half,
+            "baseline_he": baseline_he,
+            "baseline_half": baseline_half,
+            "reduction_pct": reduction_pct,
+            "beta": beta,
+            "n": n,
+        }
 
     def win_rate_with_ci(self, confidence=0.95):
         """Player win rate (excluding pushes) with a Wilson score CI.

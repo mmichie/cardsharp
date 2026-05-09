@@ -431,6 +431,92 @@ def create_io_interface(args):
     return io_interface, strategy
 
 
+def _solver_card_value(card):
+    """Convert a Card to the solver's CARD_VALUES integer (Ace=1, T/J/Q/K=10)."""
+    from cardsharp.common.card import Rank
+    if card.rank == Rank.ACE:
+        return 1
+    return min(card.bj_value, 10)
+
+
+def build_deal_ev_table(ev_table, rules):
+    """Build (c1,c2,up) -> E[X | deal], including dealer-BJ branch.
+
+    The simulator's actual outcome X conditional on the deal includes the
+    case where the dealer has a natural BJ (player loses, or pushes if also
+    BJ). The raw ev_table[deal].best_ev assumes no dealer BJ, so using it
+    directly as the control-variate Y would mismatch X. This builder
+    replicates the solver's per-deal aggregation formula so the resulting
+    table satisfies E[Y] = sol.house_edge (sign-flipped), making the
+    control-variate estimator unbiased in the simulator's frame.
+    """
+    from cardsharp.blackjack.solver.types import (
+        Deck, hand_state_from_cards,
+    )
+    from cardsharp.blackjack.solver.dealer import dealer_blackjack_prob
+
+    deck = (
+        Deck.finite(rules.num_decks)
+        if rules.num_decks <= 8
+        else Deck.infinite()
+    )
+    bj_payout = rules.blackjack_payout
+
+    deal_ev = {}
+    for c1 in range(1, 11):
+        for c2 in range(c1, 11):
+            for up in range(1, 11):
+                key = (c1, c2, up)
+                sev = ev_table.get(key)
+                if sev is None:
+                    continue
+                _, _, disp, _ = hand_state_from_cards(c1, c2)
+                is_player_bj = (
+                    disp == 21 and (c1 == 1 or c2 == 1) and c1 != c2
+                )
+
+                deck1 = deck.remove_card(c1)
+                deck2 = deck1.remove_card(c2)
+                deck3 = deck2.remove_card(up)
+                p_dbj = dealer_blackjack_prob(up, deck3)
+
+                if is_player_bj:
+                    deal_ev[key] = (1.0 - p_dbj) * bj_payout
+                else:
+                    deal_ev[key] = (
+                        p_dbj * (-1.0) + (1.0 - p_dbj) * sev.best_ev
+                    )
+    return deal_ev
+
+
+def _compute_deal_y(game, deal_ev_table):
+    """Look up the solver's bet-weighted predicted profit for this round's deal.
+
+    Returns Y in the same units as X = net/initial_bet (player's view, profit
+    per dollar bet). Aggregates across players when there are multiple, weighted
+    by each player's initial bet.
+    """
+    upcard = _solver_card_value(game.dealer.current_hand.cards[0])
+    weighted_ev = 0.0
+    bet_total = 0.0
+    for player in game.players:
+        if not player.hands or len(player.hands[0].cards) < 2:
+            continue
+        c1 = _solver_card_value(player.hands[0].cards[0])
+        c2 = _solver_card_value(player.hands[0].cards[1])
+        if c1 > c2:
+            c1, c2 = c2, c1
+        bet = player.bets[0] if player.bets else 0
+        if bet == 0:
+            continue
+        ev = deal_ev_table.get((c1, c2, upcard))
+        if ev is None:
+            continue
+        weighted_ev += ev * bet
+        bet_total += bet
+    return weighted_ev / bet_total if bet_total > 0 else 0.0
+
+
 def play_game(
     rules,
     io_interface,
@@ -438,10 +524,15 @@ def play_game(
     strategy,
     shoe: Optional[Shoe] = None,
     initial_bankroll: int = 1000,
+    ev_table=None,
 ):
     """
     Function to play a single game of Blackjack, to be executed in a separate process.
     Now accepts an optional shoe parameter and initial bankroll.
+
+    If ev_table is provided, the round's deal state is captured between the
+    DEALING and PLAYERS_TURN states and looked up in ev_table to provide a
+    control-variate Y to record_round.
     """
     cards_before = shoe.cards_remaining if shoe else None
 
@@ -455,7 +546,20 @@ def play_game(
         game.add_player(player)
 
     game.set_state(_state_placing_bets)
-    game.play_round()
+
+    deal_y = None
+    if ev_table is None:
+        game.play_round()
+    else:
+        # Step the state machine manually so we can capture the deal state
+        # AFTER DealingState.handle() runs but before player play mutates it.
+        from cardsharp.blackjack.state import STATE_DEALING
+        while game.current_state.STATE_ID != STATE_END_ROUND:
+            prev_state_id = game.current_state.STATE_ID
+            game.current_state.handle(game)
+            if prev_state_id == STATE_DEALING and deal_y is None:
+                deal_y = _compute_deal_y(game, ev_table)
+        game.current_state.handle(game)  # END_ROUND
 
     net_earnings = sum(player.money - initial_bankroll for player in game.players)
     total_bets = sum(player.total_bets for player in game.players)
@@ -465,7 +569,9 @@ def play_game(
     # Skip rounds with zero initial bet (broke player) so the ratio
     # estimator's denominator stays positive.
     if initial_bets > 0:
-        game.stats.record_round(net_earnings, initial_bets, total_bets)
+        game.stats.record_round(
+            net_earnings, initial_bets, total_bets, cv_y=deal_y
+        )
 
     if isinstance(strategy, CountingStrategy) and game.shoe:
         # Detect reshuffle: cards_remaining goes UP when shoe reshuffles.
@@ -501,6 +607,7 @@ def play_game_batch(
     shuffle_type: str = "perfect",
     shuffle_count: int = None,
     seed: Optional[int] = None,
+    ev_table=None,
 ):
     """Function to play a batch of games of Blackjack, to be executed in a separate process.
 
@@ -542,7 +649,8 @@ def play_game_batch(
 
     for _ in range(num_games):
         game_earnings, game_bets, game_initial, result, current_shoe = play_game(
-            rules, io_interface, player_names, strategy, shoe, initial_bankroll
+            rules, io_interface, player_names, strategy, shoe, initial_bankroll,
+            ev_table=ev_table,
         )
         shoe = current_shoe
         agg_stats.merge(SimulationStats.from_dict(result))
@@ -985,6 +1093,15 @@ def main():
         default=0.95,
         help="Confidence level for reported intervals (default 0.95).",
     )
+    parser.add_argument(
+        "--cv",
+        action="store_true",
+        help="Use the solver's exact EV table as a control variate to "
+        "tighten the simulator's house-edge CI. Solves the rules once at "
+        "startup (~1s for fast mode); for each round, looks up the deal "
+        "state's expected EV and uses it to absorb the between-deal "
+        "variance from the Monte Carlo estimator.",
+    )
     args = parser.parse_args()
 
     # Validate num_players
@@ -1037,9 +1154,31 @@ def main():
         random.seed(master_seed)
         print(f"Seed: {master_seed}")
 
+        # If control variate requested, solve the rules to get an EV table
+        # and the exact mu_y (= -solver_HE = solver-predicted player EV).
+        # build_deal_ev_table folds in the dealer-BJ branch so that
+        # E[Y] in the simulator equals -sol.house_edge under fresh-shoe
+        # conditions; without that fold, Y is biased by ~0.5% and the CV
+        # estimator becomes inconsistent with the baseline.
+        deal_ev_table = None
+        cv_mu_y = None
+        if args.cv:
+            from cardsharp.blackjack.solver import solve
+            solver_t0 = time.time()
+            print("Solving rules for control variate...")
+            sol = solve(rules, mode="fast")
+            deal_ev_table = build_deal_ev_table(sol.ev_table, rules)
+            cv_mu_y = -sol.house_edge
+            print(
+                f"Solver done ({time.time() - solver_t0:.2f}s). "
+                f"Solver HE = {sol.house_edge * 100:.4f}% "
+                f"(mu_Y = {cv_mu_y:+.6f})"
+            )
+
         start_time = time.time()
         graph = BlackjackGraph(args.num_games) if args.vis else None
         agg_stats = SimulationStats()
+        agg_stats.cv_mu_y = cv_mu_y
         running_net_earnings = 0
         total_bets = 0
         player_names = generate_player_names(args.num_players)
@@ -1063,6 +1202,7 @@ def main():
                     strategy,
                     shoe,
                     args.bankroll,
+                    ev_table=deal_ev_table,
                 )
                 shoe = current_shoe  # Update shoe state for next game
                 agg_stats.merge(SimulationStats.from_dict(result))
@@ -1094,6 +1234,7 @@ def main():
                         args.shuffle_type,
                         args.shuffle_count,
                         worker_seeds[i],
+                        deal_ev_table,
                     )
                     for i, game_count in enumerate(game_batches)
                 ]
@@ -1134,6 +1275,24 @@ def main():
                 f"({ci_pct}% CI: [{lo * 100:.4f}%, {hi * 100:.4f}%], "
                 f"n={agg_stats.n_rounds:,})"
             )
+
+        # If control variate is enabled, report the CV-adjusted estimate.
+        if args.cv:
+            cv = agg_stats.control_variate_he_with_ci(
+                confidence=args.confidence
+            )
+            if cv is not None:
+                print(
+                    f"House Edge (CV): {cv['he'] * 100:.4f}% +/- "
+                    f"{cv['half'] * 100:.4f}% "
+                    f"({ci_pct}% CI: [{cv['lo'] * 100:.4f}%, "
+                    f"{cv['hi'] * 100:.4f}%], n={cv['n']:,})"
+                )
+                print(
+                    f"  Variance reduction: {cv['reduction_pct']:.1f}% "
+                    f"(beta={cv['beta']:.3f}, "
+                    f"baseline half-width {cv['baseline_half'] * 100:.4f}%)"
+                )
         # Edge over total action (legacy metric: includes doubles/splits
         # in the denominator). Kept for backwards compatibility.
         if total_bets > 0:
