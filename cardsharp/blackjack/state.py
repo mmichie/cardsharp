@@ -815,8 +815,14 @@ class EndRoundState(GameState):
             # Player-level OBO (Original Bets Only) refund: in no-peek
             # mode with dealer BJ, the player's total exposure is capped
             # at the initial wager. Any extra accumulated via doubles or
-            # splits on hands lost to the dealer is refunded.
-            if is_no_peek and dealer_blackjack:
+            # splits on hands lost to the dealer is refunded. Some games
+            # (and some house rules) disable OBO; allow_obo=False makes
+            # the player lose the full bet on every losing hand.
+            if (
+                is_no_peek
+                and dealer_blackjack
+                and getattr(game.rules, "allow_obo", True)
+            ):
                 losing_total = sum(
                     player.bets[i]
                     for i in range(len(player.hands))

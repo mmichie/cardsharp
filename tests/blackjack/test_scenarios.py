@@ -1229,6 +1229,27 @@ class TestInsuranceInteractions:
 
 class TestOBOSplitHands:
 
+    def test_no_obo_loses_full_split_exposure(self, scenario):
+        """With allow_obo=False, the player loses the FULL split exposure
+        when the dealer reveals BJ in no-peek mode. This models European
+        games that don't apply Original Bets Only."""
+        result = scenario(
+            player=["8h", "8d"],
+            dealer=["Ah", "Kd"],         # BJ (no peek)
+            extra=["Td", "3h", "Tc"],     # split + double on hand 2 -> 21
+            rules={
+                "dealer_peek": False,
+                "allow_obo": False,
+                "allow_surrender": False,
+                "allow_double_after_split": True,
+            },
+        )
+        assert result.dealer_blackjack
+        assert result.dealer_won
+        # Bet=1, split adds 1, double on hand 2 adds 1 -> total 3.
+        # Without OBO the player loses everything: -3.
+        assert result.money_change == -3
+
     def test_obo_refunds_split_double_on_dealer_bj(self, scenario):
         """European no-peek: split + double, dealer has BJ.
 

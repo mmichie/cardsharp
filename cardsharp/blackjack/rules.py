@@ -33,6 +33,7 @@ class Rules:
         double_on: str = "any",
         resplit_aces: bool = False,
         hit_split_aces: bool = False,
+        allow_obo: bool = True,
     ):
         self.allow_double_after_split = allow_double_after_split
         self.allow_double_down = allow_double_down
@@ -60,6 +61,11 @@ class Rules:
         self.double_on = double_on  # "any", "9-11", or "10-11"
         self.resplit_aces = resplit_aces
         self.hit_split_aces = hit_split_aces
+        # OBO (Original Bets Only) caps player exposure at the initial
+        # wager when the dealer reveals BJ in no-peek mode. Most
+        # European games use it; some don't (player loses full action
+        # including doubles/splits).
+        self.allow_obo = allow_obo
 
         # Initialize variant
         variant_class = VariantRegistry.get(variant)
