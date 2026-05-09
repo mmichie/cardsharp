@@ -684,31 +684,41 @@ class EndRoundState(GameState):
         is_no_peek = not game.rules.should_dealer_peek()
 
         for player in game.players:
+            # Pre-pass: void late surrenders against dealer BJ in no-peek
+            # mode. Surrender (Player.surrender) leaves bets[i]=0 with
+            # original_bets[i]>0; under late-surrender semantics the
+            # decision is supposed to be made AFTER the dealer peeks, so
+            # a dealer BJ retroactively voids it. Early surrender (allowed
+            # before dealer checks) holds against dealer BJ and is
+            # exempted.
+            if (
+                is_no_peek
+                and dealer_blackjack
+                and not game.rules.allow_early_surrender
+            ):
+                for hand_index in range(len(player.hands)):
+                    if (
+                        player.bets[hand_index] == 0
+                        and hand_index < len(player.original_bets)
+                        and player.original_bets[hand_index] > 0
+                    ):
+                        original = player.original_bets[hand_index]
+                        half = original / 2
+                        # Reverse the half-bet refund granted by surrender()
+                        player.money -= half
+                        player.total_winnings -= half
+                        player.bets[hand_index] = original
+                        # surrender's hand-value comparison can land on a
+                        # "draw" for 2-card 21 vs dealer 21; voided
+                        # surrender always loses to dealer BJ.
+                        player.winner[hand_index] = "dealer"
+
             for hand_index, hand in enumerate(player.hands):
                 winner = player.winner[hand_index]
                 bet_for_hand = player.bets[hand_index]
+
                 if bet_for_hand == 0:
                     continue  # Skip hands with no bet
-
-                # OBO (Original Bets Only): in no-peek mode, if dealer has
-                # blackjack, player loses only the original bet. Refund any
-                # extra from doubles or splits.
-                if (
-                    is_no_peek
-                    and dealer_blackjack
-                    and winner == "dealer"
-                    and hand_index < len(player.original_bets)
-                ):
-                    original = player.original_bets[hand_index]
-                    extra = bet_for_hand - original
-                    if extra > 0:
-                        player.money += extra
-                        player.bets[hand_index] = original
-                        bet_for_hand = original
-                        game.output(
-                            f"{player.name}'s hand {hand_index + 1}: "
-                            f"OBO refund of ${extra:.2f} (dealer blackjack)."
-                        )
 
                 # Use variant's payout system if available
                 if game.payout_calculator and game.variant:
@@ -762,6 +772,24 @@ class EndRoundState(GameState):
                     elif winner == "draw":
                         payout_amount = bet_for_hand
                         player.payout(hand_index, payout_amount)
+
+            # Player-level OBO (Original Bets Only) refund: in no-peek
+            # mode with dealer BJ, the player's total exposure is capped
+            # at the initial wager. Any extra accumulated via doubles or
+            # splits on hands lost to the dealer is refunded.
+            if is_no_peek and dealer_blackjack:
+                losing_total = sum(
+                    player.bets[i]
+                    for i in range(len(player.hands))
+                    if player.winner[i] == "dealer"
+                )
+                if losing_total > player.initial_bets:
+                    refund = losing_total - player.initial_bets
+                    player.money += refund
+                    game.output(
+                        f"{player.name}: OBO refund of ${refund:.2f} "
+                        f"(dealer blackjack)."
+                    )
 
     def check_for_bonus_combination(self, hand):
         """

@@ -1176,12 +1176,17 @@ class TestOBOSplitHands:
     def test_obo_refunds_split_double_on_dealer_bj(self, scenario):
         """European no-peek: split + double, dealer has BJ.
 
-        OBO refunds the double extra but not the split bet.
-        Hand 1: 8+T=18, bet=1, original=1, no extra → loses 1
-        Hand 2: 8+3=11, doubled to bet=2, original=1, extra=1 → refund 1, loses 1
-        Dealer: A+K = BJ
+        OBO (Original Bets Only) caps the player's exposure at the
+        initial wager when the dealer has BJ in no-peek mode. Both the
+        double's extra AND the split's added bet are refunded.
 
-        Money: -1(bet) -1(split) -1(double) +1(OBO refund) = -2
+        Hand 1: 8+T=18, bet=1
+        Hand 2: 8+3=11, doubled to bet=2
+        Total exposure to dealer BJ: 3
+        Initial wager: 1
+        OBO refund: 3 - 1 = 2
+
+        Money: -1(bet) -1(split) -1(double) +2(OBO refund) = -1
         """
         result = scenario(
             player=["8h", "8d"],       # pair 8s vs A → surrender→split fallback
@@ -1198,7 +1203,7 @@ class TestOBOSplitHands:
         )
         assert result.dealer_blackjack
         assert result.dealer_won
-        assert result.money_change == -2
+        assert result.money_change == -1
 
 
 # ---------------------------------------------------------------------------

@@ -742,6 +742,11 @@ def run_rule_comparison(args, baseline_rules):
             "3:2": with_override(blackjack_payout=1.5),
             "6:5": with_override(blackjack_payout=1.2),
         }
+    elif args.compare_rules == "peek_vs_no_peek":
+        pair = {
+            "peek": with_override(dealer_peek=True),
+            "no-peek": with_override(dealer_peek=False),
+        }
     else:
         raise ValueError(
             f"Unknown comparison: {args.compare_rules}"
@@ -1079,13 +1084,14 @@ def main():
         "--compare_rules",
         type=str,
         default=None,
-        choices=["h17_vs_s17", "bj_3_2_vs_6_5"],
+        choices=["h17_vs_s17", "bj_3_2_vs_6_5", "peek_vs_no_peek"],
         help="Run a Common Random Numbers (CRN) comparison of two rule "
         "sets. Reports per-rule house edge plus the much tighter paired "
-        "difference. Uses --num_games rounds. Only rule changes that "
-        "alter dealer behavior or payouts produce meaningful diffs with "
-        "BasicStrategy (CSV-based), since BasicStrategy does not switch "
-        "decisions on DAS / surrender / peek availability.",
+        "difference. Uses --num_games rounds. With BasicStrategy "
+        "(CSV-based, does not switch decisions on DAS/surrender/peek "
+        "availability), peek_vs_no_peek should give a diff of essentially "
+        "zero -- which is the regression test for the late-surrender vs "
+        "dealer-BJ accounting in no-peek mode.",
     )
     parser.add_argument(
         "--confidence",
