@@ -783,24 +783,27 @@ def run_strategy_analysis(args, rules, initial_bankroll: int = 1000):
     os.environ["BLACKJACK_DISABLE_LOGGING"] = "1"
     decision_logger.set_level(logging.ERROR)
 
+    # Solve once to provide an optimal-per-rules baseline alongside the
+    # heuristic strategies. Solver cost is ~1s in fast mode, negligible
+    # vs the simulation runtime.
+    from cardsharp.blackjack.solver import solve
+    from cardsharp.blackjack.strategy import SolverStrategy
+
+    print(f"Solving rules for the optimal-strategy baseline...")
+    sol = solve(rules, mode="fast")
+    print(f"  Solver HE = {sol.house_edge * 100:.4f}%")
+
     strategies = {
         "Basic": BasicStrategy(),
         "Counting": CountingStrategy(num_decks=rules.num_decks),
         "Aggressive": AggressiveStrategy(),
         "Martingale": MartingaleStrategy(),
+        "Solver": SolverStrategy(sol),
     }
 
-    results = {
-        name: {
-            "net_earnings": 0,
-            "total_bets": 0,
-            "initial_bets": 0,
-            "wins": 0,
-            "losses": 0,
-            "draws": 0,
-        }
-        for name in strategies
-    }
+    # Per-strategy SimulationStats accumulators give us Welford-tracked
+    # variance and delta-method CIs for free.
+    stats_per_strategy = {name: SimulationStats() for name in strategies}
     player_names = generate_player_names(args.num_players)
 
     def make_shoe():
@@ -818,6 +821,11 @@ def run_strategy_analysis(args, rules, initial_bankroll: int = 1000):
     # see the correct card history for their count.
     shoes = {name: make_shoe() for name in strategies}
 
+    # Track running net earnings per strategy for the graph (cumulative
+    # money change). Computed independently from the SimulationStats
+    # bookkeeping so existing visualization stays untouched.
+    running_net = {name: 0.0 for name in strategies}
+
     graph = (
         MultiStrategyBlackjackGraph(args.num_games, strategies.keys())
         if args.vis
@@ -834,45 +842,51 @@ def run_strategy_analysis(args, rules, initial_bankroll: int = 1000):
                 shoes[strategy_name],
                 initial_bankroll,
             )
-
-            results[strategy_name]["net_earnings"] += earnings
-            results[strategy_name]["total_bets"] += total_bets
-            results[strategy_name]["initial_bets"] += init_bets
-            results[strategy_name]["wins"] += result["player_wins"]
-            results[strategy_name]["losses"] += result["dealer_wins"]
-            results[strategy_name]["draws"] += result["draws"]
+            stats_per_strategy[strategy_name].merge(
+                SimulationStats.from_dict(result)
+            )
+            running_net[strategy_name] += earnings
 
             if graph:
                 graph.update(
                     strategy_name,
                     game_number + 1,
-                    results[strategy_name]["net_earnings"],
+                    running_net[strategy_name],
                 )
 
+    ci_pct = int(round(args.confidence * 100))
     print("\nStrategy Analysis Results:")
     print("--------------------------")
-    for strategy_name, result in results.items():
+    for strategy_name, stats in stats_per_strategy.items():
         print(f"\n{strategy_name} Strategy:")
-        print(f"Net Earnings: ${result['net_earnings']:,.2f}")
-        print(f"Total Bets: ${result['total_bets']:,.2f}")
-        print(f"Wins: {result['wins']:,}")
-        print(f"Losses: {result['losses']:,}")
-        print(f"Draws: {result['draws']:,}")
+        print(f"Net Earnings: ${stats.net_sum:,.2f}")
+        print(f"Total Bets: ${stats.total_bet_sum:,.2f}")
+        print(f"Wins: {stats.player_wins:,}")
+        print(f"Losses: {stats.dealer_wins:,}")
+        print(f"Draws: {stats.draws:,}")
 
-        total_games = result["wins"] + result["losses"] + result["draws"]
-        if total_games > 0:
-            win_rate = result["wins"] / total_games
-            print(f"Win Rate: {win_rate:.2%}")
+        wr = stats.win_rate_with_ci(args.confidence)
+        if wr is not None:
+            p, lo, hi, half = wr
+            print(
+                f"Win Rate: {p * 100:.2f}% +/- {half * 100:.2f}% "
+                f"({ci_pct}% Wilson CI: [{lo * 100:.2f}%, {hi * 100:.2f}%])"
+            )
 
-        if result["initial_bets"] > 0:
-            edge_initial = (-result["net_earnings"] / result["initial_bets"]) * 100
-            print(f"Edge (initial wagers): {edge_initial:.2f}%")
-        if result["total_bets"] > 0:
-            edge_total = (-result["net_earnings"] / result["total_bets"]) * 100
-            print(f"Edge (total action):   {edge_total:.2f}%")
+        he = stats.house_edge_with_ci(args.confidence)
+        if he is not None:
+            edge, lo, hi, half = he
+            print(
+                f"Edge (initial wagers): {edge * 100:+.4f}% +/- "
+                f"{half * 100:.4f}% "
+                f"({ci_pct}% CI: [{lo * 100:+.4f}%, {hi * 100:+.4f}%])"
+            )
+        if stats.total_bet_sum > 0:
+            edge_total = (-stats.net_sum / stats.total_bet_sum) * 100
+            print(f"Edge (total action):   {edge_total:+.4f}%")
 
-    best_strategy = max(results, key=lambda x: results[x]["net_earnings"])
-    worst_strategy = min(results, key=lambda x: results[x]["net_earnings"])
+    best_strategy = max(stats_per_strategy, key=lambda n: running_net[n])
+    worst_strategy = min(stats_per_strategy, key=lambda n: running_net[n])
 
     print(f"\nBest Performing Strategy: {best_strategy}")
     print(f"Worst Performing Strategy: {worst_strategy}")
