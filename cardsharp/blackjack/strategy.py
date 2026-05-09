@@ -223,6 +223,65 @@ class BasicStrategy(Strategy):
         return False
 
 
+class SolverStrategy(BasicStrategy):
+    """BasicStrategy variant whose tables are built from a solver result.
+
+    The CSV-backed BasicStrategy is rule-blind aside from a 3-cell H17->S17
+    patch; it cannot reflect rule-aware decisions like "split 8s vs A only
+    if surrender is unavailable" or "double 9 vs 2 only with DAS". The
+    solver produces an optimal-per-rules strategy table; this class wraps
+    that table in the same Strategy interface so the simulator plays the
+    rule-correct strategy without rebuilding decision logic.
+
+    Pass either a SolverResult or its .strategy dict.
+    """
+
+    def __init__(self, strategy_source):
+        # Resolve to a strategy dict.
+        if hasattr(strategy_source, "strategy"):
+            strategy_dict = strategy_source.strategy
+        else:
+            strategy_dict = strategy_source
+
+        # Skip the parent's CSV load; build empty tables and populate from
+        # the dict directly.
+        self.hard_table = [[self._HIT] * 10 for _ in range(18)]
+        self.soft_table = [[self._HIT] * 10 for _ in range(9)]
+        self.pair_table = [[self._HIT] * 10 for _ in range(10)]
+        self._populate_from_dict(strategy_dict)
+        # Solver tables are already rule-aware; suppress the parent's
+        # runtime H17/S17 patching.
+        self._s17_applied = True
+
+    def _populate_from_dict(self, strategy_dict):
+        action_map = {
+            "H": self._HIT,
+            "S": self._STAND,
+            "D": self._DOUBLE,
+            "DS": self._DOUBLE_STAND,
+            "P": self._SPLIT,
+            "R": self._SURRENDER,
+        }
+        for label, actions_codes in strategy_dict.items():
+            actions = [action_map.get(a.strip(), self._HIT) for a in actions_codes]
+            if label.startswith("Hard"):
+                v = int(label[4:])
+                if 4 <= v <= 21:
+                    self.hard_table[v - 4] = actions
+            elif label.startswith("Soft"):
+                v = int(label[4:])
+                if 13 <= v <= 21:
+                    self.soft_table[v - 13] = actions
+            elif label.startswith("Pair"):
+                p = label[4:]
+                if p == "A":
+                    self.pair_table[9] = actions
+                elif p == "10":
+                    self.pair_table[8] = actions
+                else:
+                    self.pair_table[int(p) - 2] = actions
+
+
 # Illustrious 18 deviations for card counting.
 # Format: (hand_value, is_soft, dealer_up_value, tc_threshold, action_above, action_below)
 _COUNTING_DEVIATIONS = [

@@ -110,6 +110,7 @@ def compare_rules(
     num_rounds: int,
     seed: Optional[int] = None,
     initial_bankroll: int = 10_000_000,
+    use_solver_strategy: bool = False,
 ) -> ComparisonResult:
     """Compare N rule sets via Common Random Numbers.
 
@@ -118,8 +119,13 @@ def compare_rules(
     same hole card, same player initial cards, and the same hit-card
     sequence up to the point where their player decisions diverge.
 
-    BasicStrategy is used for all rule sets (counting strategies need
-    continuous shoe state, which per-round CRN reset cannot provide).
+    By default BasicStrategy (the static CSV) is used for every rule
+    set. With use_solver_strategy=True, each rule set gets its own
+    optimal strategy from the solver, which is required for comparisons
+    that only differ in player-decision incentives (e.g. DAS vs no-DAS
+    -- the static CSV doesn't branch on DAS, so it would report a zero
+    diff). Counting strategies need continuous shoe state, which CRN's
+    per-round reset destroys, so they're not supported here either way.
 
     Returns per-rule SimulationStats plus a PairedDiff for every ordered
     pair (a, b) with a appearing before b in dict iteration order.
@@ -142,7 +148,17 @@ def compare_rules(
     ]
     paired_diffs = {pair: PairedDiff() for pair in pairs}
 
-    strategy = BasicStrategy()
+    if use_solver_strategy:
+        from cardsharp.blackjack.solver import solve
+        from cardsharp.blackjack.strategy import SolverStrategy
+        strategy_for = {
+            label: SolverStrategy(solve(rules, mode="fast"))
+            for label, rules in rules_dict.items()
+        }
+    else:
+        shared_strategy = BasicStrategy()
+        strategy_for = {label: shared_strategy for label in rules_dict}
+
     io = DummyIOInterface()
 
     for k in range(num_rounds):
@@ -163,7 +179,7 @@ def compare_rules(
 
             game = BlackjackGame(rules, io, shoe)
             player = Player(
-                "Sim", io, strategy, initial_money=initial_bankroll
+                "Sim", io, strategy_for[label], initial_money=initial_bankroll
             )
             game.add_player(player)
             game.set_state(_state_placing_bets)

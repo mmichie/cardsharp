@@ -34,10 +34,12 @@ from cardsharp.blackjack.state import (
     _state_placing_bets,
 )
 from cardsharp.blackjack.stats import SimulationStats
-from cardsharp.blackjack.strategy import BasicStrategy
-from cardsharp.blackjack.strategy import CountingStrategy
-from cardsharp.blackjack.strategy import AggressiveStrategy
-from cardsharp.blackjack.strategy import BasicStrategy, MartingaleStrategy
+from cardsharp.blackjack.strategy import (
+    AggressiveStrategy,
+    BasicStrategy,
+    CountingStrategy,
+    MartingaleStrategy,
+)
 from cardsharp.common.shoe import Shoe
 from cardsharp.common.io_interface import (
     ConsoleIOInterface,
@@ -279,10 +281,6 @@ class BlackjackGame:
     def can_insure(self, player):
         """Check if the player can opt for insurance."""
         return self.rules.can_insure(self.dealer.current_hand, player.current_hand)
-
-    def can_surrender(self, hand):
-        """Check if the player can surrender."""
-        return self.rules.can_surrender(hand)
 
     def get_min_bet(self):
         """Get the minimum bet allowed in the game."""
@@ -605,7 +603,7 @@ def play_game_batch(
     strategy,
     initial_bankroll: int = 1000,
     shuffle_type: str = "perfect",
-    shuffle_count: int = None,
+    shuffle_count: Optional[int] = None,
     seed: Optional[int] = None,
     ev_table=None,
 ):
@@ -747,16 +745,32 @@ def run_rule_comparison(args, baseline_rules):
             "peek": with_override(dealer_peek=True),
             "no-peek": with_override(dealer_peek=False),
         }
+    elif args.compare_rules == "das_vs_no_das":
+        pair = {
+            "DAS": with_override(allow_double_after_split=True),
+            "no-DAS": with_override(allow_double_after_split=False),
+        }
+    elif args.compare_rules == "surrender_vs_none":
+        pair = {
+            "LS": with_override(allow_surrender=True,
+                                allow_late_surrender=True),
+            "no-surr": with_override(allow_surrender=False,
+                                     allow_late_surrender=False,
+                                     allow_early_surrender=False),
+        }
     else:
         raise ValueError(
             f"Unknown comparison: {args.compare_rules}"
         )
 
     print(f"Comparing: {args.compare_rules}")
+    if args.solver_strategy:
+        print("  Using per-rule solver strategy")
     result = compare_rules(
         rules_dict=pair,
         num_rounds=args.num_games,
         seed=args.seed,
+        use_solver_strategy=args.solver_strategy,
     )
     result.print_report(confidence=args.confidence)
 
@@ -1084,14 +1098,19 @@ def main():
         "--compare_rules",
         type=str,
         default=None,
-        choices=["h17_vs_s17", "bj_3_2_vs_6_5", "peek_vs_no_peek"],
+        choices=[
+            "h17_vs_s17",
+            "bj_3_2_vs_6_5",
+            "peek_vs_no_peek",
+            "das_vs_no_das",
+            "surrender_vs_none",
+        ],
         help="Run a Common Random Numbers (CRN) comparison of two rule "
         "sets. Reports per-rule house edge plus the much tighter paired "
-        "difference. Uses --num_games rounds. With BasicStrategy "
-        "(CSV-based, does not switch decisions on DAS/surrender/peek "
-        "availability), peek_vs_no_peek should give a diff of essentially "
-        "zero -- which is the regression test for the late-surrender vs "
-        "dealer-BJ accounting in no-peek mode.",
+        "difference. Uses --num_games rounds. Comparisons whose effect "
+        "is purely on player-decision incentives (DAS, surrender) only "
+        "produce a non-zero diff with --solver_strategy, since the "
+        "default CSV-based BasicStrategy does not branch on those rules.",
     )
     parser.add_argument(
         "--confidence",
@@ -1107,6 +1126,16 @@ def main():
         "startup (~1s for fast mode); for each round, looks up the deal "
         "state's expected EV and uses it to absorb the between-deal "
         "variance from the Monte Carlo estimator.",
+    )
+    parser.add_argument(
+        "--solver_strategy",
+        action="store_true",
+        help="Use the solver's optimal per-rules strategy instead of the "
+        "static basic_strategy.csv. The CSV is rule-blind aside from a "
+        "3-cell H17->S17 patch; the solver-derived strategy reflects the "
+        "actual rule set (DAS, surrender, peek, blackjack payout, deck "
+        "count). Required for --compare_rules to show a non-zero diff on "
+        "rule changes that only affect player decisions (DAS).",
     )
     args = parser.parse_args()
 
@@ -1160,26 +1189,31 @@ def main():
         random.seed(master_seed)
         print(f"Seed: {master_seed}")
 
-        # If control variate requested, solve the rules to get an EV table
-        # and the exact mu_y (= -solver_HE = solver-predicted player EV).
-        # build_deal_ev_table folds in the dealer-BJ branch so that
-        # E[Y] in the simulator equals -sol.house_edge under fresh-shoe
-        # conditions; without that fold, Y is biased by ~0.5% and the CV
-        # estimator becomes inconsistent with the baseline.
+        # If control variate or solver-strategy requested, solve the rules
+        # once and reuse the result for both. build_deal_ev_table folds
+        # in the dealer-BJ branch so that E[Y] in the simulator equals
+        # -sol.house_edge under fresh-shoe conditions; without that fold,
+        # Y is biased by ~0.5% and the CV estimator becomes inconsistent
+        # with the baseline.
         deal_ev_table = None
         cv_mu_y = None
-        if args.cv:
+        if args.cv or args.solver_strategy:
             from cardsharp.blackjack.solver import solve
             solver_t0 = time.time()
-            print("Solving rules for control variate...")
+            print("Solving rules...")
             sol = solve(rules, mode="fast")
-            deal_ev_table = build_deal_ev_table(sol.ev_table, rules)
-            cv_mu_y = -sol.house_edge
             print(
                 f"Solver done ({time.time() - solver_t0:.2f}s). "
-                f"Solver HE = {sol.house_edge * 100:.4f}% "
-                f"(mu_Y = {cv_mu_y:+.6f})"
+                f"Solver HE = {sol.house_edge * 100:.4f}%"
             )
+            if args.cv:
+                deal_ev_table = build_deal_ev_table(sol.ev_table, rules)
+                cv_mu_y = -sol.house_edge
+                print(f"  CV mu_Y = {cv_mu_y:+.6f}")
+            if args.solver_strategy:
+                from cardsharp.blackjack.strategy import SolverStrategy
+                strategy = SolverStrategy(sol)
+                print("  Using solver-derived strategy table.")
 
         start_time = time.time()
         graph = BlackjackGraph(args.num_games) if args.vis else None
