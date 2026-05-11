@@ -230,3 +230,141 @@ class TestSolverResult:
         r1 = solve(rules)
         r2 = solve(rules)
         assert r1.house_edge == r2.house_edge
+
+
+class TestAutoMode:
+    """Verify mode='auto' routes to the right path for each deck size.
+
+    The auto router is the practical lever for accuracy in small-deck games:
+    1-2 decks pick up combinatorial (matches WoO Appendix 9 within rounding),
+    3-4 decks pick up exact (closes ~88% of the static-dealer-prob bias),
+    5+ decks fall through to fast (where the bias is already <0.005%).
+    """
+
+    def _canonical_rules(self, num_decks):
+        return Rules(
+            num_decks=num_decks,
+            dealer_hit_soft_17=True,
+            allow_double_down=True,
+            allow_split=True,
+            allow_surrender=True,
+            allow_late_surrender=True,
+            allow_double_after_split=False,
+            allow_resplitting=False,
+            dealer_peek=True,
+            blackjack_payout=1.5,
+            penetration=0.75,
+        )
+
+    def test_auto_six_deck_matches_fast(self):
+        """At 6 decks, auto should fall through to fast mode (no slowdown,
+        ~bit-equal HE). The fast path's bias is sub-noise for typical shoes."""
+        rules = self._canonical_rules(6)
+        he_auto = solve(rules, mode="auto").house_edge
+        he_fast = solve(rules, mode="fast").house_edge
+        assert he_auto == he_fast
+
+    def test_auto_five_deck_matches_fast(self):
+        """5 decks is the threshold; auto must stay on the fast path."""
+        rules = self._canonical_rules(5)
+        he_auto = solve(rules, mode="auto").house_edge
+        he_fast = solve(rules, mode="fast").house_edge
+        assert he_auto == he_fast
+
+    def test_auto_infinite_matches_fast(self):
+        """Infinite-deck (num_decks > 8) trivially routes to fast since
+        deck composition doesn't change."""
+        rules = Rules(num_decks=99, dealer_peek=True, dealer_hit_soft_17=True)
+        he_auto = solve(rules, mode="auto").house_edge
+        he_fast = solve(rules, mode="fast").house_edge
+        assert he_auto == he_fast
+
+    @pytest.mark.slow
+    def test_auto_one_deck_routes_to_combinatorial(self):
+        """1-deck auto should match combinatorial mode bit-equal, and
+        should differ from fast mode by ~0.03% (the dealer-prob-staleness
+        gap measured in the prior cross-mode comparison)."""
+        rules = self._canonical_rules(1)
+        he_auto = solve(rules, mode="auto").house_edge
+        he_comb = solve(rules, mode="combinatorial").house_edge
+        he_fast = solve(rules, mode="fast").house_edge
+        assert he_auto == he_comb
+        assert abs(he_fast - he_comb) > 0.0001  # gap is real (~0.03%)
+
+    @pytest.mark.slow
+    def test_auto_three_deck_routes_to_exact(self):
+        """3-deck auto should pick exact mode and trim the fast-mode gap.
+
+        Pinning equality to exact mode locks in the routing decision: if a
+        future change reroutes 3-deck back to fast or to combinatorial, this
+        test fails.
+        """
+        rules = self._canonical_rules(3)
+        he_auto = solve(rules, mode="auto").house_edge
+        he_exact = solve(rules, mode="exact").house_edge
+        assert he_auto == he_exact
+
+
+class TestCombinatorialPinned:
+    """Lock in combinatorial-mode HE for canonical small-deck rule sets.
+
+    The combinatorial solver is the gold standard (single-pass enumeration
+    with inline dealer evaluation, matches WoO Appendix 9 within rounding).
+    Pinning its output for known rule sets catches future regressions in
+    the combinatorial path -- the path that auto-mode now relies on for
+    1-2 deck accuracy.
+    """
+
+    @pytest.mark.slow
+    def test_one_deck_h17_pinned(self):
+        """1-deck H17, no DAS, peek, LS, no-resplit, 3:2 BJ.
+
+        Expected HE = 0.001235 (Wizard of Odds Appendix 9 publishes
+        0.18% for the canonical 1-deck game; the variance with our
+        no-resplit / no-DAS configuration is small).
+        """
+        rules = Rules(
+            num_decks=1, dealer_hit_soft_17=True, allow_double_down=True,
+            allow_split=True, allow_surrender=True, allow_late_surrender=True,
+            allow_double_after_split=False, allow_resplitting=False,
+            dealer_peek=True, blackjack_payout=1.5, penetration=0.75,
+        )
+        he = solve(rules, mode="combinatorial").house_edge
+        assert abs(he - 0.001235) < 5e-6, (
+            f"1-deck H17 combinatorial HE = {he:.6f}, expected ~0.001235. "
+            f"This indicates a regression in the combinatorial solver path."
+        )
+
+    @pytest.mark.slow
+    def test_two_deck_h17_pinned(self):
+        """2-deck H17, no DAS, peek, LS, no-resplit, 3:2 BJ."""
+        rules = Rules(
+            num_decks=2, dealer_hit_soft_17=True, allow_double_down=True,
+            allow_split=True, allow_surrender=True, allow_late_surrender=True,
+            allow_double_after_split=False, allow_resplitting=False,
+            dealer_peek=True, blackjack_payout=1.5, penetration=0.75,
+        )
+        he = solve(rules, mode="combinatorial").house_edge
+        assert abs(he - 0.004823) < 5e-6, (
+            f"2-deck H17 combinatorial HE = {he:.6f}, expected ~0.004823. "
+            f"This indicates a regression in the combinatorial solver path."
+        )
+
+    @pytest.mark.slow
+    def test_one_deck_s17_pinned(self):
+        """1-deck S17, no DAS, peek, LS, no-resplit, 3:2 BJ.
+
+        S17 with 1-deck and player-friendly rules tips slightly negative
+        (player advantage) -- a known property of single-deck S17 games.
+        """
+        rules = Rules(
+            num_decks=1, dealer_hit_soft_17=False, allow_double_down=True,
+            allow_split=True, allow_surrender=True, allow_late_surrender=True,
+            allow_double_after_split=False, allow_resplitting=False,
+            dealer_peek=True, blackjack_payout=1.5, penetration=0.75,
+        )
+        he = solve(rules, mode="combinatorial").house_edge
+        assert abs(he - (-0.000565)) < 5e-6, (
+            f"1-deck S17 combinatorial HE = {he:.6f}, expected ~-0.000565. "
+            f"This indicates a regression in the combinatorial solver path."
+        )

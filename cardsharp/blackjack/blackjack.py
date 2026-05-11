@@ -791,7 +791,7 @@ def run_strategy_analysis(args, rules, initial_bankroll: int = 1000):
     from cardsharp.blackjack.strategy import SolverStrategy
 
     print(f"Solving rules for the optimal-strategy baseline...")
-    sol = solve(rules, mode="fast")
+    sol = solve(rules, mode="auto")
     print(f"  Solver HE = {sol.house_edge * 100:.4f}%")
 
     strategies = {
@@ -1015,9 +1015,10 @@ def main():
     parser.add_argument(
         "--solver_mode",
         type=str,
-        choices=["fast", "exact", "combinatorial"],
-        default="fast",
-        help="Solver mode: fast (~1s), exact (~1-5min), combinatorial (~1-10min, matches WoO)",
+        choices=["auto", "fast", "exact", "combinatorial"],
+        default="auto",
+        help="Solver mode: auto (deck-size-aware default), fast (~1s, small bias), "
+             "exact (~1-5min, dynamic dealer probs), combinatorial (~1-10min, matches WoO)",
     )
     parser.add_argument("--min_bet", type=int, default=10, help="Minimum bet amount")
     parser.add_argument("--max_bet", type=int, default=1000, help="Maximum bet amount")
@@ -1222,7 +1223,11 @@ def main():
             from cardsharp.blackjack.solver import solve
             solver_t0 = time.time()
             print("Solving rules...")
-            sol = solve(rules, mode="fast")
+            # mode="auto": for ≤4 decks the solver routes to a more accurate
+            # path (combinatorial / exact) so cv_mu_y and the solver strategy
+            # table aren't biased by the static-dealer-prob shortcut. 5+ deck
+            # shoes still take the fast path (bias < 0.005%).
+            sol = solve(rules, mode="auto")
             print(
                 f"Solver done ({time.time() - solver_t0:.2f}s). "
                 f"Solver HE = {sol.house_edge * 100:.4f}%"

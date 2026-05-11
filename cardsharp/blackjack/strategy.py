@@ -554,8 +554,13 @@ def _build_solver(rules=None, **_):
             "optimal play); pass rules=... to create_strategy."
         )
     # Local import avoids a hard solver dependency at module import time.
+    # mode="auto" routes ≤2 decks to combinatorial (matches WoO Appendix 9),
+    # 3-4 decks to exact mode, and 5+ decks to fast. This costs 30-150s of
+    # startup for small-deck games but eliminates the ~0.01-0.03% static-
+    # dealer-prob bias that flows into --solver_strategy decisions. 5+ deck
+    # games (the common case) take the fast path and see no slowdown.
     from cardsharp.blackjack.solver import solve
-    return SolverStrategy(solve(rules, mode="fast"))
+    return SolverStrategy(solve(rules, mode="auto"))
 
 
 STRATEGY_FACTORIES = {

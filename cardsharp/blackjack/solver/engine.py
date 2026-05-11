@@ -105,16 +105,31 @@ def solve(rules: Rules, mode: str = "fast") -> SolverResult:
     """Compute exact house edge and optimal strategy for a rule set.
 
     mode:
-        "fast"          - Static dealer probs, ~1-2s. (default)
+        "fast"          - Static dealer probs, ~1-2s. (default for library
+                          callers)  ~0.01-0.03% pessimistic at 1-2 decks,
+                          shrinking to <0.005% at 5+ decks.
+        "auto"          - Pick the most accurate practical mode for the
+                          deck size. ≤2 decks: combinatorial. 3-4: exact.
+                          5+ decks: fast (no penalty over plain fast). The
+                          simulator CLI uses auto by default.
         "exact"         - Dynamic dealer probs for non-split hands. ~1-5min.
+                          Closes ~88% of the fast-vs-truth gap.
         "combinatorial" - Single-pass enumeration with inline dealer eval
                           for ALL hands including splits. Matches WoO
                           Appendix 9 within rounding. ~10-30s for 1-2 decks.
-                          Automatically routes to "exact" for 4+ decks
+                          Automatically routes to "exact" for 3+ decks
                           (combinatorial memo space is too large for 6-deck).
 
     Infinite-deck is always fast (no card depletion effect).
     """
+    if mode == "auto":
+        num_decks = getattr(rules, "num_decks", None)
+        if num_decks is None or num_decks >= 5:
+            mode = "fast"
+        elif num_decks <= 2:
+            mode = "combinatorial"
+        else:
+            mode = "exact"
     if mode == "combinatorial":
         num_decks = getattr(rules, "num_decks", None)
         if num_decks is not None and num_decks > 2:

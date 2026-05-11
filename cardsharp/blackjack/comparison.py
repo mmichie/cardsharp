@@ -157,8 +157,11 @@ def compare_rules(
     if use_solver_strategy:
         from cardsharp.blackjack.solver import solve
         from cardsharp.blackjack.strategy import SolverStrategy
+        # mode="auto" picks combinatorial for ≤2 decks (matches WoO),
+        # exact for 3-4 decks, fast for 5+; tightens ground-truth strategy
+        # for small-deck rule comparisons without slowing 6-deck cases.
         strategy_for = {
-            label: SolverStrategy(solve(rules, mode="fast"))
+            label: SolverStrategy(solve(rules, mode="auto"))
             for label, rules in rules_dict.items()
         }
     else:
