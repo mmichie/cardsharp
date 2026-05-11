@@ -68,11 +68,17 @@ class BasicStrategy(Strategy):
     three cells are patched at runtime.
     """
 
-    # Action constants for array storage (avoids repeated enum construction)
+    # Action constants for array storage (avoids repeated enum construction).
+    # _DOUBLE_STAND is a string sentinel rather than object(): instances of
+    # bare object() are not pickle-identity-preserving across processes, so a
+    # strategy table sent to a multiprocessing worker would have DS cells
+    # whose `is` comparison against the worker's class attribute fails,
+    # silently downgrading DS plays to HIT and biasing measured HE by ~20bp.
+    # The string survives pickle/unpickle and matches under == reliably.
     _HIT = Action.HIT
     _STAND = Action.STAND
     _DOUBLE = Action.DOUBLE
-    _DOUBLE_STAND = object()  # Sentinel: double if allowed, otherwise stand
+    _DOUBLE_STAND = "DS"
     _SPLIT = Action.SPLIT
     _SURRENDER = Action.SURRENDER
 
@@ -175,7 +181,7 @@ class BasicStrategy(Strategy):
     def _get_valid_action(self, player, action, dealer_idx=None):
         valid_actions = player.valid_actions
 
-        if action is self._DOUBLE_STAND:
+        if action == self._DOUBLE_STAND:
             # DS = Double if allowed, otherwise Stand
             if Action.DOUBLE in valid_actions:
                 return Action.DOUBLE
