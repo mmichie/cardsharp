@@ -393,10 +393,28 @@ class TestWoOReference:
         6d H17: +0.4 bp   6d S17: -0.5 bp
 
     Tolerance is set to 10 bp (0.10%) -- comfortable margin above the
-    7-bp 1-deck H17 outlier (whose cause we haven't pinned down: could
-    be a residual split-EV approximation specific to the deepest deck
-    composition shifts) without flaking on legitimate sub-bp drift.
-    A regression that adds 20+ bp of bias will fail.
+    7-bp 1-deck H17 outlier (see investigation notes below) without
+    flaking on legitimate sub-bp drift. A regression that adds 20+ bp
+    of bias will fail.
+
+    1-deck H17 gap investigation (2026-05-12, cardsharp-nl4):
+        The 7-bp gap is reproducible and *specific to 1-deck H17*. Both
+        DAS and no-DAS variants show the same ~7-8 bp gap, ruling out a
+        DAS-specific bug:
+            1d H17 no-DAS LS:  HE 0.12350% (gap -7.3 bp)
+            1d H17 DAS    LS:  HE -0.00848% (gap -7.95 bp)
+        Combinatorial vs exact mode at 1d H17 no-DAS LS agree within
+        3 bp (0.12350% vs 0.12660%) -- so most of the gap (~4 bp) is
+        shared between both code paths and 3 bp lives in combinatorial-
+        specific logic (likely the _ev_split path-dependence where
+        hand 2's play deck doesn't account for hand 1's hits).
+        Strategy choices match WoO's published basic strategy chart at
+        the total-dependent level, so the residual is in EV calculation
+        rather than action selection. Most likely candidate: dealer
+        soft-17 recursion at deepest composition shifts (the H17/1-deck
+        intersection that's anomalous), but no single obvious bug has
+        been pinned down. The gap shrinks to sub-bp at 2+ decks and is
+        well below our test tolerance.
     """
 
     TOLERANCE = 0.0010  # 10 basis points
