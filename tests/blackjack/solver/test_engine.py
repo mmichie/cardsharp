@@ -368,3 +368,77 @@ class TestCombinatorialPinned:
             f"1-deck S17 combinatorial HE = {he:.6f}, expected ~-0.000565. "
             f"This indicates a regression in the combinatorial solver path."
         )
+
+
+class TestWoOReference:
+    """Solver HE vs Wizard of Odds blackjack calculator (external reference).
+
+    Values pulled directly from
+    https://wizardofodds.com/games/blackjack/calculator/ via Playwright
+    on 2026-05-12. WoO publishes 5-decimal HE for arbitrary rule sets
+    under three strategy modes; we compare against "Optimal results"
+    (perfect composition-dependent strategy + reshuffle every hand),
+    which is the closest match to what our solver computes (per-(cv1,
+    cv2, upcard) best_ev aggregated across deal probabilities, no
+    cross-round shoe depletion).
+
+    Rule set fixed across all rows:
+        double-after-split=No, double-on=any, resplit-to=2 hands,
+        resplit-aces=No, hit-split-aces=No, OBO=Yes, surrender=Late,
+        blackjack=3:2
+
+    Measured gaps to WoO Optimal at session pull:
+        1d H17: -7.3 bp   1d S17: -1.0 bp
+        2d H17: -0.4 bp
+        6d H17: +0.4 bp   6d S17: -0.5 bp
+
+    Tolerance is set to 10 bp (0.10%) -- comfortable margin above the
+    7-bp 1-deck H17 outlier (whose cause we haven't pinned down: could
+    be a residual split-EV approximation specific to the deepest deck
+    composition shifts) without flaking on legitimate sub-bp drift.
+    A regression that adds 20+ bp of bias will fail.
+    """
+
+    TOLERANCE = 0.0010  # 10 basis points
+
+    def _rules(self, num_decks, h17):
+        return Rules(
+            num_decks=num_decks,
+            dealer_hit_soft_17=h17,
+            allow_double_down=True,
+            allow_split=True,
+            allow_double_after_split=False,
+            allow_resplitting=False,
+            allow_surrender=True,
+            allow_late_surrender=True,
+            dealer_peek=True,
+            blackjack_payout=1.5,
+        )
+
+    # WoO calculator output for "Optimal results" (composition-dependent
+    # strategy + reshuffle every hand), 2026-05-12.
+    WOO_OPTIMAL = {
+        (1, True): 0.0013076,   # 1-deck H17
+        (1, False): -0.0004632,  # 1-deck S17
+        (2, True): 0.0048575,   # 2-deck H17
+        (6, True): 0.0070486,   # 6-deck H17
+        (6, False): 0.0050619,  # 6-deck S17
+    }
+
+    @pytest.mark.slow
+    @pytest.mark.parametrize("num_decks,h17,woo_he", [
+        (decks, h17, he) for (decks, h17), he in sorted(WOO_OPTIMAL.items())
+    ])
+    def test_woo_optimal(self, num_decks, h17, woo_he):
+        rules = self._rules(num_decks, h17)
+        # mode="auto" picks combinatorial for ≤2 decks (the most accurate
+        # path for small shoes) and fast for 5+ (where bias is already
+        # < 5 bp). exact mode at 3-4 decks is too slow to include here.
+        he = solve(rules, mode="auto").house_edge
+        gap = he - woo_he
+        rule_label = f"{num_decks}d {'H17' if h17 else 'S17'}"
+        assert abs(gap) < self.TOLERANCE, (
+            f"{rule_label}: solver HE = {he*100:.4f}%, "
+            f"WoO Optimal = {woo_he*100:.4f}%, gap = {gap*100:+.4f}% "
+            f"(tolerance 10 bp)."
+        )
