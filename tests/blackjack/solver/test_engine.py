@@ -397,24 +397,40 @@ class TestWoOReference:
     flaking on legitimate sub-bp drift. A regression that adds 20+ bp
     of bias will fail.
 
-    1-deck H17 gap investigation (2026-05-12, cardsharp-nl4):
+    1-deck H17 gap investigation (2026-05-12 / 13, cardsharp-nl4):
         The 7-bp gap is reproducible and *specific to 1-deck H17*. Both
         DAS and no-DAS variants show the same ~7-8 bp gap, ruling out a
         DAS-specific bug:
             1d H17 no-DAS LS:  HE 0.12350% (gap -7.3 bp)
             1d H17 DAS    LS:  HE -0.00848% (gap -7.95 bp)
         Combinatorial vs exact mode at 1d H17 no-DAS LS agree within
-        3 bp (0.12350% vs 0.12660%) -- so most of the gap (~4 bp) is
-        shared between both code paths and 3 bp lives in combinatorial-
-        specific logic (likely the _ev_split path-dependence where
-        hand 2's play deck doesn't account for hand 1's hits).
-        Strategy choices match WoO's published basic strategy chart at
-        the total-dependent level, so the residual is in EV calculation
-        rather than action selection. Most likely candidate: dealer
-        soft-17 recursion at deepest composition shifts (the H17/1-deck
-        intersection that's anomalous), but no single obvious bug has
-        been pinned down. The gap shrinks to sub-bp at 2+ decks and is
-        well below our test tolerance.
+        3 bp (0.12350% vs 0.12660%); 4 bp of the gap is shared, 3 bp
+        lives in combinatorial-vs-exact split-EV-structure differences.
+        Strategy choices match WoO's published basic strategy chart.
+
+        Three-stage investigation ruled out the obvious causes:
+        1. Memoization in _dealer_probs is correct: a no-memo
+           reimplementation gives identical dealer outcome
+           distributions across multiple probe states.
+        2. Per-action EVs (stand / hit / double / split) match an
+           independent brute-force reimplementation EXACTLY (to 1e-10)
+           across 13 sampled cells including high-impact, borderline,
+           H17-sensitive, and pair states.
+        3. Split EV path-dependence (where real hand 2 plays from a
+           deck depleted by hand 1's hits, but our solver and brute
+           force both use deck2) was tested for (8,8) vs 10: proper
+           path-dependent EV is -0.46234 vs our -0.46252. The shift is
+           1.8 bp in the WRONG direction relative to WoO -- a
+           path-dependent fix would move our HE further below WoO,
+           not closer. So path-dependence is not the source.
+
+        The remaining 7-bp residual is most likely an algorithmic
+        methodology difference between our solver and WoO's calculator
+        that does not appear in any of our per-state EVs but in some
+        higher-level aggregation we use identically across our paths.
+        Without WoO's source, no further bisection is possible. The gap
+        shrinks to sub-bp at 2+ decks and is comfortably below the
+        10-bp test tolerance.
     """
 
     TOLERANCE = 0.0010  # 10 basis points
