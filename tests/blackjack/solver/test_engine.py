@@ -408,7 +408,7 @@ class TestWoOReference:
         lives in combinatorial-vs-exact split-EV-structure differences.
         Strategy choices match WoO's published basic strategy chart.
 
-        Three-stage investigation ruled out the obvious causes:
+        Four-stage investigation ruled out the obvious causes:
         1. Memoization in _dealer_probs is correct: a no-memo
            reimplementation gives identical dealer outcome
            distributions across multiple probe states.
@@ -423,14 +423,23 @@ class TestWoOReference:
            1.8 bp in the WRONG direction relative to WoO -- a
            path-dependent fix would move our HE further below WoO,
            not closer. So path-dependence is not the source.
+        4. Dealer outcome distribution under H17 soft-17 hits at 1-deck
+           composition matches Monte Carlo (N=2M, SE ~3 bp per outcome)
+           on 5 probe states including A-upcard-with-hole-6 in player-
+           depleted decks. Our recursion produces the same dealer prob
+           distribution as random card sampling.
 
-        The remaining 7-bp residual is most likely an algorithmic
-        methodology difference between our solver and WoO's calculator
-        that does not appear in any of our per-state EVs but in some
-        higher-level aggregation we use identically across our paths.
-        Without WoO's source, no further bisection is possible. The gap
-        shrinks to sub-bp at 2+ decks and is comfortably below the
-        10-bp test tolerance.
+        The remaining 7-bp residual is unexplained at this depth of
+        investigation. Every major component (memo, dealer probs,
+        per-action player EVs, split EVs) verifies correct against
+        independent reimplementations. The gap must therefore be either
+        an algorithmic methodology difference between our solver and
+        WoO's calculator that does not surface at the per-component
+        level, or a bug in some path not yet probed (most likely
+        suspect: HE aggregation, though its arithmetic is mechanically
+        simple). Without WoO's source no further bisection is possible.
+        The gap shrinks to sub-bp at 2+ decks and is comfortably below
+        the 10-bp test tolerance.
     """
 
     TOLERANCE = 0.0010  # 10 basis points
