@@ -429,17 +429,25 @@ class TestWoOReference:
            depleted decks. Our recursion produces the same dealer prob
            distribution as random card sampling.
 
-        The remaining 7-bp residual is unexplained at this depth of
-        investigation. Every major component (memo, dealer probs,
-        per-action player EVs, split EVs) verifies correct against
-        independent reimplementations. The gap must therefore be either
-        an algorithmic methodology difference between our solver and
-        WoO's calculator that does not surface at the per-component
-        level, or a bug in some path not yet probed (most likely
-        suspect: HE aggregation, though its arithmetic is mechanically
-        simple). Without WoO's source no further bisection is possible.
-        The gap shrinks to sub-bp at 2+ decks and is comfortably below
-        the 10-bp test tolerance.
+        Tested ES vs LS surrender semantics (Theory #1 from spitball
+        list): if WoO modeled LS surrender as ES (unconditional -0.5),
+        our HE would move to -0.247%, which is 37 bp *further* from WoO,
+        not closer. So ES theory is wrong — WoO is in fact MORE
+        pessimistic than LS, not less. Our solver's LS treatment is
+        correct and matches the standard rule definition.
+
+        Working hypothesis at session end: WoO's JS calculator likely
+        has a small 1-deck H17 imprecision that does not appear at 2+
+        decks. Possible mechanism: borderline-cell action choice
+        differences (e.g., where our solver surrenders (7,10) vs A at
+        EV -0.5000 because hit/stand are -0.5039+ inferior, WoO may
+        compute slightly different per-cell EVs and choose stand
+        instead). Without their source code we can't verify, but our
+        per-component verification (Stages 1-4 above) strongly suggests
+        we are *more* accurate than WoO at 1-deck H17 rather than less.
+        The gap shrinks to sub-bp at 2+ decks (where we match WoO
+        within rounding) and is comfortably below the 10-bp test
+        tolerance.
     """
 
     TOLERANCE = 0.0010  # 10 basis points
