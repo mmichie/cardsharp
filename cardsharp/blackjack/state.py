@@ -146,6 +146,11 @@ class DealingState(GameState):
         """
         Handles the card dealing and notifies the interface.
         """
+        # Open the round on the shoe: if the cut card came out last round,
+        # this is where the (between-rounds) shuffle happens. While the
+        # round is open the shoe will not shuffle at the cut card.
+        game.shoe.begin_round()
+
         # Skip output for simulation mode
         is_dummy_io = isinstance(game.io_interface, DummyIOInterface)
 
@@ -561,16 +566,40 @@ class DealersTurnState(GameState):
 
     def handle(self, game):
         """Handles the dealer's actions and changes the game state to EndRoundState."""
-        # The dealer should always hit according to the rules, even if all players busted
-        # The original logic skipped dealer actions when all players busted, which
-        # could result in the dealer stopping at values below 17
-
-        # Hit until the dealer should stand according to the rules
-        while game.dealer.should_hit(game.rules):
-            self.dealer_action(game)
+        # Casino procedure: the dealer completes their hand only if at
+        # least one player hand is still live (not busted, surrendered, or
+        # already settled). When every hand is dead the dealer just reveals
+        # the hole card -- drawing extra cards would consume shoe cards a
+        # real game never deals, distorting shoe pacing and giving counting
+        # strategies information a real counter would never see.
+        if self._any_live_hand(game):
+            # Hit until the dealer should stand according to the rules
+            while game.dealer.should_hit(game.rules):
+                self.dealer_action(game)
 
         game.output("Dealer stands.")
         game.set_state(_state_end_round)
+
+    @staticmethod
+    def _any_live_hand(game):
+        """Return True if any player hand's outcome depends on the dealer's
+        final total (rather than only on the already-dealt dealer cards)."""
+        for player in game.players:
+            for i, hand in enumerate(player.hands):
+                if i < len(player.bets) and player.bets[i] <= 0:
+                    continue  # surrendered, or already settled (e.g. paid BJ)
+                if not hand.cards:
+                    continue
+                if hand.value() > 21:
+                    continue  # busted: loses regardless of dealer total
+                if hand.is_blackjack:
+                    # A natural's outcome depends only on whether the dealer
+                    # also has a natural -- already determined by the two
+                    # dealt dealer cards, never by further draws. (is_blackjack
+                    # is False for split hands, which do need a dealer total.)
+                    continue
+                return True
+        return False
 
     def dealer_action(self, game):
         """
@@ -602,12 +631,16 @@ class EndRoundState(GameState):
         # Counting strategies need to see all cards (including dealer hits)
         # after the round ends.
 
+        # Close the round on the shoe so between-round shuffling (and any
+        # out-of-round dealing by other callers) behaves correctly.
+        game.shoe.end_round()
+
         # Check if cut card was reached and we need to reshuffle
         if game.shoe.is_cut_card_reached():
             game.output(
-                "Cut card reached. Shuffling shoe after this round."
+                "Cut card reached. Shuffling shoe before the next round."
             )
-            # The shoe will automatically reshuffle on the next deal
+            # begin_round() performs the shuffle when the next round starts
 
         game.set_state(_state_placing_bets)
 

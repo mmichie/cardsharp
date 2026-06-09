@@ -58,6 +58,15 @@ class Shoe:
         self.burned_cards: List[Card] = []  # Track burned cards
         self.cut_card_reached = False  # Track if cut card has been reached
 
+        # Round-aware dealing. Card games that bracket their rounds with
+        # begin_round()/end_round() get casino-correct shuffle timing: the
+        # cut card coming out mid-round does NOT interrupt the round; the
+        # shuffle happens before the next round starts. Callers that never
+        # call begin_round() keep the legacy behavior (shuffle the moment
+        # the cut card index is crossed).
+        self._in_round = False
+        self._round_start_index = 0
+
         # Set shuffle count based on type if not specified
         # Research shows: 7 riffle shuffles for 52 cards approaches randomness
         # Scale up for multiple decks (Bayer-Diaconis)
@@ -113,7 +122,7 @@ class Shoe:
         # This models the natural variation in where dealers split the deck
         # Not always exactly at midpoint
         cut_point = 0
-        for i in range(n):
+        for _ in range(n):
             if random.random() < 0.5:
                 cut_point += 1
 
@@ -183,6 +192,21 @@ class Shoe:
 
         return result
 
+    def _shuffle_cards(self, cards: List[Card]) -> List[Card]:
+        """Apply the configured shuffle procedure to a list of cards."""
+        if self.shuffle_type == "perfect":
+            # Perfect shuffle - cryptographically random
+            random.shuffle(cards)
+        elif self.shuffle_type == "riffle":
+            # GSR riffle shuffle - realistic model of casino shuffling
+            for _ in range(self.shuffle_count):
+                cards = self._gsr_riffle_shuffle(cards)
+        elif self.shuffle_type == "strip":
+            # Strip shuffle - less effective but used in some casinos
+            for _ in range(self.shuffle_count):
+                cards = self._strip_shuffle(cards)
+        return cards
+
     def shuffle(self):
         """Shuffle all cards in the shoe and reset the next card index."""
         # If using CSM, include discarded cards in the shuffle
@@ -190,20 +214,9 @@ class Shoe:
             self.cards.extend(self.discarded_cards)
             self.discarded_cards = []
 
-        # Perform shuffle based on type
-        if self.shuffle_type == "perfect":
-            # Perfect shuffle - cryptographically random
-            random.shuffle(self.cards)
-        elif self.shuffle_type == "riffle":
-            # GSR riffle shuffle - realistic model of casino shuffling
-            for _ in range(self.shuffle_count):
-                self.cards = self._gsr_riffle_shuffle(self.cards)
-        elif self.shuffle_type == "strip":
-            # Strip shuffle - less effective but used in some casinos
-            for _ in range(self.shuffle_count):
-                self.cards = self._strip_shuffle(self.cards)
-
+        self.cards = self._shuffle_cards(self.cards)
         self.next_card_index = 0
+        self._round_start_index = 0
         self.cut_card_reached = False
 
         # Burn cards after shuffle if specified
@@ -215,6 +228,58 @@ class Shoe:
                 burned_card = self.cards[self.next_card_index]
                 self.burned_cards.append(burned_card)
                 self.next_card_index += 1
+            self._round_start_index = self.next_card_index
+
+    def begin_round(self):
+        """Mark the start of a round of play.
+
+        If the cut card came out during the previous round, shuffle now --
+        between rounds -- which is when real dealers shuffle. While a round
+        is open, deal() will not shuffle at the cut card; it only performs
+        an emergency mid-round reshuffle if the shoe physically runs out.
+        """
+        if not self.use_csm and (
+            self.cut_card_reached or self.next_card_index >= self.reshuffle_point
+        ):
+            self.shuffle()
+        self._in_round = True
+        self._round_start_index = self.next_card_index
+
+    def end_round(self):
+        """Mark the end of a round of play."""
+        self._in_round = False
+
+    def _reshuffle_discards_mid_round(self):
+        """Handle the shoe running out of cards in the middle of a round.
+
+        Casino procedure: cards on the table stay on the table; the dealer
+        shuffles the discard pile and continues dealing from it. Cards dealt
+        during the current round are therefore excluded from the new pile --
+        a card in a player's hand cannot also be in the shoe. The legacy
+        behavior (reshuffling the entire list, in-play cards included) could
+        deal a physical card twice in the same round.
+
+        No cards are burned here: burning is part of the between-rounds
+        shuffle ritual, and this path exists precisely because cards are
+        scarce mid-round.
+        """
+        in_play = self.cards[self._round_start_index : self.next_card_index]
+        pool = (
+            self.cards[: self._round_start_index]
+            + self.cards[self.next_card_index :]
+        )
+        if not pool:
+            raise RuntimeError(
+                "Shoe exhausted mid-round with every card in play; "
+                "cannot continue the round."
+            )
+        pool = self._shuffle_cards(pool)
+        self.cards = in_play + pool
+        self.next_card_index = len(in_play)
+        self._round_start_index = 0
+        # The shoe was just (effectively) reshuffled; the cut card is
+        # repositioned, so penetration tracking restarts.
+        self.cut_card_reached = False
 
     def deal(self, num_cards: int = 1) -> Union[Card, List[Card]]:
         """
@@ -229,10 +294,17 @@ class Shoe:
         # Common case: deal a single card in non-CSM mode - most frequent case
         if num_cards == 1 and not self.use_csm:
             # Fast path for single card deal
-            if (
+            if self._in_round:
+                # Round-aware path: the cut card never interrupts a round
+                # (begin_round shuffles between rounds). Only a physically
+                # exhausted shoe forces a mid-round reshuffle of discards.
+                if self.next_card_index >= len(self.cards):
+                    self._reshuffle_discards_mid_round()
+            elif (
                 self.next_card_index >= self.reshuffle_point
                 or self.next_card_index >= self.total_cards
             ):
+                # Legacy path for callers that don't bracket rounds.
                 self.cut_card_reached = True
                 self.shuffle()
 
@@ -247,8 +319,11 @@ class Shoe:
 
         # For non-CSM mode with multiple cards
         if not self.use_csm:
-            # Check if reshuffle is needed due to penetration or not enough cards
-            if (
+            if self._in_round:
+                # Round-aware path: see single-card branch above.
+                if self.next_card_index + num_cards > len(self.cards):
+                    self._reshuffle_discards_mid_round()
+            elif (
                 self.next_card_index >= self.reshuffle_point
                 or self.next_card_index + num_cards > self.total_cards
             ):
