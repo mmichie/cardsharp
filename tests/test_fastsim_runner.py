@@ -46,6 +46,90 @@ def make_rules(**overrides):
     return Rules(**kwargs)
 
 
+# --- Rules-surface tripwire (beads-366) -------------------------------------
+#
+# The one silent drift path between engines: a field added to the Python
+# Rules that the facade neither maps nor refuses would be honored by the
+# reference engine and silently ignored by the core. Every Rules field
+# must therefore be classified below. A new field fails this test until
+# someone decides: map it (port the behavior to the core), refuse it
+# (resolve_engine falls back with a reason), or prove it inert and add a
+# parity fuzz config exercising it.
+
+CORE_MAPPED = {
+    "blackjack_payout",
+    "dealer_hit_soft_17",
+    "allow_split",
+    "allow_double_down",
+    "allow_insurance",
+    "allow_surrender",
+    "allow_early_surrender",
+    "allow_double_after_split",
+    "allow_resplitting",
+    "dealer_peek",
+    "num_decks",
+    "min_bet",
+    "max_bet",
+    "max_splits",
+    "insurance_payout",
+    "five_card_charlie",
+    "penetration",
+    "burn_cards",
+    "resplit_aces",
+    "hit_split_aces",
+    "allow_obo",
+    "double_on",
+}
+
+CORE_REFUSED = {
+    "use_csm",  # rules_kwargs raises; resolve_engine falls back
+    "variant",  # classic only; rules_kwargs raises otherwise
+}
+
+# Fields proven to have no effect on classic strategy-driven rounds; each
+# claim is exercised by a dedicated parity fuzz config in
+# tests/test_fastsim_parity.py so it cannot rot silently.
+ENGINE_INERT = {
+    "allow_late_surrender": "only read by Rules.can_surrender's non-variant "
+    "fallback, which is dead under the classic action validator",
+    "time_limit": "only read on the IOInterface (interactive) decision path, "
+    "never when a strategy decides",
+    "bonus_payouts": "the classic variant's payout calculator bypasses the "
+    "bonus-combination branch entirely",
+}
+
+
+def rules_surface():
+    import inspect
+
+    init_params = set(inspect.signature(Rules.__init__).parameters) - {"self"}
+    return init_params | set(Rules().to_dict().keys())
+
+
+def test_every_rules_field_is_classified_for_the_fast_core():
+    surface = rules_surface()
+    classified = CORE_MAPPED | CORE_REFUSED | set(ENGINE_INERT)
+    unclassified = surface - classified
+    assert not unclassified, (
+        f"New Rules field(s) {sorted(unclassified)} are not classified for "
+        f"the fast core. Decide: add to CORE_MAPPED (and port the behavior "
+        f"to cardsharp_core + rules_kwargs + parity coverage), CORE_REFUSED "
+        f"(and make rules_kwargs/resolve_engine reject it), or ENGINE_INERT "
+        f"(with proof and a parity fuzz config)."
+    )
+    stale = classified - surface
+    assert not stale, f"Classified field(s) {sorted(stale)} no longer exist on Rules"
+
+
+def test_core_mapped_set_matches_rules_kwargs_output():
+    from cardsharp.fastsim import rules_kwargs
+
+    assert set(rules_kwargs(make_rules())) == CORE_MAPPED
+
+
+# -----------------------------------------------------------------------------
+
+
 def test_python_engine_can_be_requested_explicitly():
     choice = resolve_engine(make_rules(), BasicStrategy(), requested="python")
     assert not choice.use_core

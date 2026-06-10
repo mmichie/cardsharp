@@ -254,6 +254,33 @@ FUZZ_CONFIGS = [
     pytest.param(
         {"max_splits": 1}, SPLIT_HEAVY, False, 1, 1000, 150, 114, id="max-splits-1"
     ),
+    # The three ENGINE_INERT claims from the rules-surface tripwire
+    # (tests/test_fastsim_runner.py): each flag is honored by neither
+    # engine on classic strategy-driven rounds. If the Python engine ever
+    # starts reading one of these, parity breaks here.
+    pytest.param(
+        {"allow_late_surrender": True, "allow_surrender": False},
+        TEN_HEAVY,
+        False,
+        1,
+        1000,
+        100,
+        120,
+        id="late-surrender-flag-inert",
+    ),
+    pytest.param(
+        {"time_limit": 30}, UNIFORM, False, 1, 1000, 100, 121, id="time-limit-inert"
+    ),
+    pytest.param(
+        {"bonus_payouts": {"suited-6-7-8": 2.0, "7-7-7": 3.0, "five-card-21": 1.5}},
+        UNIFORM,
+        False,
+        1,
+        1000,
+        100,
+        122,
+        id="bonus-payouts-inert",
+    ),
     pytest.param({"num_decks": 1}, UNIFORM, False, 1, 1000, 150, 115, id="one-deck"),
     pytest.param({}, SPLIT_HEAVY, False, 1, 15, 200, 116, id="broke-player"),
     pytest.param({}, SPLIT_HEAVY, False, 1, 25, 150, 117, id="one-double-only"),
