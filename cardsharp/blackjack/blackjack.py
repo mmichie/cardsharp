@@ -603,13 +603,15 @@ def play_game_batch(
     shuffle_count: Optional[int] = None,
     seed: Optional[int] = None,
     ev_table=None,
+    collect_earnings: bool = False,
 ):
     """Function to play a batch of games of Blackjack, to be executed in a separate process.
 
     If seed is provided, the worker's global random state is seeded for
     reproducibility. Returns the batch-aggregated stats (as a dict),
-    a per-round earnings list (for graphing), and the batch's total
-    bet sum.
+    a per-round earnings list (only when collect_earnings is set --
+    it exists solely for --vis graphing and is a large pickle on big
+    runs), and the batch's total bet sum.
     """
     # Ensure logging is disabled in worker processes
     import os
@@ -654,7 +656,8 @@ def play_game_batch(
         )
         shoe = current_shoe
         agg_stats.merge(SimulationStats.from_dict(result))
-        earnings.append(game_earnings)
+        if collect_earnings:
+            earnings.append(game_earnings)
         total_bets += game_bets
         # Shuffle detection and count updates are handled inside play_game.
 
@@ -1359,6 +1362,7 @@ def main():
                         args.shuffle_count,
                         worker_seeds[i],
                         deal_ev_table,
+                        bool(args.vis),
                     )
                     for i, game_count in enumerate(game_batches)
                 ]

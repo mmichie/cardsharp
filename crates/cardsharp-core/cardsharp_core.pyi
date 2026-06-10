@@ -80,6 +80,7 @@ def simulate_batch(
     n_players: int = 1,
     initial_bankroll: float = 1000.0,
     always_insure: bool = False,
+    threads: int = 0,
 ) -> dict: ...
 def play_card_stream(
     rules: Rules,

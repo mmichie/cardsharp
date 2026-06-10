@@ -264,6 +264,20 @@ def test_simulate_batch_is_deterministic_per_seed():
     assert a != c
 
 
+def test_simulate_batch_results_are_thread_count_invariant():
+    """Shards are self-contained and merged in shard order, so any thread
+    count must produce bit-identical aggregates for a given seed. Uses
+    600k rounds so the batch spans multiple shards."""
+    rules = make_rules()
+    table = encode_strategy_table(BasicStrategy(), rules)
+    core_rules = make_core_rules(rules)
+    one = cardsharp_core.simulate_batch(core_rules, table, 600_000, seed=9, threads=1)
+    two = cardsharp_core.simulate_batch(core_rules, table, 600_000, seed=9, threads=2)
+    all_cores = cardsharp_core.simulate_batch(core_rules, table, 600_000, seed=9)
+    assert one == two == all_cores
+    assert one["n_rounds"] == 600_000
+
+
 def test_simulate_batch_house_edge_in_plausible_band():
     """Loose 4-sigma guard against gross engine breakage (the tight
     statistical gate is beads-9ro.6)."""

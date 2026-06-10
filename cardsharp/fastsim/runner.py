@@ -112,8 +112,14 @@ def run_fast_batch(
     seed: int,
     n_players: int = 1,
     initial_bankroll: float = 1000,
+    threads: int = 0,
 ) -> SimulationStats:
-    """Run one batch on the Rust core and lift the report into stats."""
+    """Run one batch on the Rust core and lift the report into stats.
+
+    ``threads`` = 0 uses all cores; the result is bit-identical for a
+    given seed regardless of thread count (the core shards the batch
+    deterministically and merges in shard order).
+    """
     table = encode_strategy_table(strategy, rules)
     report = cardsharp_core.simulate_batch(
         make_core_rules(rules),
@@ -122,6 +128,7 @@ def run_fast_batch(
         seed=seed % (2**64),
         n_players=n_players,
         initial_bankroll=initial_bankroll,
+        threads=threads,
     )
     return SimulationStats.from_dict(report)
 
@@ -176,6 +183,7 @@ def simulate(
     needs_cv: bool = False,
     shuffle_type: str = "perfect",
     shuffle_count=None,
+    threads: int = 0,
 ) -> SimulationRun:
     """Simulate ``num_rounds`` of blackjack on the best available engine."""
     if seed is None:
@@ -193,7 +201,7 @@ def simulate(
     start = time.perf_counter()
     if choice.use_core:
         stats = run_fast_batch(
-            rules, strategy, num_rounds, seed, n_players, initial_bankroll
+            rules, strategy, num_rounds, seed, n_players, initial_bankroll, threads
         )
         engine_used = "fast"
     else:

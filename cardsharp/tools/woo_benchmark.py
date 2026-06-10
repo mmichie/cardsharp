@@ -81,7 +81,9 @@ def woo_rules(num_decks, h17):
     )
 
 
-def run_config(label, num_decks, h17, woo_he, num_games, master_seed, engine="python"):
+def run_config(
+    label, num_decks, h17, woo_he, num_games, master_seed, engine="python", threads=0
+):
     rules = woo_rules(num_decks, h17)
 
     t0 = time.time()
@@ -97,7 +99,7 @@ def run_config(label, num_decks, h17, woo_he, num_games, master_seed, engine="py
 
     if engine == "fast":
         return run_config_fast(
-            label, rules, sol, table_he, woo_he, num_games, master_seed
+            label, rules, sol, table_he, woo_he, num_games, master_seed, threads
         )
 
     strategy = SolverStrategy(sol, use_ev_table=True)
@@ -162,8 +164,10 @@ def run_config(label, num_decks, h17, woo_he, num_games, master_seed, engine="py
     return row
 
 
-def run_config_fast(label, rules, sol, table_he, woo_he, num_games, master_seed):
-    """Fast-core leg: table-only strategy, no CV, single core (pre-Rayon).
+def run_config_fast(
+    label, rules, sol, table_he, woo_he, num_games, master_seed, threads=0
+):
+    """Fast-core leg: table-only strategy, no CV, Rayon-sharded.
 
     table_he (strategy_house_edge) prices the table's first decisions with
     optimal continuations, so sim-table isolates the post-first-decision
@@ -173,11 +177,12 @@ def run_config_fast(label, rules, sol, table_he, woo_he, num_games, master_seed)
     strategy = SolverStrategy(sol)  # table-only: encodable for the core
 
     t0 = time.time()
-    agg = run_fast_batch(rules, strategy, num_games, master_seed)
+    agg = run_fast_batch(rules, strategy, num_games, master_seed, threads=threads)
     elapsed = time.time() - t0
+    threads_desc = f"{threads} threads" if threads else "all cores"
     print(
         f"[{label}] {num_games:,} games in {elapsed:.0f}s "
-        f"({num_games / elapsed:,.0f} games/s, single core)",
+        f"({num_games / elapsed:,.0f} games/s, {threads_desc})",
         flush=True,
     )
 
@@ -290,6 +295,13 @@ def main():
         "fast: Rust core with the pure table strategy, pinned against "
         "strategy_house_edge.",
     )
+    parser.add_argument(
+        "--threads",
+        type=int,
+        default=0,
+        help="fast engine only: worker threads (0 = all cores). Results are "
+        "bit-identical for a given seed regardless of thread count.",
+    )
     args = parser.parse_args()
 
     os.environ["BLACKJACK_DISABLE_LOGGING"] = "1"
@@ -306,6 +318,7 @@ def main():
                 args.num_games,
                 args.seed + i,
                 engine=args.engine,
+                threads=args.threads,
             )
         )
     print_report(rows, args.num_games, engine=args.engine)

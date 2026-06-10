@@ -153,9 +153,11 @@ Simulation mechanics that this chain guards (all have regression tests):
 
 ### Fast Core (default when built)
 ```bash
-# Rust fast core: ~2.7M games/second single-threaded (Apple Silicon, 2026-06).
+# Rust fast core: ~30M games/second across all cores, ~2.9M on one thread
+# (Apple Silicon, 14 logical cores, 2026-06). Seeded results are
+# bit-identical regardless of thread count.
 # Built with: uv sync --extra fast
-uv run python cardsharp/blackjack/blackjack.py --simulate --num_games 10000000
+uv run python cardsharp/blackjack/blackjack.py --simulate --num_games 100000000
 ```
 
 ### Reference Engine (Multiprocessing)

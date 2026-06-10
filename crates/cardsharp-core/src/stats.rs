@@ -48,6 +48,44 @@ impl SimStats {
         }
     }
 
+    /// Mirrors `SimulationStats.merge` (Chan parallel Welford), used to
+    /// fold per-shard stats in deterministic shard order so results are
+    /// identical regardless of thread count.
+    pub fn merge(&mut self, other: &SimStats) {
+        self.games_played += other.games_played;
+        self.player_wins += other.player_wins;
+        self.dealer_wins += other.dealer_wins;
+        self.draws += other.draws;
+
+        let n_a = self.n_rounds;
+        let n_b = other.n_rounds;
+        let n = n_a + n_b;
+        if n_b > 0 {
+            if n_a == 0 {
+                self.n_rounds = other.n_rounds;
+                self.net_mean = other.net_mean;
+                self.bet_mean = other.bet_mean;
+                self.net_m2 = other.net_m2;
+                self.bet_m2 = other.bet_m2;
+                self.net_bet_c = other.net_bet_c;
+            } else {
+                let (n_a, n_b, n) = (n_a as f64, n_b as f64, n as f64);
+                let d_net = other.net_mean - self.net_mean;
+                let d_bet = other.bet_mean - self.bet_mean;
+                self.net_m2 = self.net_m2 + other.net_m2 + d_net * d_net * n_a * n_b / n;
+                self.bet_m2 = self.bet_m2 + other.bet_m2 + d_bet * d_bet * n_a * n_b / n;
+                self.net_bet_c = self.net_bet_c + other.net_bet_c + d_net * d_bet * n_a * n_b / n;
+                self.net_mean += d_net * n_b / n;
+                self.bet_mean += d_bet * n_b / n;
+                self.n_rounds += other.n_rounds;
+            }
+        }
+
+        self.net_sum += other.net_sum;
+        self.bet_sum += other.bet_sum;
+        self.total_bet_sum += other.total_bet_sum;
+    }
+
     /// Mirrors `SimulationStats.record_round` (no control variate).
     pub fn record_round(&mut self, net: f64, initial_bet: f64, total_bet: f64) {
         self.n_rounds += 1;

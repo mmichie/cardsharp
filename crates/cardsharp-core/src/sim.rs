@@ -11,6 +11,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
+use rayon::prelude::*;
 
 fn parse_table(table: &[u8]) -> PyResult<StrategyTable> {
     StrategyTable::from_bytes(table).map_err(|e| PyValueError::new_err(e.to_string()))
@@ -23,11 +24,49 @@ fn parse_stream(cards: &[u8]) -> PyResult<Vec<Rank>> {
         .collect()
 }
 
-/// Simulate `n_rounds` of classic blackjack against a fresh shoe seeded
-/// with `seed`. Returns a dict shaped exactly like
-/// `SimulationStats.report()`, consumable by `SimulationStats.from_dict`.
+/// Rounds per shard. Each shard runs against its own freshly shuffled
+/// shoe with a seed derived deterministically from the master seed, so a
+/// batch's result is a pure function of (seed, n_rounds, config) -- the
+/// thread count cannot change it. The fresh-shoe boundary every
+/// SHARD_ROUNDS matches what multiprocess Python workers already did.
+const SHARD_ROUNDS: u64 = 250_000;
+
+/// SplitMix64: stable, explicit derivation of per-shard seeds from the
+/// master seed (independent of any RNG crate internals).
+fn splitmix64(state: &mut u64) -> u64 {
+    *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    let mut z = *state;
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^ (z >> 31)
+}
+
+fn run_shard(
+    rules: &Rules,
+    table: &StrategyTable,
+    cfg: &RoundConfig,
+    rounds: u64,
+    shard_seed: u64,
+) -> Result<SimStats, crate::shoe::OutOfCards> {
+    let rng = Xoshiro256PlusPlus::seed_from_u64(shard_seed);
+    let mut shoe = Shoe::new(rules.num_decks, rules.penetration, rules.burn_cards, rng);
+    let mut stats = SimStats::new();
+    for _ in 0..rounds {
+        let result = play_round(&mut shoe, rules, table, cfg)?;
+        accumulate(&mut stats, &result);
+    }
+    Ok(stats)
+}
+
+/// Simulate `n_rounds` of classic blackjack, sharded across threads.
+/// Returns a dict shaped exactly like `SimulationStats.report()`,
+/// consumable by `SimulationStats.from_dict`.
+///
+/// `threads` = 0 uses all available cores; any value yields bit-identical
+/// results for a given seed (shards are self-contained and merged in
+/// shard order). The GIL is released for the duration of the simulation.
 #[pyfunction]
-#[pyo3(signature = (rules, table, n_rounds, seed, n_players = 1, initial_bankroll = 1000.0, always_insure = false))]
+#[pyo3(signature = (rules, table, n_rounds, seed, n_players = 1, initial_bankroll = 1000.0, always_insure = false, threads = 0))]
 #[allow(clippy::too_many_arguments)]
 pub fn simulate_batch<'py>(
     py: Python<'py>,
@@ -38,6 +77,7 @@ pub fn simulate_batch<'py>(
     n_players: usize,
     initial_bankroll: f64,
     always_insure: bool,
+    threads: usize,
 ) -> PyResult<Bound<'py, PyDict>> {
     if n_players < 1 {
         return Err(PyValueError::new_err("n_players must be at least 1"));
@@ -50,15 +90,49 @@ pub fn simulate_batch<'py>(
         always_insure,
     };
 
-    let rng = Xoshiro256PlusPlus::seed_from_u64(seed);
-    let mut shoe = Shoe::new(rules.num_decks, rules.penetration, rules.burn_cards, rng);
-    let mut stats = SimStats::new();
+    // Fixed-size shards with explicitly derived seeds: the shard layout
+    // depends only on (seed, n_rounds), never on the thread count.
+    let mut seed_state = seed;
+    let n_shards = n_rounds.div_ceil(SHARD_ROUNDS).max(1);
+    let shards: Vec<(u64, u64)> = (0..n_shards)
+        .map(|i| {
+            let rounds = if i == n_shards - 1 {
+                n_rounds - i * SHARD_ROUNDS
+            } else {
+                SHARD_ROUNDS
+            };
+            (rounds, splitmix64(&mut seed_state))
+        })
+        .collect();
 
-    for _ in 0..n_rounds {
-        let result = play_round(&mut shoe, &rules, &table, &cfg)
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        accumulate(&mut stats, &result);
-    }
+    let stats = py
+        .detach(|| -> Result<SimStats, crate::shoe::OutOfCards> {
+            let run_all = || -> Result<Vec<SimStats>, crate::shoe::OutOfCards> {
+                shards
+                    .par_iter()
+                    .map(|(rounds, shard_seed)| {
+                        run_shard(&rules, &table, &cfg, *rounds, *shard_seed)
+                    })
+                    .collect()
+            };
+            let shard_stats = if threads == 0 {
+                run_all()?
+            } else {
+                rayon::ThreadPoolBuilder::new()
+                    .num_threads(threads)
+                    .build()
+                    .expect("failed to build thread pool")
+                    .install(run_all)?
+            };
+            // Deterministic ordered fold (par_iter + collect preserves
+            // shard order).
+            let mut total = SimStats::new();
+            for s in &shard_stats {
+                total.merge(s);
+            }
+            Ok(total)
+        })
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
 
     stats.to_dict(py)
 }
