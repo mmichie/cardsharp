@@ -17,9 +17,22 @@ simulator plays table-achievable strategy, so it lands slightly above
 both: ~+6 bp at 1-2 decks, ~+1.5 bp at 6 decks (the achievability gap
 dilutes with deck count).
 
+With --engine fast the Rust core plays the PURE TABLE strategy
+(SolverStrategy without the ev_table: composition-dependent first
+decisions are not table-encodable). The natural reference is then
+strategy_house_edge(sol, rules), which prices table FIRST decisions but
+embeds optimal composition-dependent continuations (see its docstring
+caveat), so sim-table isolates the post-first-decision continuation
+achievability gap. Measured at 200M games/config on 2026-06-09:
++6.3/+7.6 bp at 1 deck, +3.9 at 2 decks, +2.9/+4.1 at 6 decks, each
++/-1.6 bp -- consistent with the accuracy chain's continuation-gap
+account, and larger than the docstring's "order of magnitude smaller
+than the first-decision effect" guess.
+
 Example:
     python -m cardsharp.tools.woo_benchmark --num_games 40000000
     python -m cardsharp.tools.woo_benchmark --num_games 1000000 --configs 1dH17
+    python -m cardsharp.tools.woo_benchmark --engine fast --num_games 200000000
 """
 
 import argparse
@@ -30,10 +43,11 @@ import time
 
 from cardsharp.blackjack.blackjack import build_deal_ev_table, play_game_batch
 from cardsharp.blackjack.rules import Rules
-from cardsharp.blackjack.solver import solve
+from cardsharp.blackjack.solver import solve, strategy_house_edge
 from cardsharp.blackjack.stats import SimulationStats
 from cardsharp.blackjack.strategy import SolverStrategy
 from cardsharp.common.io_interface import DummyIOInterface
+from cardsharp.fastsim import run_fast_batch
 
 # WoO calculator "Optimal results" (perfect composition-dependent
 # strategy + reshuffle every hand), pulled via Playwright on 2026-05-12.
@@ -67,17 +81,24 @@ def woo_rules(num_decks, h17):
     )
 
 
-def run_config(label, num_decks, h17, woo_he, num_games, master_seed):
+def run_config(label, num_decks, h17, woo_he, num_games, master_seed, engine="python"):
     rules = woo_rules(num_decks, h17)
 
     t0 = time.time()
     print(f"\n[{label}] solving (mode=auto)...", flush=True)
     sol = solve(rules, mode="auto")
+    table_he = strategy_house_edge(sol, rules)
     print(
         f"[{label}] solver HE = {sol.house_edge * 100:+.4f}%  "
+        f"table HE = {table_he * 100:+.4f}%  "
         f"(WoO Optimal {woo_he * 100:+.4f}%)  solve took {time.time() - t0:.0f}s",
         flush=True,
     )
+
+    if engine == "fast":
+        return run_config_fast(
+            label, rules, sol, table_he, woo_he, num_games, master_seed
+        )
 
     strategy = SolverStrategy(sol, use_ev_table=True)
     deal_ev_table = build_deal_ev_table(sol.ev_table, rules)
@@ -130,7 +151,9 @@ def run_config(label, num_decks, h17, woo_he, num_games, master_seed):
         "cv": cv,  # dict or None
     }
     he, _, _, half = he_raw
-    print(f"[{label}] sim HE = {he * 100:+.4f}% +/- {half * 100:.4f}% (raw)", flush=True)
+    print(
+        f"[{label}] sim HE = {he * 100:+.4f}% +/- {half * 100:.4f}% (raw)", flush=True
+    )
     if cv:
         print(
             f"[{label}] sim HE = {cv['he'] * 100:+.4f}% +/- {cv['half'] * 100:.4f}% (CV)",
@@ -139,12 +162,53 @@ def run_config(label, num_decks, h17, woo_he, num_games, master_seed):
     return row
 
 
-def print_report(rows, num_games):
+def run_config_fast(label, rules, sol, table_he, woo_he, num_games, master_seed):
+    """Fast-core leg: table-only strategy, no CV, single core (pre-Rayon).
+
+    table_he (strategy_house_edge) prices the table's first decisions with
+    optimal continuations, so sim-table isolates the post-first-decision
+    continuation achievability gap (positive, shrinking with deck count)
+    rather than converging to zero.
+    """
+    strategy = SolverStrategy(sol)  # table-only: encodable for the core
+
+    t0 = time.time()
+    agg = run_fast_batch(rules, strategy, num_games, master_seed)
+    elapsed = time.time() - t0
+    print(
+        f"[{label}] {num_games:,} games in {elapsed:.0f}s "
+        f"({num_games / elapsed:,.0f} games/s, single core)",
+        flush=True,
+    )
+
+    he_raw = agg.house_edge_with_ci(0.95)
+    if he_raw is None:
+        raise RuntimeError(f"[{label}] no rounds recorded")
+    he, _, _, half = he_raw
+    print(
+        f"[{label}] sim HE = {he * 100:+.4f}% +/- {half * 100:.4f}%  "
+        f"(table target {table_he * 100:+.4f}%, "
+        f"gap {(he - table_he) * 1e4:+.2f} bp)",
+        flush=True,
+    )
+    return {
+        "label": label,
+        "woo": woo_he,
+        "solver": sol.house_edge,
+        "table": table_he,
+        "raw": he_raw,
+        "cv": None,
+    }
+
+
+def print_report(rows, num_games, engine="python"):
     bp = 1e4
+    fast = engine == "fast"
+    strat_desc = "table strategy (Rust core)" if fast else "CD strategy"
     print("\n" + "=" * 96)
     print(
         f"Simulator vs Wizard of Odds Optimal -- fresh shoe per round, "
-        f"CD strategy, {num_games:,} games per config"
+        f"{strat_desc}, {num_games:,} games per config"
     )
     print(
         "Rules: no-DAS, double any 2, split to 2 hands, no RSA/HSA, peek, "
@@ -152,7 +216,10 @@ def print_report(rows, num_games):
     )
     print("=" * 96)
     header = (
-        f"{'config':<7} {'WoO':>8} {'solver':>8} {'sim (CV)':>9} "
+        f"{'config':<7} {'WoO':>8} {'solver':>8} {'table':>8} "
+        f"{'sim':>9} {'+/-':>6} {'sim-table':>9} {'sim-WoO':>8} {'sim-solver':>10}"
+        if fast
+        else f"{'config':<7} {'WoO':>8} {'solver':>8} {'sim (CV)':>9} "
         f"{'+/-':>6} {'sim-WoO':>8} {'sim-solver':>10}"
     )
     print(header + "   (all in bp of initial bet)")
@@ -163,20 +230,38 @@ def print_report(rows, num_games):
             he, half = est["he"], est["half"]
         else:
             he, _, _, half = r["raw"]
-        print(
-            f"{r['label']:<7} {r['woo'] * bp:>8.2f} {r['solver'] * bp:>8.2f} "
-            f"{he * bp:>9.2f} {half * bp:>6.2f} "
-            f"{(he - r['woo']) * bp:>+8.2f} {(he - r['solver']) * bp:>+10.2f}"
-        )
+        if fast:
+            print(
+                f"{r['label']:<7} {r['woo'] * bp:>8.2f} {r['solver'] * bp:>8.2f} "
+                f"{r['table'] * bp:>8.2f} {he * bp:>9.2f} {half * bp:>6.2f} "
+                f"{(he - r['table']) * bp:>+9.2f} {(he - r['woo']) * bp:>+8.2f} "
+                f"{(he - r['solver']) * bp:>+10.2f}"
+            )
+        else:
+            print(
+                f"{r['label']:<7} {r['woo'] * bp:>8.2f} {r['solver'] * bp:>8.2f} "
+                f"{he * bp:>9.2f} {half * bp:>6.2f} "
+                f"{(he - r['woo']) * bp:>+8.2f} {(he - r['solver']) * bp:>+10.2f}"
+            )
     print("-" * 96)
-    print(
-        "Expected: solver-WoO within ~1 bp at every config (both are full-CD "
-        "optima). sim-solver is\npositive and shrinks with deck count -- the "
-        "achievability gap between table play and\ncomposition-dependent "
-        "continuations: ~+6 bp at 1-2 decks, ~+1.5 bp at 6 decks "
-        "(2026-06-09\nbaselines: 40M games/config + 160M-game 6d precision "
-        "run)."
-    )
+    if fast:
+        print(
+            "Expected: sim-table isolates the post-first-decision "
+            "continuation achievability gap\n(strategy_house_edge embeds "
+            "optimal continuations): ~+6-8 bp at 1 deck, ~+3-4 bp at\n2-6 "
+            "decks (200M games/config, 2026-06-09). sim-WoO / sim-solver "
+            "add the first-decision\nTD-vs-CD effect on top and match the "
+            "documented achievability bands."
+        )
+    else:
+        print(
+            "Expected: solver-WoO within ~1 bp at every config (both are full-CD "
+            "optima). sim-solver is\npositive and shrinks with deck count -- the "
+            "achievability gap between table play and\ncomposition-dependent "
+            "continuations: ~+6 bp at 1-2 decks, ~+1.5 bp at 6 decks "
+            "(2026-06-09\nbaselines: 40M games/config + 160M-game 6d precision "
+            "run)."
+        )
 
 
 def main():
@@ -184,14 +269,27 @@ def main():
         description="Large-sample simulator benchmark vs WoO calculator values."
     )
     parser.add_argument(
-        "--num_games", type=int, default=40_000_000,
+        "--num_games",
+        type=int,
+        default=40_000_000,
         help="games per configuration (default 40M: CV CI ~ +/-3bp)",
     )
     parser.add_argument(
-        "--configs", nargs="*", default=list(WOO_OPTIMAL),
-        choices=list(WOO_OPTIMAL), help="subset of configs to run",
+        "--configs",
+        nargs="*",
+        default=list(WOO_OPTIMAL),
+        choices=list(WOO_OPTIMAL),
+        help="subset of configs to run",
     )
     parser.add_argument("--seed", type=int, default=20260609)
+    parser.add_argument(
+        "--engine",
+        choices=["python", "fast"],
+        default="python",
+        help="python: multiprocess reference engine with CD strategy and CV. "
+        "fast: Rust core with the pure table strategy, pinned against "
+        "strategy_house_edge.",
+    )
     args = parser.parse_args()
 
     os.environ["BLACKJACK_DISABLE_LOGGING"] = "1"
@@ -200,9 +298,17 @@ def main():
     for i, label in enumerate(args.configs):
         num_decks, h17, woo_he = WOO_OPTIMAL[label]
         rows.append(
-            run_config(label, num_decks, h17, woo_he, args.num_games, args.seed + i)
+            run_config(
+                label,
+                num_decks,
+                h17,
+                woo_he,
+                args.num_games,
+                args.seed + i,
+                engine=args.engine,
+            )
         )
-    print_report(rows, args.num_games)
+    print_report(rows, args.num_games, engine=args.engine)
 
 
 if __name__ == "__main__":

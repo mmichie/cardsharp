@@ -117,6 +117,26 @@ The simulator's accuracy is anchored end to end:
    and none to deal distribution.
 5. At real penetrations the simulator's edge sits above the solver value
    by the cut-card effect; that is correct behavior, not a bug.
+6. The Rust fast core (crates/cardsharp-core, --engine fast) is held to
+   the same chain two ways. (a) Equivalence: the card-stream parity suite
+   (tests/test_fastsim_parity.py, in CI) proves round-for-round identity
+   with the Python engine -- money flow, per-hand outcomes, and cards
+   consumed over fuzzed and adversarial streams across 19 rule
+   configurations, plus consumption-count shuffle-epoch equality for
+   cut-card and mid-round-exhaustion semantics. (b) Statistics: a
+   200M-games-per-config woo_benchmark --engine fast run (2026-06-09,
+   ~1B rounds total at 1.2-2.3M games/s on a single core, pre-Rayon)
+   playing the pure solver table at fresh shoe measured sim-WoO of
+   +8.3/+11.5 bp at 1 deck, +4.6 bp at 2 decks, and +3.3/+4.3 bp at 6
+   decks -- the documented achievability gap, slightly wider than item
+   4's CD-first bands because the core plays the table at every
+   decision. Against strategy_house_edge (table first decisions, optimal
+   continuations) the residual isolates the post-hit continuation gap:
+   +6.3/+7.6 bp (1d), +3.9 (2d), +2.9/+4.1 (6d), each +/-1.6 bp. This
+   confirms item 4's structural account while correcting the magnitude
+   guess in strategy_house_edge's docstring: the continuation residual
+   is not an order of magnitude smaller than the first-decision effect
+   -- at every pinned config it is larger.
 
 Simulation mechanics that this chain guards (all have regression tests):
 
