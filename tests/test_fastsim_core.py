@@ -278,6 +278,42 @@ def test_simulate_batch_results_are_thread_count_invariant():
     assert one["n_rounds"] == 600_000
 
 
+def test_counting_results_are_thread_count_invariant():
+    """The counter is per-shard, so thread count cannot change results."""
+    from cardsharp.blackjack.strategy import CountingStrategy
+    from cardsharp.fastsim import encode_counting_config
+
+    rules = make_rules()
+    strategy = CountingStrategy(num_decks=6)
+    table = encode_strategy_table(strategy, rules)
+    counting = encode_counting_config(strategy)
+    core_rules = make_core_rules(rules)
+    one = cardsharp_core.simulate_batch(
+        core_rules, table, 600_000, seed=13, threads=1, counting=counting
+    )
+    many = cardsharp_core.simulate_batch(
+        core_rules, table, 600_000, seed=13, counting=counting
+    )
+    assert one == many
+    # The ramp produces variable bets, so mean initial bet exceeds the
+    # table minimum.
+    assert one["bet_mean"] > 10.0
+
+
+def test_counting_house_edge_beats_flat_basic():
+    """Hi-Lo with the 1x-20x ramp and Illustrious 18 must show a clear
+    player improvement over flat basic strategy (~+0.63% house edge at
+    these rules). Loose statistical band; exact behavior is pinned by
+    the parity suite."""
+    from cardsharp.blackjack.strategy import CountingStrategy
+    from cardsharp.fastsim import run_fast_batch
+
+    rules = make_rules()
+    stats = run_fast_batch(rules, CountingStrategy(num_decks=6), 2_000_000, seed=77)
+    he = -stats.net_sum / stats.bet_sum
+    assert -0.04 < he < 0.004, f"counting house edge {he:.4%} outside expected band"
+
+
 def test_simulate_batch_house_edge_in_plausible_band():
     """Loose 4-sigma guard against gross engine breakage (the tight
     statistical gate is beads-9ro.6)."""

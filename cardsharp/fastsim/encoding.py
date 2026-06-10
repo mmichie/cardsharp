@@ -109,3 +109,33 @@ def make_core_rules(rules):
             "cardsharp_core extension is not installed (uv sync --extra fast)"
         )
     return cardsharp_core.Rules(**rules_kwargs(rules))
+
+
+_DEVIATION_CODES = {Action.HIT: 0, Action.STAND: 1, Action.DOUBLE: 2}
+
+
+def encode_counting_config(strategy):
+    """Build a cardsharp_core.CountingConfig from a CountingStrategy.
+
+    The Illustrious 18 deviation table crosses the boundary as data, so
+    cardsharp.blackjack.strategy stays the single source of truth: edits
+    to _COUNTING_DEVIATIONS reach the core without touching Rust.
+    """
+    if not CORE_AVAILABLE:
+        raise RuntimeError(
+            "cardsharp_core extension is not installed (uv sync --extra fast)"
+        )
+    from cardsharp.blackjack.strategy import _COUNTING_DEVIATIONS
+
+    deviations = [
+        (
+            hand_value,
+            is_soft,
+            dealer_value,
+            float(threshold),
+            _DEVIATION_CODES[above] if above else None,
+            _DEVIATION_CODES[below] if below else None,
+        )
+        for hand_value, is_soft, dealer_value, threshold, above, below in _COUNTING_DEVIATIONS
+    ]
+    return cardsharp_core.CountingConfig(deviations, float(strategy.initial_decks))

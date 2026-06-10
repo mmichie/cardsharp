@@ -32,6 +32,10 @@ pub trait DealSource {
     fn begin_round(&mut self);
     fn end_round(&mut self);
     fn deal(&mut self) -> Result<Rank, OutOfCards>;
+    /// Cards left to deal, mirroring `Shoe.cards_remaining` (the counting
+    /// integration derives decks_remaining and reshuffle detection from
+    /// this, so the formula must match the Python shoe's).
+    fn cards_remaining(&self) -> usize;
 }
 
 pub struct Shoe {
@@ -152,6 +156,10 @@ impl DealSource for Shoe {
         }
         Ok(card)
     }
+
+    fn cards_remaining(&self) -> usize {
+        self.total_cards.saturating_sub(self.next)
+    }
 }
 
 /// A fixed card sequence injected from Python for parity testing. Never
@@ -181,6 +189,10 @@ impl DealSource for CardStream {
         let card = self.cards.get(self.next).copied().ok_or(OutOfCards)?;
         self.next += 1;
         Ok(card)
+    }
+
+    fn cards_remaining(&self) -> usize {
+        self.cards.len() - self.next
     }
 }
 

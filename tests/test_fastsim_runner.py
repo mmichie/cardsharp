@@ -17,6 +17,7 @@ from cardsharp.blackjack.rules import Rules  # noqa: E402
 from cardsharp.blackjack.strategy import (  # noqa: E402
     BasicStrategy,
     CountingStrategy,
+    MartingaleStrategy,
 )
 from cardsharp.fastsim import (  # noqa: E402
     CORE_AVAILABLE,
@@ -135,9 +136,13 @@ def test_python_engine_can_be_requested_explicitly():
     assert not choice.use_core
 
 
-def test_counting_strategy_is_not_encodable():
-    assert not strategy_is_encodable(CountingStrategy())
-    choice = resolve_engine(make_rules(), CountingStrategy(), requested="auto")
+def test_counting_strategy_is_encodable():
+    assert strategy_is_encodable(CountingStrategy(num_decks=6))
+
+
+def test_martingale_strategy_is_not_encodable():
+    assert not strategy_is_encodable(MartingaleStrategy())
+    choice = resolve_engine(make_rules(), MartingaleStrategy(), requested="auto")
     assert not choice.use_core
     assert "not table-encodable" in choice.reason
 
@@ -157,7 +162,7 @@ def test_csm_and_realistic_shuffles_force_the_reference_engine():
 
 def test_requested_fast_raises_with_blockers():
     with pytest.raises(RuntimeError, match="not table-encodable"):
-        resolve_engine(make_rules(), CountingStrategy(), requested="fast")
+        resolve_engine(make_rules(), MartingaleStrategy(), requested="fast")
 
 
 def test_simulate_python_fallback_produces_stats():

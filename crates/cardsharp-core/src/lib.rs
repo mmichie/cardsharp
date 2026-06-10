@@ -8,6 +8,7 @@
 //! (`cardsharp.fastsim.encoding.encode_strategy_table`).
 
 mod card;
+mod counting;
 mod hand;
 mod round;
 mod rules;
@@ -40,6 +41,7 @@ fn cardsharp_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sim::play_card_stream, m)?)?;
     m.add_function(wrap_pyfunction!(sim::trace_shoe, m)?)?;
     m.add_class::<rules::Rules>()?;
+    m.add_class::<counting::CountingConfig>()?;
     m.add_class::<sim::RoundRecord>()?;
     m.add_class::<sim::PlayerRecord>()?;
     m.add("STRATEGY_TABLE_BYTES", strategy::TABLE_BYTES)?;

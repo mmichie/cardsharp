@@ -1,9 +1,10 @@
 //! Python entry points: `simulate_batch` and `play_card_stream`.
 
 use crate::card::Rank;
+use crate::counting::{Counter, CountingConfig};
 use crate::round::{RoundConfig, RoundResult, play_round};
 use crate::rules::Rules;
-use crate::shoe::{CardStream, Shoe};
+use crate::shoe::{CardStream, DealSource, Shoe};
 use crate::stats::SimStats;
 use crate::strategy::StrategyTable;
 use pyo3::exceptions::PyValueError;
@@ -45,14 +46,22 @@ fn run_shard(
     rules: &Rules,
     table: &StrategyTable,
     cfg: &RoundConfig,
+    counting: Option<&CountingConfig>,
     rounds: u64,
     shard_seed: u64,
 ) -> Result<SimStats, crate::shoe::OutOfCards> {
     let rng = Xoshiro256PlusPlus::seed_from_u64(shard_seed);
     let mut shoe = Shoe::new(rules.num_decks, rules.penetration, rules.burn_cards, rng);
     let mut stats = SimStats::new();
+    // The count is per-shard, matching the per-worker count of the old
+    // multiprocess Python runs (each shard starts a fresh shoe anyway).
+    let mut counter = counting.map(|c| Counter::new(c.clone()));
     for _ in 0..rounds {
-        let result = play_round(&mut shoe, rules, table, cfg)?;
+        let remaining_before = shoe.cards_remaining();
+        let result = play_round(&mut shoe, rules, table, cfg, counter.as_mut())?;
+        if let Some(c) = counter.as_mut() {
+            c.finish_round(remaining_before, shoe.cards_remaining());
+        }
         accumulate(&mut stats, &result);
     }
     Ok(stats)
@@ -66,7 +75,7 @@ fn run_shard(
 /// results for a given seed (shards are self-contained and merged in
 /// shard order). The GIL is released for the duration of the simulation.
 #[pyfunction]
-#[pyo3(signature = (rules, table, n_rounds, seed, n_players = 1, initial_bankroll = 1000.0, always_insure = false, threads = 0))]
+#[pyo3(signature = (rules, table, n_rounds, seed, n_players = 1, initial_bankroll = 1000.0, always_insure = false, threads = 0, counting = None))]
 #[allow(clippy::too_many_arguments)]
 pub fn simulate_batch<'py>(
     py: Python<'py>,
@@ -78,12 +87,14 @@ pub fn simulate_batch<'py>(
     initial_bankroll: f64,
     always_insure: bool,
     threads: usize,
+    counting: Option<PyRef<'py, CountingConfig>>,
 ) -> PyResult<Bound<'py, PyDict>> {
     if n_players < 1 {
         return Err(PyValueError::new_err("n_players must be at least 1"));
     }
     let table = parse_table(table)?;
     let rules: Rules = rules.clone();
+    let counting: Option<CountingConfig> = counting.map(|c| c.clone());
     let cfg = RoundConfig {
         n_players,
         initial_bankroll,
@@ -111,7 +122,14 @@ pub fn simulate_batch<'py>(
                 shards
                     .par_iter()
                     .map(|(rounds, shard_seed)| {
-                        run_shard(&rules, &table, &cfg, *rounds, *shard_seed)
+                        run_shard(
+                            &rules,
+                            &table,
+                            &cfg,
+                            counting.as_ref(),
+                            *rounds,
+                            *shard_seed,
+                        )
                     })
                     .collect()
             };
@@ -189,7 +207,8 @@ pub struct RoundRecord {
 /// The parity suite feeds the same sequence to the Python engine via a
 /// pre-loaded `Shoe` and asserts the records match.
 #[pyfunction]
-#[pyo3(signature = (rules, table, cards, n_players = 1, initial_bankroll = 1000.0, always_insure = false, max_rounds = None))]
+#[pyo3(signature = (rules, table, cards, n_players = 1, initial_bankroll = 1000.0, always_insure = false, max_rounds = None, counting = None))]
+#[allow(clippy::too_many_arguments)]
 pub fn play_card_stream(
     rules: PyRef<'_, Rules>,
     table: &[u8],
@@ -198,6 +217,7 @@ pub fn play_card_stream(
     initial_bankroll: f64,
     always_insure: bool,
     max_rounds: Option<u64>,
+    counting: Option<PyRef<'_, CountingConfig>>,
 ) -> PyResult<Vec<RoundRecord>> {
     if n_players < 1 {
         return Err(PyValueError::new_err("n_players must be at least 1"));
@@ -211,6 +231,7 @@ pub fn play_card_stream(
     };
 
     let mut stream = CardStream::new(parse_stream(&cards)?);
+    let mut counter = counting.map(|c| Counter::new(c.clone()));
     let mut records = Vec::new();
 
     loop {
@@ -220,8 +241,12 @@ pub fn play_card_stream(
             break;
         }
         let before = stream.consumed();
-        match play_round(&mut stream, &rules, &table, &cfg) {
+        let remaining_before = stream.cards_remaining();
+        match play_round(&mut stream, &rules, &table, &cfg, counter.as_mut()) {
             Ok(result) => {
+                if let Some(c) = counter.as_mut() {
+                    c.finish_round(remaining_before, stream.cards_remaining());
+                }
                 let consumed = (stream.consumed() - before) as u32;
                 records.push(make_record(result, consumed));
             }

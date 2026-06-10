@@ -27,11 +27,18 @@ os.environ["BLACKJACK_DISABLE_LOGGING"] = "1"
 from cardsharp.blackjack.blackjack import play_game  # noqa: E402
 from cardsharp.blackjack.decision_logger import decision_logger  # noqa: E402
 from cardsharp.blackjack.rules import Rules  # noqa: E402
-from cardsharp.blackjack.strategy import BasicStrategy  # noqa: E402
+from cardsharp.blackjack.strategy import (  # noqa: E402
+    BasicStrategy,
+    CountingStrategy,
+)
 from cardsharp.common.card import Card, Rank, Suit  # noqa: E402
 from cardsharp.common.io_interface import DummyIOInterface  # noqa: E402
 from cardsharp.common.shoe import Shoe  # noqa: E402
-from cardsharp.fastsim import encode_strategy_table, make_core_rules  # noqa: E402
+from cardsharp.fastsim import (  # noqa: E402
+    encode_counting_config,
+    encode_strategy_table,
+    make_core_rules,
+)
 
 decision_logger.set_level(logging.ERROR)
 
@@ -94,6 +101,9 @@ def rust_stream(
     rules, strategy, codes, n_players=1, bankroll=1000, always_insure=False
 ):
     table = encode_strategy_table(strategy, rules)
+    counting = (
+        encode_counting_config(strategy) if type(strategy) is CountingStrategy else None
+    )
     records = cardsharp_core.play_card_stream(
         make_core_rules(rules),
         table,
@@ -101,6 +111,7 @@ def rust_stream(
         n_players=n_players,
         initial_bankroll=bankroll,
         always_insure=always_insure,
+        counting=counting,
     )
     rounds = []
     for r in records:
@@ -321,6 +332,58 @@ def test_stream_parity_fuzz(
             context=f"trial {trial}",
         )
     assert compared >= trials  # several rounds per trial expected
+
+
+# Drives the running count strongly positive: bet ramp, stand/double
+# deviations, and TC>=3 insurance all fire. Aces stay frequent so
+# insurance offers actually occur.
+LOW_HEAVY = [3, 4, 4, 4, 4, 4, 1, 1, 1, 1, 1, 1, 1]
+
+
+@pytest.mark.parametrize(
+    "overrides,weights,trials,seed",
+    [
+        pytest.param({}, UNIFORM, 150, 201, id="count-uniform"),
+        pytest.param({}, LOW_HEAVY, 200, 202, id="count-high-tc"),
+        pytest.param({}, TEN_HEAVY, 150, 203, id="count-negative-tc"),
+        pytest.param(
+            {"dealer_hit_soft_17": False}, LOW_HEAVY, 150, 204, id="count-s17"
+        ),
+        pytest.param({"dealer_peek": False}, LOW_HEAVY, 150, 205, id="count-no-peek"),
+        pytest.param(
+            {"allow_resplitting": True}, SPLIT_HEAVY, 150, 206, id="count-resplit"
+        ),
+    ],
+)
+def test_counting_stream_parity_fuzz(overrides, weights, trials, seed):
+    """Counting parity: the Hi-Lo count, bet ramp, Illustrious 18
+    deviations, and TC-based insurance must move money identically in
+    both engines. Streams are long so the count evolves across rounds;
+    the strategy is fresh per trial (its count is stateful)."""
+    rules = make_rules(**overrides)
+    rng = random.Random(seed)
+    compared = 0
+    for trial in range(trials):
+        codes = weighted_codes(rng, 120, weights)
+        strategy = CountingStrategy(num_decks=rules.num_decks)
+        compared += assert_streams_match(
+            rules, strategy, codes, context=f"counting trial {trial}"
+        )
+    assert compared > trials * 3  # long streams: several rounds per trial
+
+
+def test_counting_bet_ramp_rises_with_the_count():
+    """A run of low cards must raise later bets identically in both
+    engines, and the ramp must actually fire."""
+    rules = make_rules()
+    codes = [2, 3, 4, 5, 6] * 4 + [10, 10, 10, 10, 10, 10]
+    strategy = CountingStrategy(num_decks=rules.num_decks)
+    assert_streams_match(rules, strategy, codes, context="bet-ramp")
+    rs = rust_stream(rules, CountingStrategy(num_decks=rules.num_decks), codes)
+    assert rs, "stream produced no rounds"
+    assert any(
+        r["initial"] > 10 for r in rs[1:]
+    ), f"bet ramp never fired: {[r['initial'] for r in rs]}"
 
 
 def test_resplit_eights_to_four_hands():

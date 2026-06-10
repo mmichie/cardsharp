@@ -55,6 +55,13 @@ class Rules:
         double_on: str = "any",
     ) -> None: ...
 
+class CountingConfig:
+    def __init__(
+        self,
+        deviations: list[tuple[int, bool, int, float, int | None, int | None]],
+        initial_decks: float,
+    ) -> None: ...
+
 class PlayerRecord:
     hands: list[list[int]]
     actions: list[list[str]]
@@ -81,6 +88,7 @@ def simulate_batch(
     initial_bankroll: float = 1000.0,
     always_insure: bool = False,
     threads: int = 0,
+    counting: CountingConfig | None = None,
 ) -> dict: ...
 def play_card_stream(
     rules: Rules,
@@ -90,6 +98,7 @@ def play_card_stream(
     initial_bankroll: float = 1000.0,
     always_insure: bool = False,
     max_rounds: int | None = None,
+    counting: CountingConfig | None = None,
 ) -> list[RoundRecord]: ...
 def trace_shoe(
     num_decks: int,

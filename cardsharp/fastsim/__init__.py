@@ -12,6 +12,7 @@ toolchain. Everything in cardsharp works without it.
 
 from cardsharp.fastsim.encoding import (
     CORE_AVAILABLE,
+    encode_counting_config,
     encode_strategy_table,
     make_core_rules,
     rules_kwargs,
@@ -29,6 +30,7 @@ __all__ = [
     "CORE_AVAILABLE",
     "EngineChoice",
     "SimulationRun",
+    "encode_counting_config",
     "encode_strategy_table",
     "make_core_rules",
     "resolve_engine",

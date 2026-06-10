@@ -17,10 +17,15 @@ import time
 from dataclasses import dataclass
 
 from cardsharp.blackjack.stats import SimulationStats
-from cardsharp.blackjack.strategy import BasicStrategy, SolverStrategy
+from cardsharp.blackjack.strategy import (
+    BasicStrategy,
+    CountingStrategy,
+    SolverStrategy,
+)
 from cardsharp.fastsim.encoding import (
     CORE_AVAILABLE,
     cardsharp_core,
+    encode_counting_config,
     encode_strategy_table,
     make_core_rules,
 )
@@ -51,15 +56,19 @@ class SimulationRun:
 
 
 def strategy_is_encodable(strategy) -> bool:
-    """True if the strategy is fully described by its hard/soft/pair tables.
+    """True if the core can reproduce this strategy exactly.
 
-    CountingStrategy, MartingaleStrategy, and the composition-dependent
-    SolverStrategy subclass BasicStrategy but make decisions (or bets)
-    outside the tables, so they must run on the reference engine.
+    Tables cover BasicStrategy and the non-composition-dependent
+    SolverStrategy; CountingStrategy additionally crosses as a
+    CountingConfig (Hi-Lo count, bet ramp, Illustrious 18 deviations).
+    MartingaleStrategy and other bet-progression or custom strategies
+    must run on the reference engine.
     """
     if type(strategy) is BasicStrategy:
         return True
     if type(strategy) is SolverStrategy and strategy.cd_table is None:
+        return True
+    if type(strategy) is CountingStrategy:
         return True
     return False
 
@@ -121,6 +130,9 @@ def run_fast_batch(
     deterministically and merges in shard order).
     """
     table = encode_strategy_table(strategy, rules)
+    counting = (
+        encode_counting_config(strategy) if type(strategy) is CountingStrategy else None
+    )
     report = cardsharp_core.simulate_batch(
         make_core_rules(rules),
         table,
@@ -129,6 +141,7 @@ def run_fast_batch(
         n_players=n_players,
         initial_bankroll=initial_bankroll,
         threads=threads,
+        counting=counting,
     )
     return SimulationStats.from_dict(report)
 

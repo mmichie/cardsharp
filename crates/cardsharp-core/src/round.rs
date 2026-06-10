@@ -8,10 +8,42 @@
 //! identical decisions, payouts, and card consumption, not idealized rules.
 
 use crate::card::Rank;
+use crate::counting::Counter;
 use crate::hand::Hand;
 use crate::rules::Rules;
 use crate::shoe::{DealSource, OutOfCards};
 use crate::strategy::{Action, StrategyTable, ValidActions};
+
+/// Deal one card, letting an active counter see it (every dealt card is
+/// visible to the counting strategy in the reference engine, including
+/// the dealer's hole card).
+fn deal_card<S: DealSource>(
+    shoe: &mut S,
+    counter: &mut Option<&mut Counter>,
+) -> Result<Rank, OutOfCards> {
+    let card = shoe.deal()?;
+    if let Some(c) = counter.as_deref_mut() {
+        c.saw_card(card);
+    }
+    Ok(card)
+}
+
+/// One play decision: counting deviations first (which fold pending cards
+/// into the count), then the strategy chart.
+fn choose_action(
+    table: &StrategyTable,
+    counter: &mut Option<&mut Counter>,
+    hand: &Hand,
+    dealer_up: Rank,
+    valid: &ValidActions,
+) -> Action {
+    if let Some(c) = counter.as_deref_mut()
+        && let Some(action) = c.decide_deviation(hand, dealer_up)
+    {
+        return action;
+    }
+    table.decide(hand, dealer_up, valid)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Winner {
@@ -186,20 +218,29 @@ pub struct RoundResult {
 }
 
 /// Play one full round. The shoe's `begin_round`/`end_round` bracketing
-/// matches `DealingState.deal` and `EndRoundState.handle`.
+/// matches `DealingState.deal` and `EndRoundState.handle`. An active
+/// `counter` drives bets, insurance, and play deviations exactly as the
+/// reference engine's CountingStrategy does.
 pub fn play_round<S: DealSource>(
     shoe: &mut S,
     rules: &Rules,
     table: &StrategyTable,
     cfg: &RoundConfig,
+    mut counter: Option<&mut Counter>,
 ) -> Result<RoundResult, OutOfCards> {
-    // PlacingBetsState: flat betting at table minimum (BasicStrategy's
-    // get_bet_amount).
+    // PlacingBetsState: the strategy's get_bet_amount -- table minimum for
+    // flat betting, the true-count ramp when counting. The count used is
+    // the round-start count (cards dealt this round are not folded in
+    // until a play decision).
     let mut players: Vec<PlayerRound> = (0..cfg.n_players)
         .map(|_| PlayerRound::new(cfg.initial_bankroll))
         .collect();
     for player in &mut players {
-        player.place_bet(rules.min_bet);
+        let bet = match counter.as_deref() {
+            Some(c) => c.bet_amount(rules.min_bet, rules.max_bet, player.money),
+            None => rules.min_bet,
+        };
+        player.place_bet(bet);
     }
 
     // DealingState: one card to each player then the dealer, twice. The
@@ -208,10 +249,10 @@ pub fn play_round<S: DealSource>(
     let mut dealer = Hand::new();
     for _pass in 0..2 {
         for player in &mut players {
-            let card = shoe.deal()?;
+            let card = deal_card(shoe, &mut counter)?;
             player.hands[0].add(card);
         }
-        dealer.add(shoe.deal()?);
+        dealer.add(deal_card(shoe, &mut counter)?);
     }
 
     // DealingState.check_blackjack: in no-peek mode, naturals are flagged
@@ -230,15 +271,23 @@ pub fn play_round<S: DealSource>(
 
     // OfferInsuranceState, in handler order: insurance offers, early
     // surrender, peek (dealer blackjack / insurance loss / natural payout).
-    if dealer_up == Rank::Ace && rules.allow_insurance && cfg.always_insure {
-        for player in &mut players {
-            let insurance_bet = player.bets[0] / 2.0;
-            player.buy_insurance(insurance_bet);
+    // Counting insures at TC >= 3 using the round-start count (the
+    // reference's decide_insurance never folds in this round's cards).
+    if dealer_up == Rank::Ace && rules.allow_insurance {
+        let wants_insurance = match counter.as_deref() {
+            Some(c) => c.wants_insurance(),
+            None => cfg.always_insure,
+        };
+        if wants_insurance {
+            for player in &mut players {
+                let insurance_bet = player.bets[0] / 2.0;
+                player.buy_insurance(insurance_bet);
+            }
         }
     }
 
     if rules.allow_early_surrender {
-        early_surrender_phase(&mut players, dealer_up, rules, table);
+        early_surrender_phase(&mut players, dealer_up, rules, table, &mut counter);
     }
 
     if rules.dealer_peek {
@@ -267,8 +316,8 @@ pub fn play_round<S: DealSource>(
     }
 
     if !round_over {
-        players_turn(&mut players, dealer_up, shoe, rules, table)?;
-        dealers_turn(&players, &mut dealer, shoe, rules)?;
+        players_turn(&mut players, dealer_up, shoe, rules, table, &mut counter)?;
+        dealers_turn(&players, &mut dealer, shoe, rules, &mut counter)?;
     }
 
     // EndRoundState.
@@ -289,13 +338,14 @@ fn early_surrender_phase(
     dealer_up: Rank,
     rules: &Rules,
     table: &StrategyTable,
+    counter: &mut Option<&mut Counter>,
 ) {
     for player in players {
         if player.hand_done[0] {
             continue;
         }
         let valid = valid_actions_property(player, rules);
-        let action = table.decide(&player.hands[0], dealer_up, &valid);
+        let action = choose_action(table, counter, &player.hands[0], dealer_up, &valid);
         if action == Action::Surrender {
             player.surrender(0);
         }
@@ -402,6 +452,7 @@ fn players_turn<S: DealSource>(
     shoe: &mut S,
     rules: &Rules,
     table: &StrategyTable,
+    counter: &mut Option<&mut Counter>,
 ) -> Result<(), OutOfCards> {
     for player in players {
         let mut hand_index = 0;
@@ -412,9 +463,10 @@ fn players_turn<S: DealSource>(
             }
             while !player.hand_done[hand_index] {
                 let valid = valid_actions_state(player, hand_index, rules);
-                let action = table.decide(&player.hands[hand_index], dealer_up, &valid);
+                let action =
+                    choose_action(table, counter, &player.hands[hand_index], dealer_up, &valid);
                 if valid.contains(action) {
-                    player_action(player, hand_index, action, shoe, rules)?;
+                    player_action(player, hand_index, action, shoe, rules, counter)?;
                 } else {
                     // The reference engine forces a stand on an invalid
                     // action; unreachable with a well-formed table, kept
@@ -439,6 +491,7 @@ fn player_action<S: DealSource>(
     action: Action,
     shoe: &mut S,
     rules: &Rules,
+    counter: &mut Option<&mut Counter>,
 ) -> Result<(), OutOfCards> {
     player.action_history[hand_index].push(action);
 
@@ -454,7 +507,7 @@ fn player_action<S: DealSource>(
                 return Ok(());
             }
 
-            let card = shoe.deal()?;
+            let card = deal_card(shoe, counter)?;
             player.hit(hand_index, card);
 
             let hand = &player.hands[hand_index];
@@ -477,7 +530,7 @@ fn player_action<S: DealSource>(
             // One card to the original hand, then one to the new hand.
             let new_hand_index = player.hands.len() - 1;
             for i in [hand_index, new_hand_index] {
-                let card = shoe.deal()?;
+                let card = deal_card(shoe, counter)?;
                 player.hands[i].add(card);
                 if is_splitting_aces {
                     player.hand_done[i] = true;
@@ -493,7 +546,7 @@ fn player_action<S: DealSource>(
                 return Ok(());
             }
             player.double_down(hand_index);
-            let card = shoe.deal()?;
+            let card = deal_card(shoe, counter)?;
             player.hit(hand_index, card);
             player.hand_done[hand_index] = true;
         }
@@ -517,10 +570,11 @@ fn dealers_turn<S: DealSource>(
     dealer: &mut Hand,
     shoe: &mut S,
     rules: &Rules,
+    counter: &mut Option<&mut Counter>,
 ) -> Result<(), OutOfCards> {
     if any_live_hand(players) {
         while rules.should_dealer_hit(dealer) {
-            dealer.add(shoe.deal()?);
+            dealer.add(deal_card(shoe, counter)?);
         }
     }
     Ok(())
