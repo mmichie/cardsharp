@@ -20,3 +20,6 @@ extension-module = ["pyo3/extension-module"]
 # versions. The Python<->Rust boundary is one call per simulation batch,
 # so the stable-ABI overhead is irrelevant to throughput.
 pyo3 = { version = "0.26", features = ["abi3-py312"] }
+rand = "0.9"
+# Explicit, version-stable PRNG algorithm so seeded runs stay reproducible.
+rand_xoshiro = "0.7"
