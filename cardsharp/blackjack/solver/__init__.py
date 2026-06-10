@@ -21,7 +21,7 @@ Modes (see ``solve`` docstring for full table):
   static-dealer-prob gap). 5+ decks → fast (no penalty over plain fast).
 """
 
-from .engine import solve, SolverResult
+from .engine import solve, strategy_house_edge, SolverResult
 from .types import StateEV
 
-__all__ = ["solve", "SolverResult", "StateEV"]
+__all__ = ["solve", "strategy_house_edge", "SolverResult", "StateEV"]

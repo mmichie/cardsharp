@@ -160,8 +160,9 @@ class BasicStrategy(Strategy):
         return self._HIT
 
     def _apply_s17_overrides(self):
-        """Patch the 3 cells that differ between H17 and S17."""
+        """Patch the 4 cells that differ between H17 and S17."""
         self.hard_table[11 - 4][9] = self._HIT       # Hard 11 vs A: D → H
+        self.hard_table[17 - 4][9] = self._STAND      # Hard 17 vs A: R → S
         self.soft_table[18 - 13][0] = self._STAND     # Soft 18 vs 2: DS → S
         self.pair_table[8 - 2][9] = self._SPLIT       # Pair 8 vs A: R → P
         self._s17_applied = True
@@ -199,6 +200,16 @@ class BasicStrategy(Strategy):
             # the correct fallback before defaulting to hit.
             if Action.SPLIT in valid_actions:
                 return Action.SPLIT
+            # Published charts distinguish Rh (surrender else hit, e.g.
+            # 16 vs 10) from Rs (surrender else stand, e.g. 17 vs A in
+            # H17): standing is right exactly for hard 17+.
+            hand = player.current_hand
+            if hand.value() >= 17 and not hand.is_soft:
+                return (
+                    Action.STAND
+                    if Action.STAND in valid_actions
+                    else Action.HIT
+                )
             return Action.HIT if Action.HIT in valid_actions else Action.STAND
 
         if action == Action.SPLIT:
@@ -240,9 +251,20 @@ class SolverStrategy(BasicStrategy):
     rule-correct strategy without rebuilding decision logic.
 
     Pass either a SolverResult or its .strategy dict.
+
+    use_ev_table=True additionally plays the first decision of each hand
+    composition-dependently: a 2-card unsplit hand looks up the solver's
+    best action for its exact (card1, card2, upcard) deal instead of the
+    collapsed total row (so 10+6 and 9+7 vs the same upcard may play
+    differently). This is the strategy the solver's house_edge -- and the
+    Wizard of Odds "optimal results" benchmark -- actually models; with it
+    the simulator converges to result.house_edge rather than to the
+    slightly higher total-dependent table EV. Requires a SolverResult
+    (the ev_table is needed). Hands of 3+ cards and split hands fall back
+    to the total-based tables.
     """
 
-    def __init__(self, strategy_source):
+    def __init__(self, strategy_source, use_ev_table: bool = False):
         # Resolve to a strategy dict.
         if hasattr(strategy_source, "strategy"):
             strategy_dict = strategy_source.strategy
@@ -258,6 +280,59 @@ class SolverStrategy(BasicStrategy):
         # Solver tables are already rule-aware; suppress the parent's
         # runtime H17/S17 patching.
         self._s17_applied = True
+
+        # Optional composition-dependent first-decision table:
+        # {(c1, c2, upcard): action} with c1 <= c2, Ace=1, all values 1-10.
+        # Action codes are resolved to the same sentinels the total tables
+        # use, so the per-deal lookup survives pickling to worker processes.
+        self.cd_table = None
+        if use_ev_table:
+            ev_table = getattr(strategy_source, "ev_table", None)
+            if not ev_table:
+                raise ValueError(
+                    "use_ev_table=True requires a SolverResult with a "
+                    "populated ev_table; got "
+                    f"{type(strategy_source).__name__}"
+                )
+            self.cd_table = self._build_cd_table(ev_table)
+
+    def _build_cd_table(self, ev_table):
+        from cardsharp.blackjack.solver.engine import _action_code
+
+        action_map = {
+            "H": self._HIT,
+            "S": self._STAND,
+            "D": self._DOUBLE,
+            "DS": self._DOUBLE_STAND,
+            "P": self._SPLIT,
+            "R": self._SURRENDER,
+        }
+        cd = {}
+        for key, sev in ev_table.items():
+            cd[key] = action_map.get(_action_code(sev, True), self._HIT)
+        return cd
+
+    @staticmethod
+    def _solver_card_value(card) -> int:
+        """Card -> solver value: Ace=1, ten-value cards=10."""
+        if card.rank == Rank.ACE:
+            return 1
+        return min(card.bj_value, 10)
+
+    def decide_action(self, player, dealer_up_card: Card, game=None) -> Action:
+        if self.cd_table is not None:
+            hand = player.current_hand
+            if hand._card_count == 2 and not hand.is_split:
+                c1 = self._solver_card_value(hand.cards[0])
+                c2 = self._solver_card_value(hand.cards[1])
+                if c1 > c2:
+                    c1, c2 = c2, c1
+                up = self._solver_card_value(dealer_up_card)
+                action = self.cd_table.get((c1, c2, up))
+                if action is not None:
+                    dealer_idx = self._dealer_index(dealer_up_card)
+                    return self._get_valid_action(player, action, dealer_idx)
+        return super().decide_action(player, dealer_up_card, game)
 
     def _populate_from_dict(self, strategy_dict):
         action_map = {
@@ -553,7 +628,7 @@ def _build_martingale(rules=None, **kwargs):
     )
 
 
-def _build_solver(rules=None, **_):
+def _build_solver(rules=None, use_ev_table=False, **_):
     if rules is None:
         raise ValueError(
             "solver strategy requires a Rules object (it solves rules-aware "
@@ -566,7 +641,7 @@ def _build_solver(rules=None, **_):
     # dealer-prob bias that flows into --solver_strategy decisions. 5+ deck
     # games (the common case) take the fast path and see no slowdown.
     from cardsharp.blackjack.solver import solve
-    return SolverStrategy(solve(rules, mode="auto"))
+    return SolverStrategy(solve(rules, mode="auto"), use_ev_table=use_ev_table)
 
 
 STRATEGY_FACTORIES = {

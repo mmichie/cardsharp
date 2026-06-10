@@ -1159,7 +1159,19 @@ def main():
         "count). Required for --compare_rules to show a non-zero diff on "
         "rule changes that only affect player decisions (DAS).",
     )
+    parser.add_argument(
+        "--cd_strategy",
+        action="store_true",
+        help="Play the first decision of each hand composition-dependently "
+        "from the solver's per-(card1,card2,upcard) EV table instead of "
+        "the collapsed total-based table (e.g. 10+6 vs 9+7 against a 10 "
+        "may play differently). Implies --solver_strategy. This is the "
+        "strategy the solver's reported house edge models; worth a few "
+        "basis points at 1-2 decks.",
+    )
     args = parser.parse_args()
+    if args.cd_strategy:
+        args.solver_strategy = True
 
     # Validate num_players
     if args.num_players < 1 or args.num_players > 7:
@@ -1238,8 +1250,11 @@ def main():
                 print(f"  CV mu_Y = {cv_mu_y:+.6f}")
             if args.solver_strategy:
                 from cardsharp.blackjack.strategy import SolverStrategy
-                strategy = SolverStrategy(sol)
-                print("  Using solver-derived strategy table.")
+                strategy = SolverStrategy(sol, use_ev_table=args.cd_strategy)
+                print(
+                    "  Using solver-derived strategy table"
+                    + (" (composition-dependent)." if args.cd_strategy else ".")
+                )
 
         start_time = time.time()
         graph = BlackjackGraph(args.num_games) if args.vis else None

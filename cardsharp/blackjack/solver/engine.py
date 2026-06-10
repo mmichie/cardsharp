@@ -260,11 +260,17 @@ def _cond_dealer_for_deal(upcard, remaining, hit_soft_17, exclude_hole):
     return _conditional_probs(upcard, hit_soft_17, remaining, exclude_hole)
 
 
-def _compute_house_edge(ev_table, deck, bj_payout, peek):
+def _compute_house_edge(ev_table, deck, bj_payout, peek, ev_selector=None):
     """Compute exact house edge by summing over all initial deals.
 
     For finite deck, accounts for card removal: P(card2|card1) and
     P(upcard|card1,card2) use conditional probabilities.
+
+    ev_selector(cv1, cv2, upcard, sev) returns the player's conditional EV
+    for a non-blackjack deal given no dealer blackjack. The default selects
+    sev.best_ev (composition-dependent optimal play at the first decision);
+    strategy_house_edge passes a selector that plays the collapsed
+    total-dependent table instead.
     """
     total_ev = 0.0
 
@@ -296,36 +302,118 @@ def _compute_house_edge(ev_table, deck, bj_payout, peek):
                 deck3 = deck12.remove_card(upcard)
                 p_dbj = dealer_blackjack_prob(upcard, deck3)
 
-                if peek:
-                    ev = _ev_with_peek(
-                        cv1, cv2, upcard, is_player_bj, p_dbj,
-                        bj_payout, ev_table,
-                    )
+                if is_player_bj:
+                    ev = p_dbj * 0.0 + (1 - p_dbj) * bj_payout
                 else:
-                    ev = _ev_no_peek(
-                        cv1, cv2, upcard, is_player_bj, p_dbj,
-                        bj_payout, ev_table,
+                    key = (min(cv1, cv2), max(cv1, cv2), upcard)
+                    sev = ev_table[key]
+                    cond_ev = (
+                        sev.best_ev
+                        if ev_selector is None
+                        else ev_selector(cv1, cv2, upcard, sev)
                     )
+                    ev = p_dbj * (-1.0) + (1 - p_dbj) * cond_ev
 
                 total_ev += p_deal * ev
 
     return -total_ev
 
 
-def _ev_with_peek(cv1, cv2, upcard, is_player_bj, p_dbj, bj_payout, ev_table):
-    if is_player_bj:
-        return p_dbj * 0.0 + (1 - p_dbj) * bj_payout
-    key = (min(cv1, cv2), max(cv1, cv2), upcard)
-    optimal_ev = ev_table[key].best_ev
-    return p_dbj * (-1.0) + (1 - p_dbj) * optimal_ev
+_DEALER_ORDER = [2, 3, 4, 5, 6, 7, 8, 9, 10, 1]
 
 
-def _ev_no_peek(cv1, cv2, upcard, is_player_bj, p_dbj, bj_payout, ev_table):
-    if is_player_bj:
-        return p_dbj * 0.0 + (1 - p_dbj) * bj_payout
-    key = (min(cv1, cv2), max(cv1, cv2), upcard)
-    optimal_ev = ev_table[key].best_ev
-    return p_dbj * (-1.0) + (1 - p_dbj) * optimal_ev
+def _table_row_label(cv1, cv2):
+    """Strategy-table row for a 2-card hand (cv1 <= cv2, Ace=1)."""
+    if cv1 == cv2:
+        return "PairA" if cv1 == 1 else f"Pair{cv1}"
+    if cv1 == 1:
+        return f"Soft{11 + cv2}"
+    return f"Hard{cv1 + cv2}"
+
+
+def _ev_for_table_code(code, sev, strategy, cv1, cv2, upcard_idx):
+    """EV of playing a strategy-table action code at a 2-card state.
+
+    Mirrors the simulator's fallback chain (BasicStrategy._get_valid_action)
+    for codes whose primary action is unavailable in this state: D falls
+    back to hit, DS to stand, R to split-then-hit, P re-resolves the
+    hand's total row. NaN per-action EVs mark unavailable actions.
+    """
+    def ok(x):
+        return x == x  # not NaN
+
+    if code == "S":
+        return sev.stand
+    if code == "H":
+        return sev.hit
+    if code == "D":
+        return sev.double if ok(sev.double) else sev.hit
+    if code == "DS":
+        return sev.double if ok(sev.double) else sev.stand
+    if code == "R":
+        if ok(sev.surrender):
+            return sev.surrender
+        if ok(sev.split):
+            return sev.split
+        # Mirror the simulator's Rh/Rs distinction: stand on hard 17+,
+        # hit everything else.
+        _, usable, disp, _ = hand_state_from_cards(cv1, cv2)
+        if disp >= 17 and not usable:
+            return sev.stand
+        return sev.hit
+    if code == "P":
+        if ok(sev.split):
+            return sev.split
+        # Split unavailable: the simulator re-resolves the hand as its
+        # total row (e.g. 9,9 -> Hard18).
+        _, _, disp, _ = hand_state_from_cards(cv1, cv2)
+        row = strategy.get(f"Hard{disp}")
+        if row is not None:
+            sub_code = row[upcard_idx]
+            if sub_code != "P":  # guard against pathological recursion
+                return _ev_for_table_code(
+                    sub_code, sev, strategy, cv1, cv2, upcard_idx
+                )
+        return sev.hit
+    return sev.hit
+
+
+def strategy_house_edge(result: SolverResult, rules: Rules) -> float:
+    """House edge when the player plays result.strategy, the collapsed
+    total-dependent (TD) table, instead of per-composition optimal actions.
+
+    result.house_edge aggregates best_ev per (card1, card2, upcard) deal --
+    composition-dependent (CD) play at the first decision. The simulator
+    plays the TD table, so where two compositions of the same total prefer
+    different actions the table misplays one of them; a table-playing
+    simulator converges to THIS value, not to result.house_edge. The gap
+    is the CD-vs-TD strategy difference (sub-bp at 6 decks, a few bp at
+    1 deck).
+
+    Caveat: per-action EVs embed optimal play after the first decision, so
+    a TD simulator's true edge can sit marginally above this value where a
+    later hit/stand boundary is composition-sensitive. That residual is an
+    order of magnitude smaller than the first-decision effect.
+    """
+    deck = (
+        Deck.finite(rules.num_decks)
+        if rules.num_decks <= 8
+        else Deck.infinite()
+    )
+    strategy = result.strategy
+    ev_table = result.ev_table
+
+    def selector(cv1, cv2, upcard, sev):
+        lo, hi = (cv1, cv2) if cv1 <= cv2 else (cv2, cv1)
+        row = strategy[_table_row_label(lo, hi)]
+        upcard_idx = _DEALER_ORDER.index(upcard)
+        code = row[upcard_idx]
+        return _ev_for_table_code(code, sev, strategy, lo, hi, upcard_idx)
+
+    return _compute_house_edge(
+        ev_table, deck, rules.blackjack_payout, rules.dealer_peek,
+        ev_selector=selector,
+    )
 
 
 def _generate_strategy(ev_table, allow_double):
@@ -368,8 +456,12 @@ def _generate_strategy(ev_table, allow_double):
 
 
 def _best_action_for_hard(total, upcard, ev_table, allow_double):
-    if total >= 17:
+    if total >= 18:
+        # No legal rule set makes anything but stand right on hard 18+.
         return "S"
+    # Hard 17 is NOT unconditionally stand: H17 games surrender 17 vs A
+    # (stand EV is below -0.5). Totals <= 17 are resolved from the EV
+    # table like any other row.
     for cv1 in CARD_VALUES:
         cv2 = total - cv1
         if cv2 < 1 or cv2 > 10:

@@ -3,7 +3,7 @@
 import os
 import pytest
 
-from cardsharp.blackjack.solver import solve
+from cardsharp.blackjack.solver import solve, strategy_house_edge
 from cardsharp.blackjack.rules import Rules
 
 
@@ -367,6 +367,61 @@ class TestCombinatorialPinned:
         assert abs(he - (-0.000565)) < 5e-6, (
             f"1-deck S17 combinatorial HE = {he:.6f}, expected ~-0.000565. "
             f"This indicates a regression in the combinatorial solver path."
+        )
+
+
+class TestStrategyHouseEdge:
+    """strategy_house_edge: the EV of playing the collapsed TD table.
+
+    result.house_edge models composition-dependent (CD) play at the first
+    decision; the simulator plays the total-dependent (TD) table. The TD
+    edge is the simulator's true convergence target, so it must (a) never
+    beat CD optimal, and (b) sit within the published CD-vs-TD strategy
+    gap of it (sub-bp at 6 decks, a few bp at 1 deck).
+    """
+
+    def _rules(self, num_decks):
+        return Rules(
+            num_decks=num_decks, dealer_hit_soft_17=True,
+            allow_double_down=True, allow_split=True, allow_surrender=True,
+            allow_late_surrender=True, allow_double_after_split=True,
+            allow_resplitting=False, dealer_peek=True, blackjack_payout=1.5,
+            penetration=0.75,
+        )
+
+    def test_six_deck_td_dominated_and_close(self):
+        rules = self._rules(6)
+        sol = solve(rules, mode="fast")
+        td = strategy_house_edge(sol, rules)
+        diff = td - sol.house_edge
+        assert diff >= -1e-12, "TD table cannot beat per-composition optimal"
+        assert diff < 0.0002, (
+            f"6-deck TD-vs-CD gap {diff*1e4:.2f} bp; expected < 2 bp"
+        )
+
+    def test_infinite_deck_td_equals_cd(self):
+        """With no card-removal effects every composition of a total has
+        identical EVs, so the TD table is exactly optimal."""
+        rules = Rules(
+            num_decks=99, dealer_hit_soft_17=True, allow_double_down=True,
+            allow_split=True, allow_surrender=True, allow_late_surrender=True,
+            dealer_peek=True, blackjack_payout=1.5,
+        )
+        sol = solve(rules)
+        td = strategy_house_edge(sol, rules)
+        assert abs(td - sol.house_edge) < 1e-9
+
+    @pytest.mark.slow
+    def test_one_deck_td_gap_within_published_range(self):
+        rules = self._rules(1)
+        sol = solve(rules, mode="combinatorial")
+        td = strategy_house_edge(sol, rules)
+        diff = td - sol.house_edge
+        assert diff >= -1e-12
+        # Wizard of Odds puts the total CD-strategy gain at single deck
+        # around 4 bp; the first-decision share must be in that ballpark.
+        assert diff < 0.0008, (
+            f"1-deck TD-vs-CD gap {diff*1e4:.2f} bp; expected < 8 bp"
         )
 
 

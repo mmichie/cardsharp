@@ -252,6 +252,67 @@ class TestHouseEdge:
 
 
 @pytest.mark.slow
+class TestFreshShoeConvergence:
+    """Simulator vs solver under matched assumptions (fresh shoe per round).
+
+    penetration=0.01 makes Shoe.begin_round reshuffle before every round,
+    which is exactly the composition model the solver assumes (and what the
+    WoO calculator's "optimal results" mode reports). SolverStrategy with
+    use_ev_table=True plays the composition-dependent first decision the
+    solver's house_edge models. Under these matched assumptions the
+    simulated edge must converge to solve(rules).house_edge, closing the
+    chain WoO calculator <-> solver <-> simulator.
+
+    The 1-deck case is the sharp regression guard for shoe integrity: the
+    legacy mid-round reshuffle (which put in-play cards back in the shoe)
+    pushed the fresh-shoe 1-deck edge ~+60 bp toward infinite-deck
+    behavior, far outside this test's 4-sigma band. The high-precision
+    protocol (20M rounds, multiprocess, --cd_strategy --cv
+    --penetration 0.01) measured agreement within +/-4.5 bp at 95%
+    confidence on 2026-06-09.
+    """
+
+    def _fresh_rules(self, num_decks):
+        return Rules(
+            num_decks=num_decks,
+            dealer_hit_soft_17=True,
+            allow_double_down=True,
+            allow_split=True,
+            allow_surrender=True,
+            allow_late_surrender=True,
+            allow_double_after_split=False,
+            allow_resplitting=False,
+            dealer_peek=True,
+            blackjack_payout=1.5,
+            penetration=0.01,  # reshuffle before every round
+        )
+
+    def test_one_deck_cd_converges_to_solver(self):
+        rules = self._fresh_rules(1)
+        sol = _cached_solver(rules)
+        strategy = SolverStrategy(sol, use_ev_table=True)
+        edge, se = _simulate(rules, 1_500_000, seed=2718, strategy=strategy)
+        expected = sol.house_edge
+        tolerance = max(4 * se, 0.001)
+        assert abs(edge - expected) < tolerance, (
+            f"1-deck fresh-shoe CD edge {edge:.4%} (SE={se:.4%}) vs "
+            f"solver {expected:.4%}; |gap| exceeds {tolerance:.4%}"
+        )
+
+    def test_six_deck_cd_converges_to_solver(self):
+        rules = self._fresh_rules(6)
+        sol = _cached_solver(rules)
+        strategy = SolverStrategy(sol, use_ev_table=True)
+        edge, se = _simulate(rules, 600_000, seed=2719, strategy=strategy)
+        expected = sol.house_edge
+        tolerance = max(4 * se, 0.001)
+        assert abs(edge - expected) < tolerance, (
+            f"6-deck fresh-shoe CD edge {edge:.4%} (SE={se:.4%}) vs "
+            f"solver {expected:.4%}; |gap| exceeds {tolerance:.4%}"
+        )
+
+
+@pytest.mark.slow
 class TestCICalibration:
     """Verify that house_edge_with_ci's 95% CI is well-calibrated.
 

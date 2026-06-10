@@ -86,6 +86,36 @@ The goal is to make the SAME simulation run faster, not to create a different, s
 3. Verify identical outcomes
 4. Check edge cases thoroughly
 
+## Accuracy Validation Chain
+
+The simulator's accuracy is anchored end to end:
+
+1. The combinatorial solver is pinned against the Wizard of Odds
+   calculator (tests/blackjack/solver/test_engine.py::TestWoOReference)
+   within 10 bp, sub-bp at 2+ decks.
+2. `strategy_house_edge(result, rules)` computes the exact EV of playing
+   the collapsed total-dependent strategy table; `result.house_edge` is
+   the composition-dependent optimum. The simulator's convergence target
+   is the former when playing the table, the latter when constructed
+   with `SolverStrategy(sol, use_ev_table=True)` (CLI: `--cd_strategy`).
+3. Fresh-shoe mode (`--penetration 0.01` reshuffles before every round)
+   matches the solver's per-round composition model. Measured agreement
+   on 2026-06-09 at 20M rounds (`--cd_strategy --cv --penetration 0.01`):
+   6-deck H17 within -2.2 bp +/- 4.5 bp.
+4. At real penetrations the simulator's edge sits above the solver value
+   by the cut-card effect; that is correct behavior, not a bug.
+
+Simulation mechanics that this chain guards (all have regression tests):
+
+- The cut card never interrupts a round; the shoe shuffles between
+  rounds (Shoe.begin_round/end_round). A mid-round exhaustion reshuffles
+  only the discards: a card on the table can never also be in the shoe.
+- The dealer completes their hand only while at least one player hand is
+  live (not busted, surrendered, or already settled), as in a real pit.
+- Hard 17 vs Ace surrenders in H17 games (worth ~0.5 bp of EV); the
+  surrender fallback when the action is unavailable is stand on hard
+  17+, hit otherwise (the published Rh/Rs distinction).
+
 ## Running Performance Benchmarks
 
 ### Basic Benchmark (Multiprocessing)
