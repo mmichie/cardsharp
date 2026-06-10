@@ -1,0 +1,18 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "cardsharp-core"
+version = "0.1.0"
+description = "Rust fast core for the cardsharp blackjack simulator"
+license = { text = "MIT" }
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+]
+
+[tool.maturin]
+module-name = "cardsharp_core"
+features = ["extension-module"]

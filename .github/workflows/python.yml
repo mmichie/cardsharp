@@ -30,3 +30,30 @@ jobs:
         find . -path ./.venv -prune -o -type f -name \*.py -print | xargs uv run pylint --disable=all --enable=F
     - name: Test with pytest
       run: uv run python -m pytest
+
+  fast-core:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+    - name: Set up Python 3.14
+      run: uv python install 3.14
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy, rustfmt
+    - name: Cache Rust build
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: crates/cardsharp-core
+    - name: Lint Rust
+      working-directory: crates/cardsharp-core
+      run: |
+        cargo fmt --check
+        cargo clippy --all-targets -- -D warnings
+    - name: Build extension
+      run: uv sync --extra dev --extra fast
+    - name: Smoke test extension
+      run: uv run pytest tests/test_fastsim_core.py -v

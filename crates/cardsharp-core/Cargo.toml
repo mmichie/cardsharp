@@ -1,0 +1,22 @@
+[package]
+name = "cardsharp-core"
+version = "0.1.0"
+edition = "2024"
+description = "Rust fast core for the cardsharp blackjack simulator"
+license = "MIT"
+publish = false
+
+[lib]
+name = "cardsharp_core"
+crate-type = ["cdylib"]
+
+[features]
+# Enabled by maturin (see pyproject.toml). Kept behind a feature so plain
+# `cargo test`/`cargo clippy` link against libpython and still work.
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+# abi3-py312: one wheel per platform, forward-compatible across CPython
+# versions. The Python<->Rust boundary is one call per simulation batch,
+# so the stable-ABI overhead is irrelevant to throughput.
+pyo3 = { version = "0.26", features = ["abi3-py312"] }

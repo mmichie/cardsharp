@@ -7,6 +7,12 @@ resolution-markers = [
     "sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 
+[manifest]
+members = [
+    "cardsharp",
+    "cardsharp-core",
+]
+
 [[package]]
 name = "aiofiles"
 version = "25.1.0"
@@ -126,6 +132,9 @@ dev = [
     { name = "pytest-mock" },
     { name = "ruff" },
 ]
+fast = [
+    { name = "cardsharp-core" },
+]
 ui = [
     { name = "streamlit" },
 ]
@@ -135,6 +144,7 @@ requires-dist = [
     { name = "aiofiles", specifier = ">=24.0.0" },
     { name = "asyncio", specifier = ">=3.4.3,<5.0.0" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=24.10,<26.0" },
+    { name = "cardsharp-core", marker = "extra == 'fast'", editable = "crates/cardsharp-core" },
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=7.1.1,<8.0.0" },
     { name = "matplotlib", specifier = ">=3.9.2,<4.0.0" },
     { name = "numpy", specifier = ">=2.2.5,<3.0.0" },
@@ -151,7 +161,12 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.15.3,<2.0.0" },
     { name = "streamlit", marker = "extra == 'ui'", specifier = ">=1.38.0,<2.0.0" },
 ]
-provides-extras = ["ui", "dev"]
+provides-extras = ["ui", "fast", "dev"]
+
+[[package]]
+name = "cardsharp-core"
+version = "0.1.0"
+source = { editable = "crates/cardsharp-core" }
 
 [[package]]
 name = "certifi"
