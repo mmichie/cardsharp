@@ -22,6 +22,7 @@ from cardsharp.fastsim.runner import (
     SimulationRun,
     resolve_engine,
     run_fast_batch,
+    run_fast_paired,
     simulate,
     strategy_is_encodable,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "resolve_engine",
     "rules_kwargs",
     "run_fast_batch",
+    "run_fast_paired",
     "simulate",
     "strategy_is_encodable",
 ]

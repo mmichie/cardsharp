@@ -780,6 +780,7 @@ def run_rule_comparison(args, baseline_rules):
         seed=args.seed,
         use_solver_strategy=args.solver_strategy,
         num_players=args.num_players,
+        engine=args.engine,
     )
     result.print_report(confidence=args.confidence)
 

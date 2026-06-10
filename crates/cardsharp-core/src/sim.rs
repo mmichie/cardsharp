@@ -76,7 +76,7 @@ fn run_shard(
 /// results for a given seed (shards are self-contained and merged in
 /// shard order). The GIL is released for the duration of the simulation.
 #[pyfunction]
-#[pyo3(signature = (rules, table, n_rounds, seed, n_players = 1, initial_bankroll = 1000.0, always_insure = false, threads = 0, counting = None, shuffle_type = "perfect", shuffle_count = None))]
+#[pyo3(signature = (rules, table, n_rounds, seed, n_players = 1, initial_bankroll = 1000.0, always_insure = false, threads = 0, counting = None, shuffle_type = "perfect", shuffle_count = None, conditional_settlement = false))]
 #[allow(clippy::too_many_arguments)]
 pub fn simulate_batch<'py>(
     py: Python<'py>,
@@ -91,9 +91,16 @@ pub fn simulate_batch<'py>(
     counting: Option<PyRef<'py, CountingConfig>>,
     shuffle_type: &str,
     shuffle_count: Option<u32>,
+    conditional_settlement: bool,
 ) -> PyResult<Bound<'py, PyDict>> {
     if n_players < 1 {
         return Err(PyValueError::new_err("n_players must be at least 1"));
+    }
+    if conditional_settlement && (!rules.dealer_peek || rules.use_csm) {
+        return Err(PyValueError::new_err(
+            "conditional_settlement requires dealer_peek=true and a non-CSM shoe \
+             (see settle.rs scope notes)",
+        ));
     }
     let table = parse_table(table)?;
     let rules: Rules = rules.clone();
@@ -110,6 +117,7 @@ pub fn simulate_batch<'py>(
         n_players,
         initial_bankroll,
         always_insure,
+        conditional_settlement,
     };
 
     // Fixed-size shards with explicitly derived seeds: the shard layout
@@ -171,7 +179,11 @@ fn accumulate(stats: &mut SimStats, result: &RoundResult) {
     let winners: Vec<_> = result.players.iter().map(|p| p.winners.clone()).collect();
     stats.count_round(&winners);
 
-    let net: f64 = result.players.iter().map(|p| p.net()).sum();
+    // Win/loss/draw counts above stay REALIZED; the financial estimator
+    // uses the Rao-Blackwellized net when conditional settlement is on.
+    let net: f64 = result
+        .conditional_net
+        .unwrap_or_else(|| result.players.iter().map(|p| p.net()).sum());
     let initial: f64 = result.players.iter().map(|p| p.initial_bets).sum();
     let total: f64 = result.players.iter().map(|p| p.total_bets).sum();
     if initial > 0.0 {
@@ -210,6 +222,8 @@ pub struct RoundRecord {
     pub dealer_cards: Vec<u32>,
     /// Cards consumed from the stream by this round.
     pub cards_consumed: u32,
+    /// Rao-Blackwellized round net when conditional settlement is on.
+    pub conditional_net: Option<f64>,
 }
 
 /// Play rounds from a fixed injected card sequence (no shuffling, ever)
@@ -219,7 +233,7 @@ pub struct RoundRecord {
 /// The parity suite feeds the same sequence to the Python engine via a
 /// pre-loaded `Shoe` and asserts the records match.
 #[pyfunction]
-#[pyo3(signature = (rules, table, cards, n_players = 1, initial_bankroll = 1000.0, always_insure = false, max_rounds = None, counting = None))]
+#[pyo3(signature = (rules, table, cards, n_players = 1, initial_bankroll = 1000.0, always_insure = false, max_rounds = None, counting = None, conditional_settlement = false))]
 #[allow(clippy::too_many_arguments)]
 pub fn play_card_stream(
     rules: PyRef<'_, Rules>,
@@ -230,6 +244,7 @@ pub fn play_card_stream(
     always_insure: bool,
     max_rounds: Option<u64>,
     counting: Option<PyRef<'_, CountingConfig>>,
+    conditional_settlement: bool,
 ) -> PyResult<Vec<RoundRecord>> {
     if n_players < 1 {
         return Err(PyValueError::new_err("n_players must be at least 1"));
@@ -240,6 +255,7 @@ pub fn play_card_stream(
         n_players,
         initial_bankroll,
         always_insure,
+        conditional_settlement,
     };
 
     let mut stream = CardStream::new(parse_stream(&cards)?);
@@ -341,5 +357,202 @@ fn make_record(result: RoundResult, cards_consumed: u32) -> RoundRecord {
             .map(|r| r.code() as u32)
             .collect(),
         cards_consumed,
+        conditional_net: result.conditional_net,
     }
+}
+
+/// Paired-difference accumulator across two rule variants played on
+/// common random numbers, mirroring `cardsharp.blackjack.comparison`.
+#[derive(Default, Clone)]
+struct PairedStats {
+    a: SimStats,
+    b: SimStats,
+    diff_n: u64,
+    diff_mean: f64,
+    diff_m2: f64,
+}
+
+impl PairedStats {
+    fn record_diff(&mut self, diff: f64) {
+        self.diff_n += 1;
+        let delta = diff - self.diff_mean;
+        self.diff_mean += delta / self.diff_n as f64;
+        self.diff_m2 += delta * (diff - self.diff_mean);
+    }
+
+    /// Chan merge in shard order, keeping results thread-count invariant.
+    fn merge(&mut self, other: &PairedStats) {
+        self.a.merge(&other.a);
+        self.b.merge(&other.b);
+        let n_a = self.diff_n;
+        let n_b = other.diff_n;
+        if n_b == 0 {
+            return;
+        }
+        if n_a == 0 {
+            self.diff_n = other.diff_n;
+            self.diff_mean = other.diff_mean;
+            self.diff_m2 = other.diff_m2;
+            return;
+        }
+        let n = n_a + n_b;
+        let (fa, fb, fn_) = (n_a as f64, n_b as f64, n as f64);
+        let d = other.diff_mean - self.diff_mean;
+        self.diff_m2 = self.diff_m2 + other.diff_m2 + d * d * fa * fb / fn_;
+        self.diff_mean += d * fb / fn_;
+        self.diff_n = n;
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_paired_shard(
+    rules_a: &Rules,
+    table_a: &StrategyTable,
+    rules_b: &Rules,
+    table_b: &StrategyTable,
+    cfg: &RoundConfig,
+    rounds: u64,
+    shard_seed: u64,
+) -> Result<PairedStats, crate::shoe::OutOfCards> {
+    let mut stats = PairedStats::default();
+    let mut seed_state = shard_seed;
+
+    for _ in 0..rounds {
+        // One seed per round: both variants shuffle identical decks, so
+        // they see the same deal and the same hit cards until their rules
+        // make play diverge -- the CRN guarantee from comparison.py.
+        let round_seed = splitmix64(&mut seed_state);
+        let mut round_he = [0.0f64; 2];
+        for (slot, (rules, table)) in [(rules_a, table_a), (rules_b, table_b)]
+            .into_iter()
+            .enumerate()
+        {
+            let rng = Xoshiro256PlusPlus::seed_from_u64(round_seed);
+            let mut shoe = Shoe::new(
+                ShoeOptions::classic(rules.num_decks, rules.penetration, rules.burn_cards),
+                rng,
+            );
+            let result = play_round(&mut shoe, rules, table, cfg, None)?;
+            let net: f64 = result
+                .conditional_net
+                .unwrap_or_else(|| result.players.iter().map(|p| p.net()).sum());
+            let initial: f64 = result.players.iter().map(|p| p.initial_bets).sum();
+            let total: f64 = result.players.iter().map(|p| p.total_bets).sum();
+            let side = if slot == 0 {
+                &mut stats.a
+            } else {
+                &mut stats.b
+            };
+            let winners: Vec<_> = result.players.iter().map(|p| p.winners.clone()).collect();
+            side.count_round(&winners);
+            if initial > 0.0 {
+                side.record_round(net, initial, total);
+            }
+            round_he[slot] = if initial > 0.0 { -net / initial } else { 0.0 };
+        }
+        stats.record_diff(round_he[0] - round_he[1]);
+    }
+    Ok(stats)
+}
+
+/// Compare two rule variants with Common Random Numbers at core speed:
+/// every round, both variants play against identically shuffled decks,
+/// so the variance of (HE_A - HE_B) reflects only rule divergence, not
+/// shuffle noise. Mirrors `cardsharp.blackjack.comparison.compare_rules`
+/// (per-round fresh shoes; counting is unsupported because per-round
+/// resets destroy the count). Returns per-variant report dicts plus the
+/// paired-difference Welford state, all thread-count invariant.
+#[pyfunction]
+#[pyo3(signature = (rules_a, table_a, rules_b, table_b, n_rounds, seed, n_players = 1, initial_bankroll = 10_000_000.0, threads = 0, conditional_settlement = false))]
+#[allow(clippy::too_many_arguments)]
+pub fn simulate_paired<'py>(
+    py: Python<'py>,
+    rules_a: PyRef<'py, Rules>,
+    table_a: &[u8],
+    rules_b: PyRef<'py, Rules>,
+    table_b: &[u8],
+    n_rounds: u64,
+    seed: u64,
+    n_players: usize,
+    initial_bankroll: f64,
+    threads: usize,
+    conditional_settlement: bool,
+) -> PyResult<Bound<'py, PyDict>> {
+    if n_players < 1 {
+        return Err(PyValueError::new_err("n_players must be at least 1"));
+    }
+    let rules_a: Rules = rules_a.clone();
+    let rules_b: Rules = rules_b.clone();
+    if conditional_settlement
+        && (!rules_a.dealer_peek || !rules_b.dealer_peek || rules_a.use_csm || rules_b.use_csm)
+    {
+        return Err(PyValueError::new_err(
+            "conditional_settlement requires dealer_peek=true and non-CSM shoes \
+             for both variants",
+        ));
+    }
+    let table_a = parse_table(table_a)?;
+    let table_b = parse_table(table_b)?;
+    let cfg = RoundConfig {
+        n_players,
+        initial_bankroll,
+        always_insure: false,
+        conditional_settlement,
+    };
+
+    let mut seed_state = seed;
+    let n_shards = n_rounds.div_ceil(SHARD_ROUNDS).max(1);
+    let shards: Vec<(u64, u64)> = (0..n_shards)
+        .map(|i| {
+            let rounds = if i == n_shards - 1 {
+                n_rounds - i * SHARD_ROUNDS
+            } else {
+                SHARD_ROUNDS
+            };
+            (rounds, splitmix64(&mut seed_state))
+        })
+        .collect();
+
+    let stats = py
+        .detach(|| -> Result<PairedStats, crate::shoe::OutOfCards> {
+            let run_all = || -> Result<Vec<PairedStats>, crate::shoe::OutOfCards> {
+                shards
+                    .par_iter()
+                    .map(|(rounds, shard_seed)| {
+                        run_paired_shard(
+                            &rules_a,
+                            &table_a,
+                            &rules_b,
+                            &table_b,
+                            &cfg,
+                            *rounds,
+                            *shard_seed,
+                        )
+                    })
+                    .collect()
+            };
+            let shard_stats = if threads == 0 {
+                run_all()?
+            } else {
+                rayon::ThreadPoolBuilder::new()
+                    .num_threads(threads)
+                    .build()
+                    .expect("failed to build thread pool")
+                    .install(run_all)?
+            };
+            let mut total = PairedStats::default();
+            for s in &shard_stats {
+                total.merge(s);
+            }
+            Ok(total)
+        })
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+
+    let out = PyDict::new(py);
+    out.set_item("a", stats.a.to_dict(py)?)?;
+    out.set_item("b", stats.b.to_dict(py)?)?;
+    out.set_item("diff_n", stats.diff_n)?;
+    out.set_item("diff_mean", stats.diff_mean)?;
+    out.set_item("diff_M2", stats.diff_m2)?;
+    Ok(out)
 }

@@ -358,6 +358,119 @@ def test_realistic_shuffles_house_edge_matches_perfect_band():
         ), f"{shuffle_type} HE {he:.4%} vs perfect {he_perfect:.4%}"
 
 
+def test_conditional_settlement_is_unbiased_and_reduces_variance():
+    """Same seed with the flag on and off plays IDENTICAL physical rounds
+    (settlement consumes no randomness), so the two estimator means can
+    differ only by the dealer noise that conditioning averaged out --
+    near zero with small variance -- while the recorded per-round
+    variance must strictly drop."""
+    rules = make_rules()
+    table = encode_strategy_table(BasicStrategy(), rules)
+    core_rules = make_core_rules(rules)
+    plain = cardsharp_core.simulate_batch(core_rules, table, 2_000_000, seed=88)
+    rb = cardsharp_core.simulate_batch(
+        core_rules, table, 2_000_000, seed=88, conditional_settlement=True
+    )
+    he_plain = -plain["net_sum"] / plain["bet_sum"]
+    he_rb = -rb["net_sum"] / rb["bet_sum"]
+    assert (
+        abs(he_rb - he_plain) < 0.002
+    ), f"RB mean {he_rb:.4%} vs plain {he_plain:.4%} on identical rounds"
+    var_plain = plain["net_M2"] / (plain["n_rounds"] - 1)
+    var_rb = rb["net_M2"] / (rb["n_rounds"] - 1)
+    assert (
+        var_rb < var_plain * 0.95
+    ), f"no variance reduction: {var_rb:.3f} vs {var_plain:.3f}"
+
+
+def test_conditional_settlement_requires_peek_and_non_csm():
+    table = encode_strategy_table(BasicStrategy(), make_rules())
+    for bad in (make_rules(dealer_peek=False), make_rules(use_csm=True)):
+        with pytest.raises(ValueError, match="conditional_settlement"):
+            cardsharp_core.simulate_batch(
+                make_core_rules(bad),
+                table,
+                100,
+                seed=1,
+                conditional_settlement=True,
+            )
+
+
+def test_conditional_net_matches_hand_computation():
+    rules = make_rules()
+    table = encode_strategy_table(BasicStrategy(), rules)
+    core_rules = make_core_rules(rules)
+
+    # Player 10,10 = 20 stands; dealer 10,6 = 16 must hit. Exactly two
+    # cards remain in the stream: a 5 (dealer makes 21, player loses) and
+    # a ten (dealer busts, player wins 20). Expected payout = 10, so the
+    # conditional net is 0 while the realized net is -10 (the 5 comes
+    # first).
+    records = cardsharp_core.play_card_stream(
+        core_rules,
+        table,
+        bytes([10, 10, 10, 6, 5, 10]),
+        conditional_settlement=True,
+        max_rounds=1,
+    )
+    r = records[0]
+    assert r.players[0].net == -10.0
+    assert r.conditional_net == 0.0
+
+    # Pat dealer: nothing to average, conditional equals realized exactly.
+    records = cardsharp_core.play_card_stream(
+        core_rules,
+        table,
+        bytes([10, 9, 10, 9]),
+        conditional_settlement=True,
+    )
+    r = records[0]
+    assert r.conditional_net == r.players[0].net == 10.0
+
+
+def test_paired_crn_identical_variants_diff_is_exactly_zero():
+    rules = make_rules()
+    table = encode_strategy_table(BasicStrategy(), rules)
+    core_rules = make_core_rules(rules)
+    report = cardsharp_core.simulate_paired(
+        core_rules, table, core_rules, table, 50_000, seed=5
+    )
+    assert report["diff_mean"] == 0.0
+    assert report["diff_M2"] == 0.0
+    assert report["a"] == report["b"]
+
+
+def test_paired_crn_h17_s17_delta_and_tightness():
+    """H17 vs S17 differ by ~20bp; CRN pairing must recover that delta
+    with a CI several times tighter than independent runs of the same
+    budget would give."""
+    import math
+
+    h17, s17 = make_rules(dealer_hit_soft_17=True), make_rules(dealer_hit_soft_17=False)
+    strategy = BasicStrategy()
+    report = cardsharp_core.simulate_paired(
+        make_core_rules(h17),
+        encode_strategy_table(BasicStrategy(), h17),
+        make_core_rules(s17),
+        encode_strategy_table(strategy, s17),
+        400_000,
+        seed=12,
+    )
+    n = report["diff_n"]
+    diff_mean = report["diff_mean"]
+    diff_se = math.sqrt(report["diff_M2"] / (n - 1) / n)
+    assert 0.0010 < diff_mean < 0.0030, f"H17-S17 delta {diff_mean:.4%}"
+    assert diff_mean - 4 * diff_se > 0, "delta should be clearly resolved"
+
+    # Tightness: paired SE vs the SE of a difference of independent runs.
+    var_a = report["a"]["net_M2"] / (n - 1) / (report["a"]["bet_mean"] ** 2)
+    var_b = report["b"]["net_M2"] / (n - 1) / (report["b"]["bet_mean"] ** 2)
+    independent_se = math.sqrt((var_a + var_b) / n)
+    assert (
+        independent_se / diff_se > 5
+    ), f"CRN only {independent_se / diff_se:.1f}x tighter"
+
+
 def test_simulate_batch_house_edge_in_plausible_band():
     """Loose 4-sigma guard against gross engine breakage (the tight
     statistical gate is beads-9ro.6)."""

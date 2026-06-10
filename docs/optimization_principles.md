@@ -117,7 +117,24 @@ The simulator's accuracy is anchored end to end:
    and none to deal distribution.
 5. At real penetrations the simulator's edge sits above the solver value
    by the cut-card effect; that is correct behavior, not a bug.
-6. The Rust fast core (crates/cardsharp-core, --engine fast) is held to
+6. Estimator extensions on the fast core (2026-06-10), both validated
+   against the plain estimator. (a) Conditional dealer settlement
+   (simulate_batch conditional_settlement=True) records each round's
+   exact expected net over the dealer's draw distribution given the
+   dealer's two cards and the remaining shoe composition; the dealer
+   still draws physically. Unbiasedness verified by same-seed runs
+   (identical physical rounds, means agree within the averaged-out
+   component); variance reduction measured at 1.83x -- but the
+   settlement recursion costs 2.75-4.3x throughput on this engine, a
+   NET LOSS for time-to-CI, which is why it defaults off. Honest
+   conclusion: Rao-Blackwellizing the dealer pays only when rounds are
+   expensive relative to the recursion; this engine's are not.
+   (b) CRN rule comparison (simulate_paired; compare_rules engine=auto)
+   plays both variants on identically shuffled per-round decks: at 2M
+   rounds the H17-S17 delta resolves to +19.05 bp +/- 2.30 bp, 9.6x
+   tighter than independent runs of the same budget (~92x effective
+   rounds), in seconds rather than the Python CRN path's hours.
+7. The Rust fast core (crates/cardsharp-core, --engine fast) is held to
    the same chain two ways. (a) Equivalence: the card-stream parity suite
    (tests/test_fastsim_parity.py, in CI) proves round-for-round identity
    with the Python engine -- money flow, per-hand outcomes, and cards

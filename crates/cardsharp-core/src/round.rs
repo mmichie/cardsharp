@@ -11,6 +11,7 @@ use crate::card::Rank;
 use crate::counting::Counter;
 use crate::hand::Hand;
 use crate::rules::Rules;
+use crate::settle::{self, LiveHand};
 use crate::shoe::{DealSource, OutOfCards};
 use crate::strategy::{Action, StrategyTable, ValidActions};
 
@@ -210,11 +211,19 @@ pub struct RoundConfig {
     /// Stand-in for `Strategy.decide_insurance`; basic strategy never
     /// insures, but the insurance machinery is testable with this on.
     pub always_insure: bool,
+    /// Rao-Blackwellized settlement: record the exact expected net over
+    /// the dealer's draw distribution instead of the realized net. The
+    /// dealer still draws physically. See settle.rs for scope.
+    pub conditional_settlement: bool,
 }
 
 pub struct RoundResult {
     pub players: Vec<PlayerRound>,
     pub dealer: Hand,
+    /// The Rao-Blackwellized round net, when conditional settlement is
+    /// on. Equals the realized net exactly when no hand's outcome
+    /// depended on the dealer's draws.
+    pub conditional_net: Option<f64>,
 }
 
 /// Play one full round. The shoe's `begin_round`/`end_round` bracketing
@@ -315,8 +324,12 @@ pub fn play_round<S: DealSource>(
         }
     }
 
+    let mut conditional_payout_net: Option<f64> = None;
     if !round_over {
         players_turn(&mut players, dealer_up, shoe, rules, table, &mut counter)?;
+        if cfg.conditional_settlement {
+            conditional_payout_net = conditional_round_net(&players, &dealer, shoe, rules, cfg);
+        }
         dealers_turn(&players, &mut dealer, shoe, rules, &mut counter)?;
     }
 
@@ -327,7 +340,71 @@ pub fn play_round<S: DealSource>(
 
     shoe.end_round();
 
-    Ok(RoundResult { players, dealer })
+    // When no hand's outcome depended on the dealer's draws (or settlement
+    // was off for this round), the conditional net IS the realized net.
+    let conditional_net = if cfg.conditional_settlement {
+        let realized: f64 = players.iter().map(|p| p.net()).sum();
+        Some(conditional_payout_net.unwrap_or(realized))
+    } else {
+        None
+    };
+
+    Ok(RoundResult {
+        players,
+        dealer,
+        conditional_net,
+    })
+}
+
+/// The Rao-Blackwellized round net: the players' current money (stakes
+/// already posted, dealer-independent payouts already made) plus the
+/// exact expected payout of every live hand over the dealer's draw
+/// distribution, relative to the table's starting bankroll. Returns None
+/// when nothing depends on the dealer (the realized net is already
+/// exact) or when the shoe cannot support the recursion.
+fn conditional_round_net<S: DealSource>(
+    players: &[PlayerRound],
+    dealer: &Hand,
+    shoe: &S,
+    rules: &Rules,
+    cfg: &RoundConfig,
+) -> Option<f64> {
+    let mut live = Vec::new();
+    for player in players {
+        for (i, hand) in player.hands.iter().enumerate() {
+            if i < player.bets.len() && player.bets[i] <= 0.0 {
+                continue;
+            }
+            if hand.is_empty() || hand.value() > 21 || hand.is_blackjack() {
+                continue;
+            }
+            live.push(LiveHand {
+                value: hand.value(),
+                bet: player.bets[i],
+            });
+        }
+    }
+    if live.is_empty() {
+        return None;
+    }
+
+    let n_remaining = shoe.cards_remaining() as u32;
+    if n_remaining == 0 {
+        return None; // mid-round exhaustion edge: settle on realized cards
+    }
+    let mut counts = shoe.remaining_rank_counts();
+    let expected_payout = settle::expected_payout(
+        dealer.value(),
+        dealer.is_soft(),
+        &mut counts,
+        n_remaining,
+        rules,
+        &live,
+    );
+
+    let money_now: f64 = players.iter().map(|p| p.money).sum();
+    let bankrolls = cfg.initial_bankroll * players.len() as f64;
+    Some(money_now + expected_payout - bankrolls)
 }
 
 /// Early surrender offer, before the dealer peeks. The Python engine asks

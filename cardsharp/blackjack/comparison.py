@@ -76,9 +76,7 @@ class ComparisonResult:
 
     def print_report(self, confidence: float = 0.95):
         ci_pct = int(round(confidence * 100))
-        print(
-            f"CRN comparison ({self.num_rounds:,} rounds, seed={self.seed})"
-        )
+        print(f"CRN comparison ({self.num_rounds:,} rounds, seed={self.seed})")
         print()
         print("Per-rule house edge (independent CIs):")
         for label, stats in self.per_rule_stats.items():
@@ -105,6 +103,43 @@ class ComparisonResult:
             )
 
 
+def _compare_rules_fast(
+    rules_dict: Dict[str, Rules],
+    strategy_for: Dict[str, "BasicStrategy"],
+    num_rounds: int,
+    seed: int,
+    initial_bankroll: int,
+    num_players: int,
+) -> ComparisonResult:
+    """CRN comparison of exactly two variants on the Rust core.
+
+    Same estimator design as the Python loop below (per-round common
+    decks, paired Welford on the per-round house-edge difference), at
+    core speed. Engines differ in RNG so the two paths agree
+    statistically, not bit-for-bit.
+    """
+    from cardsharp.fastsim import run_fast_paired
+
+    (label_a, rules_a), (label_b, rules_b) = rules_dict.items()
+    stats_a, stats_b, diff = run_fast_paired(
+        rules_a,
+        strategy_for[label_a],
+        rules_b,
+        strategy_for[label_b],
+        num_rounds,
+        seed,
+        n_players=num_players,
+        initial_bankroll=initial_bankroll,
+    )
+    paired = PairedDiff(n=diff["n"], mean=diff["mean"], M2=diff["M2"])
+    return ComparisonResult(
+        per_rule_stats={label_a: stats_a, label_b: stats_b},
+        paired_diffs={(label_a, label_b): paired},
+        num_rounds=num_rounds,
+        seed=seed,
+    )
+
+
 def compare_rules(
     rules_dict: Dict[str, Rules],
     num_rounds: int,
@@ -112,6 +147,7 @@ def compare_rules(
     initial_bankroll: int = 10_000_000,
     use_solver_strategy: bool = False,
     num_players: int = 1,
+    engine: str = "auto",
 ) -> ComparisonResult:
     """Compare N rule sets via Common Random Numbers.
 
@@ -140,10 +176,10 @@ def compare_rules(
     from cardsharp.blackjack.blackjack import BlackjackGame
 
     if seed is None:
-        seed = random.SystemRandom().randint(0, 2 ** 63 - 1)
+        seed = random.SystemRandom().randint(0, 2**63 - 1)
 
     rng = random.Random(seed)
-    round_seeds = [rng.randint(0, 2 ** 63 - 1) for _ in range(num_rounds)]
+    round_seeds = [rng.randint(0, 2**63 - 1) for _ in range(num_rounds)]
 
     per_rule_stats = {label: SimulationStats() for label in rules_dict}
     labels = list(rules_dict.keys())
@@ -157,6 +193,7 @@ def compare_rules(
     if use_solver_strategy:
         from cardsharp.blackjack.solver import solve
         from cardsharp.blackjack.strategy import SolverStrategy
+
         # mode="auto" picks combinatorial for ≤2 decks (matches WoO),
         # exact for 3-4 decks, fast for 5+; tightens ground-truth strategy
         # for small-deck rule comparisons without slowing 6-deck cases.
@@ -168,11 +205,39 @@ def compare_rules(
         shared_strategy = BasicStrategy()
         strategy_for = {label: shared_strategy for label in rules_dict}
 
+    # Fast path: exactly two variants on the Rust core, when every
+    # variant's configuration is one the core reproduces exactly.
+    if engine in ("auto", "fast") and len(rules_dict) == 2:
+        from cardsharp.fastsim import resolve_engine
+
+        try:
+            supported = all(
+                resolve_engine(rules, strategy_for[label], requested="auto").use_core
+                for label, rules in rules_dict.items()
+            )
+        except RuntimeError:
+            supported = False
+        if supported:
+            print("Engine: Rust fast core (CRN paired)")
+            return _compare_rules_fast(
+                rules_dict,
+                strategy_for,
+                num_rounds,
+                seed,
+                initial_bankroll,
+                num_players,
+            )
+        if engine == "fast":
+            raise RuntimeError(
+                "engine='fast' requested but a variant is not supported "
+                "by the fast core"
+            )
+        print("Engine: Python reference (CRN)")
+
     io = DummyIOInterface()
 
     player_names = (
-        ["Sim"] if num_players == 1
-        else [f"Sim{i + 1}" for i in range(num_players)]
+        ["Sim"] if num_players == 1 else [f"Sim{i + 1}" for i in range(num_players)]
     )
 
     for k in range(num_rounds):
@@ -186,15 +251,12 @@ def compare_rules(
                 num_decks=rules.num_decks,
                 penetration=rules.penetration,
                 burn_cards=rules.burn_cards,
-                deck_factory=(
-                    rules.variant.create_deck if rules.variant else None
-                ),
+                deck_factory=(rules.variant.create_deck if rules.variant else None),
             )
 
             game = BlackjackGame(rules, io, shoe)
             players = [
-                Player(name, io, strategy_for[label],
-                       initial_money=initial_bankroll)
+                Player(name, io, strategy_for[label], initial_money=initial_bankroll)
                 for name in player_names
             ]
             for player in players:

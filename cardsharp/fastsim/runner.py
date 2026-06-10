@@ -122,12 +122,18 @@ def run_fast_batch(
     threads: int = 0,
     shuffle_type: str = "perfect",
     shuffle_count=None,
+    conditional_settlement: bool = False,
 ) -> SimulationStats:
     """Run one batch on the Rust core and lift the report into stats.
 
     ``threads`` = 0 uses all cores; the result is bit-identical for a
     given seed regardless of thread count (the core shards the batch
     deterministically and merges in shard order).
+
+    ``conditional_settlement`` records each round's exact expected net
+    over the dealer's draw distribution (Rao-Blackwellization) instead
+    of the realized net: same mean, less variance, tighter CIs for the
+    same number of rounds. Peek rules and non-CSM shoes only.
     """
     table = encode_strategy_table(strategy, rules)
     counting = (
@@ -144,8 +150,55 @@ def run_fast_batch(
         counting=counting,
         shuffle_type=shuffle_type,
         shuffle_count=shuffle_count,
+        conditional_settlement=conditional_settlement,
     )
     return SimulationStats.from_dict(report)
+
+
+def run_fast_paired(
+    rules_a,
+    strategy_a,
+    rules_b,
+    strategy_b,
+    num_rounds: int,
+    seed: int,
+    n_players: int = 1,
+    initial_bankroll: float = 10_000_000,
+    threads: int = 0,
+    conditional_settlement: bool = False,
+):
+    """Common-Random-Numbers comparison of two rule variants on the core.
+
+    Every round both variants play identically shuffled decks, so the
+    paired difference of per-round house edges reflects rule divergence
+    only. Returns (stats_a, stats_b, diff) where diff is a dict with
+    n/mean/M2 of the per-round HE_a - HE_b series. Counting strategies
+    are unsupported (per-round shoe resets destroy the count), matching
+    cardsharp.blackjack.comparison.
+    """
+    if type(strategy_a) is CountingStrategy or type(strategy_b) is CountingStrategy:
+        raise ValueError("CRN comparison does not support counting strategies")
+    report = cardsharp_core.simulate_paired(
+        make_core_rules(rules_a),
+        encode_strategy_table(strategy_a, rules_a),
+        make_core_rules(rules_b),
+        encode_strategy_table(strategy_b, rules_b),
+        num_rounds,
+        seed=seed % (2**64),
+        n_players=n_players,
+        initial_bankroll=initial_bankroll,
+        threads=threads,
+        conditional_settlement=conditional_settlement,
+    )
+    return (
+        SimulationStats.from_dict(report["a"]),
+        SimulationStats.from_dict(report["b"]),
+        {
+            "n": report["diff_n"],
+            "mean": report["diff_mean"],
+            "M2": report["diff_M2"],
+        },
+    )
 
 
 def _run_python_batch(

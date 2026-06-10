@@ -80,6 +80,7 @@ class RoundRecord:
     players: list[PlayerRecord]
     dealer_cards: list[int]
     cards_consumed: int
+    conditional_net: float | None
 
 def simulate_batch(
     rules: Rules,
@@ -93,6 +94,19 @@ def simulate_batch(
     counting: CountingConfig | None = None,
     shuffle_type: str = "perfect",
     shuffle_count: int | None = None,
+    conditional_settlement: bool = False,
+) -> dict: ...
+def simulate_paired(
+    rules_a: Rules,
+    table_a: bytes,
+    rules_b: Rules,
+    table_b: bytes,
+    n_rounds: int,
+    seed: int,
+    n_players: int = 1,
+    initial_bankroll: float = 10_000_000.0,
+    threads: int = 0,
+    conditional_settlement: bool = False,
 ) -> dict: ...
 def play_card_stream(
     rules: Rules,
@@ -103,6 +117,7 @@ def play_card_stream(
     always_insure: bool = False,
     max_rounds: int | None = None,
     counting: CountingConfig | None = None,
+    conditional_settlement: bool = False,
 ) -> list[RoundRecord]: ...
 def trace_shoe(
     num_decks: int,

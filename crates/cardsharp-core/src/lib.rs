@@ -12,6 +12,7 @@ mod counting;
 mod hand;
 mod round;
 mod rules;
+mod settle;
 mod shoe;
 mod sim;
 mod stats;
@@ -38,6 +39,7 @@ fn cardsharp_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(engine_version, m)?)?;
     m.add_function(wrap_pyfunction!(ping, m)?)?;
     m.add_function(wrap_pyfunction!(sim::simulate_batch, m)?)?;
+    m.add_function(wrap_pyfunction!(sim::simulate_paired, m)?)?;
     m.add_function(wrap_pyfunction!(sim::play_card_stream, m)?)?;
     m.add_function(wrap_pyfunction!(sim::trace_shoe, m)?)?;
     m.add_class::<rules::Rules>()?;

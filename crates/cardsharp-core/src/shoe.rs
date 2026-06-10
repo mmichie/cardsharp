@@ -39,6 +39,10 @@ pub trait DealSource {
     /// integration derives decks_remaining and reshuffle detection from
     /// this, so the formula must match the Python shoe's).
     fn cards_remaining(&self) -> usize;
+    /// Exact rank composition of the cards left to deal, in Rank::ALL
+    /// order. Conditional settlement draws the dealer's outcome
+    /// distribution from this.
+    fn remaining_rank_counts(&self) -> [u32; 13];
 }
 
 /// Shuffle procedure, mirroring `Shoe.shuffle_type`.
@@ -355,6 +359,19 @@ impl DealSource for Shoe {
             self.total_cards.saturating_sub(self.next)
         }
     }
+
+    fn remaining_rank_counts(&self) -> [u32; 13] {
+        let mut counts = [0u32; 13];
+        let undealt = if self.options.use_csm {
+            &self.cards[..]
+        } else {
+            &self.cards[self.next..]
+        };
+        for card in undealt {
+            counts[(card.code() - 1) as usize] += 1;
+        }
+        counts
+    }
 }
 
 /// A fixed card sequence injected from Python for parity testing. Never
@@ -388,6 +405,14 @@ impl DealSource for CardStream {
 
     fn cards_remaining(&self) -> usize {
         self.cards.len() - self.next
+    }
+
+    fn remaining_rank_counts(&self) -> [u32; 13] {
+        let mut counts = [0u32; 13];
+        for card in &self.cards[self.next..] {
+            counts[(card.code() - 1) as usize] += 1;
+        }
+        counts
     }
 }
 
