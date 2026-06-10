@@ -49,6 +49,7 @@ from cardsharp.common.io_interface import (
 )
 from cardsharp.blackjack.rules import Rules
 from cardsharp.blackjack.decision_logger import decision_logger
+from cardsharp.fastsim import resolve_engine, run_fast_batch
 from typing import Optional
 
 
@@ -433,6 +434,7 @@ def create_io_interface(args, rules=None):
 def _solver_card_value(card):
     """Convert a Card to the solver's CARD_VALUES integer (Ace=1, T/J/Q/K=10)."""
     from cardsharp.common.card import Rank
+
     if card.rank == Rank.ACE:
         return 1
     return min(card.bj_value, 10)
@@ -450,15 +452,12 @@ def build_deal_ev_table(ev_table, rules):
     control-variate estimator unbiased in the simulator's frame.
     """
     from cardsharp.blackjack.solver.types import (
-        Deck, hand_state_from_cards,
+        Deck,
+        hand_state_from_cards,
     )
     from cardsharp.blackjack.solver.dealer import dealer_blackjack_prob
 
-    deck = (
-        Deck.finite(rules.num_decks)
-        if rules.num_decks <= 8
-        else Deck.infinite()
-    )
+    deck = Deck.finite(rules.num_decks) if rules.num_decks <= 8 else Deck.infinite()
     bj_payout = rules.blackjack_payout
 
     deal_ev = {}
@@ -470,9 +469,7 @@ def build_deal_ev_table(ev_table, rules):
                 if sev is None:
                     continue
                 _, _, disp, _ = hand_state_from_cards(c1, c2)
-                is_player_bj = (
-                    disp == 21 and (c1 == 1 or c2 == 1) and c1 != c2
-                )
+                is_player_bj = disp == 21 and (c1 == 1 or c2 == 1) and c1 != c2
 
                 deck1 = deck.remove_card(c1)
                 deck2 = deck1.remove_card(c2)
@@ -482,9 +479,7 @@ def build_deal_ev_table(ev_table, rules):
                 if is_player_bj:
                     deal_ev[key] = (1.0 - p_dbj) * bj_payout
                 else:
-                    deal_ev[key] = (
-                        p_dbj * (-1.0) + (1.0 - p_dbj) * sev.best_ev
-                    )
+                    deal_ev[key] = p_dbj * (-1.0) + (1.0 - p_dbj) * sev.best_ev
     return deal_ev
 
 
@@ -553,6 +548,7 @@ def play_game(
         # Step the state machine manually so we can capture the deal state
         # AFTER DealingState.handle() runs but before player play mutates it.
         from cardsharp.blackjack.state import STATE_DEALING
+
         while game.current_state.STATE_ID != STATE_END_ROUND:
             prev_state_id = game.current_state.STATE_ID
             game.current_state.handle(game)
@@ -568,14 +564,14 @@ def play_game(
     # Skip rounds with zero initial bet (broke player) so the ratio
     # estimator's denominator stays positive.
     if initial_bets > 0:
-        game.stats.record_round(
-            net_earnings, initial_bets, total_bets, cv_y=deal_y
-        )
+        game.stats.record_round(net_earnings, initial_bets, total_bets, cv_y=deal_y)
 
     if isinstance(strategy, CountingStrategy) and game.shoe:
         # Detect reshuffle: cards_remaining goes UP when shoe reshuffles.
         # cards_before is None when no shoe was passed (first game).
-        reshuffled = cards_before is not None and game.shoe.cards_remaining > cards_before
+        reshuffled = (
+            cards_before is not None and game.shoe.cards_remaining > cards_before
+        )
 
         if reshuffled:
             strategy.reset_count()
@@ -648,7 +644,12 @@ def play_game_batch(
 
     for _ in range(num_games):
         game_earnings, game_bets, game_initial, result, current_shoe = play_game(
-            rules, io_interface, player_names, strategy, shoe, initial_bankroll,
+            rules,
+            io_interface,
+            player_names,
+            strategy,
+            shoe,
+            initial_bankroll,
             ev_table=ev_table,
         )
         shoe = current_shoe
@@ -665,12 +666,14 @@ def run_solver(args, rules):
     from cardsharp.blackjack.solver import solve
 
     mode = args.solver_mode
-    print(f"Solving for: {rules.num_decks}-deck "
-          f"{'H17' if rules.dealer_hit_soft_17 else 'S17'}, "
-          f"{'DAS' if rules.allow_double_after_split else 'no-DAS'}, "
-          f"{'surrender' if rules.allow_surrender else 'no-surrender'}, "
-          f"{'peek' if rules.dealer_peek else 'no-peek'}, "
-          f"double on {rules.double_on}")
+    print(
+        f"Solving for: {rules.num_decks}-deck "
+        f"{'H17' if rules.dealer_hit_soft_17 else 'S17'}, "
+        f"{'DAS' if rules.allow_double_after_split else 'no-DAS'}, "
+        f"{'surrender' if rules.allow_surrender else 'no-surrender'}, "
+        f"{'peek' if rules.dealer_peek else 'no-peek'}, "
+        f"double on {rules.double_on}"
+    )
     deck_mode = "infinite" if rules.num_decks > 8 else f"{rules.num_decks}-deck finite"
     print(f"Mode: {mode} ({deck_mode})\n")
 
@@ -753,16 +756,15 @@ def run_rule_comparison(args, baseline_rules):
         }
     elif args.compare_rules == "surrender_vs_none":
         pair = {
-            "LS": with_override(allow_surrender=True,
-                                allow_late_surrender=True),
-            "no-surr": with_override(allow_surrender=False,
-                                     allow_late_surrender=False,
-                                     allow_early_surrender=False),
+            "LS": with_override(allow_surrender=True, allow_late_surrender=True),
+            "no-surr": with_override(
+                allow_surrender=False,
+                allow_late_surrender=False,
+                allow_early_surrender=False,
+            ),
         }
     else:
-        raise ValueError(
-            f"Unknown comparison: {args.compare_rules}"
-        )
+        raise ValueError(f"Unknown comparison: {args.compare_rules}")
 
     print(f"Comparing: {args.compare_rules}")
     if args.solver_strategy:
@@ -790,7 +792,7 @@ def run_strategy_analysis(args, rules, initial_bankroll: int = 1000):
     from cardsharp.blackjack.solver import solve
     from cardsharp.blackjack.strategy import SolverStrategy
 
-    print(f"Solving rules for the optimal-strategy baseline...")
+    print("Solving rules for the optimal-strategy baseline...")
     sol = solve(rules, mode="auto")
     print(f"  Solver HE = {sol.house_edge * 100:.4f}%")
 
@@ -843,9 +845,7 @@ def run_strategy_analysis(args, rules, initial_bankroll: int = 1000):
                 shoes[strategy_name],
                 initial_bankroll,
             )
-            stats_per_strategy[strategy_name].merge(
-                SimulationStats.from_dict(result)
-            )
+            stats_per_strategy[strategy_name].merge(SimulationStats.from_dict(result))
             running_net[strategy_name] += earnings
 
             if graph:
@@ -973,6 +973,16 @@ def main():
         help="If provided, run the simulations on a single CPU thread instead of multiple.",
     )
     parser.add_argument(
+        "--engine",
+        type=str,
+        choices=["auto", "fast", "python"],
+        default="auto",
+        help="Simulation engine: 'auto' uses the Rust fast core when it is "
+        "installed and supports the requested configuration, 'fast' "
+        "requires it (error otherwise), 'python' forces the reference "
+        "engine (combine with --single_cpu to avoid multiprocessing).",
+    )
+    parser.add_argument(
         "--profile",
         action="store_true",
         help="Run the game with profiling to analyze performance.",
@@ -1018,7 +1028,7 @@ def main():
         choices=["auto", "fast", "exact", "combinatorial"],
         default="auto",
         help="Solver mode: auto (deck-size-aware default), fast (~1s, small bias), "
-             "exact (~1-5min, dynamic dealer probs), combinatorial (~1-10min, matches WoO)",
+        "exact (~1-5min, dynamic dealer probs), combinatorial (~1-10min, matches WoO)",
     )
     parser.add_argument("--min_bet", type=int, default=10, help="Minimum bet amount")
     parser.add_argument("--max_bet", type=int, default=1000, help="Maximum bet amount")
@@ -1233,6 +1243,7 @@ def main():
         cv_mu_y = None
         if args.cv or args.solver_strategy:
             from cardsharp.blackjack.solver import solve
+
             solver_t0 = time.time()
             print("Solving rules...")
             # mode="auto": for ≤4 decks the solver routes to a more accurate
@@ -1250,6 +1261,7 @@ def main():
                 print(f"  CV mu_Y = {cv_mu_y:+.6f}")
             if args.solver_strategy:
                 from cardsharp.blackjack.strategy import SolverStrategy
+
                 strategy = SolverStrategy(sol, use_ev_table=args.cd_strategy)
                 print(
                     "  Using solver-derived strategy table"
@@ -1264,7 +1276,40 @@ def main():
         total_bets = 0
         player_names = generate_player_names(args.num_players)
 
-        if args.single_cpu:
+        # Engine selection: the Rust fast core handles table-encodable
+        # strategies on classic rules; anything it cannot reproduce
+        # exactly falls back to the reference engine (loudly under
+        # --engine fast, silently informative under auto).
+        try:
+            engine_choice = resolve_engine(
+                rules,
+                strategy,
+                requested=args.engine,
+                needs_per_round=bool(args.vis),
+                needs_cv=bool(args.cv),
+                shuffle_type=args.shuffle_type,
+            )
+        except RuntimeError as e:
+            print(f"Error: {e}")
+            return
+        if engine_choice.use_core:
+            print("Engine: Rust fast core (cardsharp-core)")
+        else:
+            print(f"Engine: Python reference ({engine_choice.reason})")
+
+        if engine_choice.use_core:
+            fast_stats = run_fast_batch(
+                rules,
+                strategy,
+                args.num_games,
+                master_seed,
+                n_players=args.num_players,
+                initial_bankroll=args.bankroll,
+            )
+            agg_stats.merge(fast_stats)
+            running_net_earnings = fast_stats.net_sum
+            total_bets = fast_stats.total_bet_sum
+        elif args.single_cpu:
             # Initialize shoe once for single CPU mode
             shoe = Shoe(
                 num_decks=rules.num_decks,
@@ -1299,9 +1344,7 @@ def main():
                 games_per_cpu + (1 if i < remainder else 0) for i in range(cpu_count)
             ]
             # Derive deterministic, independent worker seeds from the master.
-            worker_seeds = [
-                random.randint(0, 2**63 - 1) for _ in range(cpu_count)
-            ]
+            worker_seeds = [random.randint(0, 2**63 - 1) for _ in range(cpu_count)]
 
             with multiprocessing.Pool() as pool:
                 batch_args = [
@@ -1359,9 +1402,7 @@ def main():
 
         # If control variate is enabled, report the CV-adjusted estimate.
         if args.cv:
-            cv = agg_stats.control_variate_he_with_ci(
-                confidence=args.confidence
-            )
+            cv = agg_stats.control_variate_he_with_ci(confidence=args.confidence)
             if cv is not None:
                 print(
                     f"House Edge (CV): {cv['he'] * 100:.4f}% +/- "

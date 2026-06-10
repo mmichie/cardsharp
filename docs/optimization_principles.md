@@ -131,16 +131,23 @@ Simulation mechanics that this chain guards (all have regression tests):
 
 ## Running Performance Benchmarks
 
-### Basic Benchmark (Multiprocessing)
+### Fast Core (default when built)
 ```bash
-# Default simulation uses multiprocessing for ~350,000 games/second
-uv run python cardsharp/blackjack/blackjack.py --simulate --num_games 10000
+# Rust fast core: ~2.7M games/second single-threaded (Apple Silicon, 2026-06).
+# Built with: uv sync --extra fast
+uv run python cardsharp/blackjack/blackjack.py --simulate --num_games 10000000
 ```
 
-### Single-threaded Benchmark
+### Reference Engine (Multiprocessing)
 ```bash
-# Use --single_cpu to disable multiprocessing (~22,000 games/second)
-uv run python cardsharp/blackjack/blackjack.py --simulate --num_games 10000 --single_cpu
+# Pure-Python engine across all cores: ~350,000 games/second
+uv run python cardsharp/blackjack/blackjack.py --simulate --num_games 100000 --engine python
+```
+
+### Reference Engine (Single-threaded)
+```bash
+# Pure-Python engine, one thread: ~50,000 games/second
+uv run python cardsharp/blackjack/blackjack.py --simulate --num_games 100000 --engine python --single_cpu
 ```
 
 ### Performance Profiling

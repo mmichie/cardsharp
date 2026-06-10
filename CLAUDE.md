@@ -103,12 +103,22 @@ CardSharp uses a phased modernization architecture with these key components:
 ### Performance Considerations
 
 When optimizing blackjack simulations:
-- The main simulation loop is in `play_game()` and `play_game_batch()` in `cardsharp/blackjack/blackjack.py`
-- Card dealing happens through the `Shoe` class in `cardsharp/common/shoe.py`
-- Strategy lookups occur in `cardsharp/blackjack/strategy.py`
-- State management overhead in the state transition system
-- Current performance: ~22,000 games/second in simulation mode (single-threaded)
-- The default simulator uses multiprocessing to achieve ~350,000 games/second on multi-core systems
+- Simulation runs on one of two engines, selected by `--engine {auto,fast,python}`:
+  - The Rust fast core (`crates/cardsharp-core`, facade in `cardsharp/fastsim/`) plays
+    table-encodable strategies on classic rules at ~2.7M games/second single-threaded.
+    It is an optional accelerator built with `uv sync --extra fast`.
+  - The pure-Python reference engine (~50,000 games/second single-threaded, ~350,000
+    via multiprocessing) handles everything else: counting/betting strategies, CSM,
+    realistic shuffles, control variates, per-round visualization.
+- `auto` (the default) uses the fast core when it is installed and the configuration
+  is supported, and prints which engine ran and why.
+- In the Python engine: the main loop is `play_game()`/`play_game_batch()` in
+  `cardsharp/blackjack/blackjack.py`, dealing is `Shoe` in `cardsharp/common/shoe.py`,
+  strategy lookups are in `cardsharp/blackjack/strategy.py`; per-round profile in
+  `docs/perf/baseline-single-cpu-2026-06-09.md`
+- The two engines are kept equivalent by a card-stream parity suite
+  (`tests/test_fastsim_core.py`); any change to round semantics must land in both
+  engines with parity proven
 
 **IMPORTANT**: When optimizing performance, never compromise accuracy. See `docs/optimization_principles.md` for guidelines. A fast but inaccurate simulation is worthless.
 
