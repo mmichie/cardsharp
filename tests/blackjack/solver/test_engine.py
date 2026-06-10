@@ -491,18 +491,27 @@ class TestWoOReference:
         pessimistic than LS, not less. Our solver's LS treatment is
         correct and matches the standard rule definition.
 
-        Working hypothesis at session end: WoO's JS calculator likely
-        has a small 1-deck H17 imprecision that does not appear at 2+
-        decks. Possible mechanism: borderline-cell action choice
-        differences (e.g., where our solver surrenders (7,10) vs A at
-        EV -0.5000 because hit/stand are -0.5039+ inferior, WoO may
-        compute slightly different per-cell EVs and choose stand
-        instead). Without their source code we can't verify, but our
-        per-component verification (Stages 1-4 above) strongly suggests
-        we are *more* accurate than WoO at 1-deck H17 rather than less.
-        The gap shrinks to sub-bp at 2+ decks (where we match WoO
-        within rounding) and is comfortably below the 10-bp test
-        tolerance.
+        RESOLVED (2026-06-09, beads-8o8): the gap is a strategy-model
+        difference, not an imprecision on either side. Our solver's
+        best_ev embeds composition-dependent re-optimization of
+        stand-vs-hit at EVERY post-hit card (_ev_hit recurses with the
+        card-by-card depleted deck), i.e. a full-CD optimum that no
+        table-driven player can express. Empirical proof via the
+        physical simulator playing CD first decisions + table
+        continuations on fresh shoes (penetration=0.01, --cd_strategy):
+        across three independent runs (20M, 40M, 12M rounds) it
+        measured +9.7 +/- 4.5, +8.0 +/- 3.2 and +7.1 +/- 3.3 bp above
+        our solver -- statistically indistinguishable from WoO's
+        Optimal (+7.95 bp above our solver for the DAS variant). A
+        12M-round decomposition (tools/deal_ev_diagnostic methodology)
+        attributes the entire gap to per-deal play EV (G1 = +7.0 +/-
+        3.0 bp) with zero deal-mix bias (G2 = +0.1 +/- 1.4 bp).
+        Conclusion: WoO's 1-deck "optimal" number reflects
+        table-achievable play (which our simulator reproduces within
+        ~1 bp); our solver computes a strictly stronger full-CD
+        optimum, sitting ~7 bp below both. At 2+ decks the
+        continuation-CD value collapses to sub-bp, which is why all
+        parties agree there. The 10-bp tolerance stands.
     """
 
     TOLERANCE = 0.0010  # 10 basis points

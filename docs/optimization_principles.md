@@ -102,7 +102,16 @@ The simulator's accuracy is anchored end to end:
    matches the solver's per-round composition model. Measured agreement
    on 2026-06-09 at 20M rounds (`--cd_strategy --cv --penetration 0.01`):
    6-deck H17 within -2.2 bp +/- 4.5 bp.
-4. At real penetrations the simulator's edge sits above the solver value
+4. At 1 deck the fresh-shoe simulator sits ~7 bp above the solver and
+   within ~1 bp of the Wizard of Odds calculator. This is expected:
+   the solver's best_ev re-optimizes stand-vs-hit composition-
+   dependently at every post-hit card, a strictly stronger optimum
+   than any table-driven player (simulator or human) can express. A
+   12M-round decomposition (cardsharp/tools/deal_ev_diagnostic.py
+   methodology) attributes the entire 1-deck gap to this play-EV
+   difference and none to deal distribution. The continuation effect
+   collapses to sub-bp at 2+ decks.
+5. At real penetrations the simulator's edge sits above the solver value
    by the cut-card effect; that is correct behavior, not a bug.
 
 Simulation mechanics that this chain guards (all have regression tests):
