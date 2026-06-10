@@ -55,5 +55,5 @@ jobs:
         cargo clippy --all-targets -- -D warnings
     - name: Build extension
       run: uv sync --extra dev --extra fast
-    - name: Smoke test extension
-      run: uv run pytest tests/test_fastsim_core.py -v
+    - name: Test extension (smoke, runner, parity suite)
+      run: uv run pytest tests/test_fastsim_core.py tests/test_fastsim_runner.py tests/test_fastsim_parity.py -v

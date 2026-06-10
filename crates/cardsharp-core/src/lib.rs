@@ -38,6 +38,7 @@ fn cardsharp_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(ping, m)?)?;
     m.add_function(wrap_pyfunction!(sim::simulate_batch, m)?)?;
     m.add_function(wrap_pyfunction!(sim::play_card_stream, m)?)?;
+    m.add_function(wrap_pyfunction!(sim::trace_shoe, m)?)?;
     m.add_class::<rules::Rules>()?;
     m.add_class::<sim::RoundRecord>()?;
     m.add_class::<sim::PlayerRecord>()?;

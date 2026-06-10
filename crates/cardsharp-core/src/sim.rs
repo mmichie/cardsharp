@@ -157,6 +157,43 @@ pub fn play_card_stream(
     Ok(records)
 }
 
+/// Test support for the parity suite: drive a shoe through rounds of fixed
+/// consumption and report when shuffles happen.
+///
+/// Shuffle timing depends only on card COUNTS (penetration crossings and
+/// exhaustion), never on card values, so these epochs are directly
+/// comparable with the Python shoe's despite the different RNGs. Returns,
+/// per round, the cumulative (shuffles_before_dealing, mid_round_reshuffles
+/// _after_dealing) counters; the construction shuffle is excluded.
+#[pyfunction]
+#[pyo3(signature = (num_decks, penetration, burn_cards, deals_per_round, seed = 0))]
+pub fn trace_shoe(
+    num_decks: u32,
+    penetration: f64,
+    burn_cards: u32,
+    deals_per_round: Vec<u32>,
+    seed: u64,
+) -> PyResult<Vec<(u64, u64)>> {
+    use crate::shoe::DealSource;
+
+    let rng = Xoshiro256PlusPlus::seed_from_u64(seed);
+    let mut shoe = Shoe::new(num_decks, penetration, burn_cards, rng);
+    shoe.reset_counters();
+
+    let mut trace = Vec::with_capacity(deals_per_round.len());
+    for deals in deals_per_round {
+        shoe.begin_round();
+        let shuffles_before = shoe.shuffles;
+        for _ in 0..deals {
+            shoe.deal()
+                .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        }
+        shoe.end_round();
+        trace.push((shuffles_before, shoe.mid_round_reshuffles));
+    }
+    Ok(trace)
+}
+
 fn make_record(result: RoundResult, cards_consumed: u32) -> RoundRecord {
     let players = result
         .players

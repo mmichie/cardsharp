@@ -44,6 +44,12 @@ pub struct Shoe {
     total_cards: usize,
     burn_cards: usize,
     rng: Xoshiro256PlusPlus,
+    /// Cumulative shuffle count (test support: shuffle timing depends only
+    /// on consumption counts, so the parity suite compares these epochs
+    /// against the Python shoe without any RNG coupling).
+    pub shuffles: u64,
+    /// Cumulative count of mid-round discard reshuffles (test support).
+    pub mid_round_reshuffles: u64,
 }
 
 impl Shoe {
@@ -65,12 +71,22 @@ impl Shoe {
             total_cards,
             burn_cards: burn_cards as usize,
             rng,
+            shuffles: 0,
+            mid_round_reshuffles: 0,
         };
         shoe.shuffle();
         shoe
     }
 
+    /// Zero the test-support counters (so traces exclude the construction
+    /// shuffle, matching how the Python harness counts).
+    pub fn reset_counters(&mut self) {
+        self.shuffles = 0;
+        self.mid_round_reshuffles = 0;
+    }
+
     fn shuffle(&mut self) {
+        self.shuffles += 1;
         self.cards.shuffle(&mut self.rng);
         self.next = 0;
         self.round_start = 0;
@@ -86,6 +102,7 @@ impl Shoe {
     /// on the table stay on the table; the discards (everything not dealt
     /// during the current round) are reshuffled and dealing continues.
     fn reshuffle_discards_mid_round(&mut self) -> Result<(), OutOfCards> {
+        self.mid_round_reshuffles += 1;
         let in_play: Vec<Rank> = self.cards[self.round_start..self.next].to_vec();
         let mut pool: Vec<Rank> = Vec::with_capacity(self.cards.len() - in_play.len());
         pool.extend_from_slice(&self.cards[..self.round_start]);
