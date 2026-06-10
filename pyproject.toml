@@ -42,12 +42,16 @@ dev = [
     "pytest-cov>=6.0.0,<8.0.0",
     "pytest-mock>=3.12.0,<4.0.0",
     "pytest-asyncio>=0.25.1,<2.0.0",
+    "pytest-timeout>=2.3.0,<3.0.0",
     "flake8>=7.1.1,<8.0.0",
     "pylint>=3.3.1,<4.0.0",
     "ruff>=0.9.1,<0.15.0",
     "py-spy>=0.3.14,<0.5.0",
 ]
 
+# NOTE: pytest configuration lives in pytest.ini at the repo root, which
+# shadows this section entirely; these values are kept only because some
+# tools read them. Edit pytest.ini for anything pytest should honor.
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
