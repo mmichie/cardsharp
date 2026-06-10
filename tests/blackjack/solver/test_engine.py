@@ -442,22 +442,27 @@ class TestWoOReference:
         resplit-aces=No, hit-split-aces=No, OBO=Yes, surrender=Late,
         blackjack=3:2
 
-    Measured gaps to WoO Optimal at session pull:
-        1d H17: -7.3 bp   1d S17: -1.0 bp
-        2d H17: -0.4 bp
-        6d H17: +0.4 bp   6d S17: -0.5 bp
+    Measured gaps to WoO Optimal (solver - WoO, re-verified 2026-06-09):
+        1d H17: -0.73 bp   1d S17: -1.02 bp
+        2d H17: -0.35 bp
+        6d H17: +0.35 bp   6d S17: +0.25 bp
 
-    Tolerance is set to 10 bp (0.10%) -- comfortable margin above the
-    7-bp 1-deck H17 outlier (see investigation notes below) without
-    flaking on legitimate sub-bp drift. A regression that adds 20+ bp
-    of bias will fail.
+    The solver matches WoO Optimal within ~1 bp at every config. The
+    original 2026-05-12 notes recorded the two 1-deck H17 gaps with a
+    10x units slip ("-7.3 bp" / "-7.95 bp" for what are -0.73 / -0.80
+    bp); the investigation text below is kept for history, but read its
+    "7 bp" as 0.7 bp -- a sub-bp quantity like every other config.
+
+    Tolerance is set to 10 bp (0.10%) -- far above the observed sub-bp
+    gaps without flaking on legitimate drift. A regression that adds
+    a few bp of bias will still fail loudly at 20+ bp.
 
     1-deck H17 gap investigation (2026-05-12 / 13, cardsharp-nl4):
-        The 7-bp gap is reproducible and *specific to 1-deck H17*. Both
-        DAS and no-DAS variants show the same ~7-8 bp gap, ruling out a
+        The gap is reproducible and *specific to 1-deck H17*. Both
+        DAS and no-DAS variants show the same gap, ruling out a
         DAS-specific bug:
-            1d H17 no-DAS LS:  HE 0.12350% (gap -7.3 bp)
-            1d H17 DAS    LS:  HE -0.00848% (gap -7.95 bp)
+            1d H17 no-DAS LS:  HE 0.12350% (gap -0.73 bp)
+            1d H17 DAS    LS:  HE -0.00848% (gap -0.80 bp)
         Combinatorial vs exact mode at 1d H17 no-DAS LS agree within
         3 bp (0.12350% vs 0.12660%); 4 bp of the gap is shared, 3 bp
         lives in combinatorial-vs-exact split-EV-structure differences.
@@ -491,27 +496,37 @@ class TestWoOReference:
         pessimistic than LS, not less. Our solver's LS treatment is
         correct and matches the standard rule definition.
 
-        RESOLVED (2026-06-09, beads-8o8): the gap is a strategy-model
-        difference, not an imprecision on either side. Our solver's
-        best_ev embeds composition-dependent re-optimization of
-        stand-vs-hit at EVERY post-hit card (_ev_hit recurses with the
-        card-by-card depleted deck), i.e. a full-CD optimum that no
-        table-driven player can express. Empirical proof via the
-        physical simulator playing CD first decisions + table
-        continuations on fresh shoes (penetration=0.01, --cd_strategy):
-        across three independent runs (20M, 40M, 12M rounds) it
-        measured +9.7 +/- 4.5, +8.0 +/- 3.2 and +7.1 +/- 3.3 bp above
-        our solver -- statistically indistinguishable from WoO's
-        Optimal (+7.95 bp above our solver for the DAS variant). A
-        12M-round decomposition (tools/deal_ev_diagnostic methodology)
-        attributes the entire gap to per-deal play EV (G1 = +7.0 +/-
-        3.0 bp) with zero deal-mix bias (G2 = +0.1 +/- 1.4 bp).
-        Conclusion: WoO's 1-deck "optimal" number reflects
-        table-achievable play (which our simulator reproduces within
-        ~1 bp); our solver computes a strictly stronger full-CD
-        optimum, sitting ~7 bp below both. At 2+ decks the
-        continuation-CD value collapses to sub-bp, which is why all
-        parties agree there. The 10-bp tolerance stands.
+        RESOLVED (2026-06-09, beads-8o8 / beads-caz): two findings.
+
+        (1) The "7 bp" figure was the units slip noted above: the true
+        solver-vs-WoO gap is sub-bp at every config, 1-deck H17
+        included. A 40M-game-per-config benchmark
+        (cardsharp/tools/woo_benchmark.py: fresh shoe per round, CD
+        first decisions, solver-EV control variate; 95% CI ~ +/-3.1 bp)
+        re-measured everything on 2026-06-09, all values in bp:
+
+            config   WoO      solver   sim(CV)   sim-WoO  sim-solver
+            1d H17   +13.08   +12.35   +18.66     +5.6      +6.3
+            1d S17    -4.63    -5.65    -0.56     +4.1      +5.1
+            2d H17   +48.57   +48.23   +54.57     +6.0      +6.3
+            6d H17   +70.49   +70.84   +74.27     +3.8      +3.4
+            6d S17   +50.62   +50.87   +53.55     +2.9      +2.7
+
+        (2) The SIMULATOR sits above both because best_ev embeds
+        composition-dependent re-optimization at every post-hit card
+        (_ev_hit recurses on the depleted deck) -- a full-CD optimum no
+        table-driven player can express. A 12M-round decomposition
+        attributes the 1-deck simulator residual entirely to this
+        per-deal play-EV term (G1 = +7.0 +/- 3.0 bp) with zero
+        deal-mix bias (G2 = +0.1 +/- 1.4 bp), and the residual shrinks
+        with deck count as continuation composition effects dilute:
+        a 160M-game 6d H17 precision run measured +1.5 +/- 1.6 bp
+        (pooled 6d evidence ~ +1.5 +/- 1.4 bp).
+
+        Conclusion: solver and WoO Optimal agree within ~1 bp on every
+        config -- both compute the full-CD optimum -- and the simulator
+        plays table-achievable strategy, worth ~6 bp less at 1-2 decks
+        and ~1.5 bp less at 6 decks. The 10-bp tolerance stands.
     """
 
     TOLERANCE = 0.0010  # 10 basis points

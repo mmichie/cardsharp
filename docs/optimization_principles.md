@@ -102,15 +102,19 @@ The simulator's accuracy is anchored end to end:
    matches the solver's per-round composition model. Measured agreement
    on 2026-06-09 at 20M rounds (`--cd_strategy --cv --penetration 0.01`):
    6-deck H17 within -2.2 bp +/- 4.5 bp.
-4. At 1 deck the fresh-shoe simulator sits ~7 bp above the solver and
-   within ~1 bp of the Wizard of Odds calculator. This is expected:
-   the solver's best_ev re-optimizes stand-vs-hit composition-
-   dependently at every post-hit card, a strictly stronger optimum
-   than any table-driven player (simulator or human) can express. A
-   12M-round decomposition (cardsharp/tools/deal_ev_diagnostic.py
-   methodology) attributes the entire 1-deck gap to this play-EV
-   difference and none to deal distribution. The continuation effect
-   collapses to sub-bp at 2+ decks.
+4. The solver and the WoO calculator agree within ~1 bp at every
+   pinned config (1d/2d/6d, H17/S17) -- both compute the full
+   composition-dependent optimum. The fresh-shoe simulator sits
+   slightly above both: ~+6 bp at 1-2 decks, ~+1.5 bp at 6 decks
+   (cardsharp/tools/woo_benchmark.py, 40M games per config plus a
+   160M-game 6-deck precision run, 2026-06-09). This is expected,
+   not a defect: the solver's best_ev re-optimizes stand-vs-hit
+   composition-dependently at every post-hit card, a strictly
+   stronger optimum than any table-driven player (simulator or
+   human) can express, and the effect dilutes with deck count. A
+   12M-round decomposition (cardsharp/tools/deal_ev_diagnostic.py)
+   attributes the entire 1-deck residual to this play-EV difference
+   and none to deal distribution.
 5. At real penetrations the simulator's edge sits above the solver value
    by the cut-card effect; that is correct behavior, not a bug.
 

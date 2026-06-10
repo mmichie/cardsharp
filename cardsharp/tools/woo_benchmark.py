@@ -9,12 +9,13 @@ round (penetration=0.01), composition-dependent first decisions
 reports the simulated house edge against both the WoO Optimal value and
 this package's solver.
 
-Interpretation guide (see beads-8o8 and the RESOLVED note in
-TestWoOReference): our solver's best_ev embeds composition-dependent
-re-optimization at every post-hit card, a stronger optimum than any
-table-driven player can express. At 2+ decks that continuation value is
-sub-bp and all three numbers should agree; at 1 deck the simulator is
-expected to land near WoO Optimal, several bp above our solver.
+Interpretation guide (see beads-8o8/beads-caz and the RESOLVED note in
+TestWoOReference): our solver and WoO Optimal agree within ~1 bp at
+every config -- both compute the full composition-dependent optimum,
+including re-optimized stand-vs-hit at every post-hit card. The
+simulator plays table-achievable strategy, so it lands slightly above
+both: ~+6 bp at 1-2 decks, ~+1.5 bp at 6 decks (the achievability gap
+dilutes with deck count).
 
 Example:
     python -m cardsharp.tools.woo_benchmark --num_games 40000000
@@ -169,9 +170,12 @@ def print_report(rows, num_games):
         )
     print("-" * 96)
     print(
-        "Expected: sim-WoO ~ 0 everywhere; sim-solver ~ 0 at 2+ decks and "
-        "positive at 1 deck\n(the solver's full-CD continuation optimum is "
-        "stronger than table-achievable play)."
+        "Expected: solver-WoO within ~1 bp at every config (both are full-CD "
+        "optima). sim-solver is\npositive and shrinks with deck count -- the "
+        "achievability gap between table play and\ncomposition-dependent "
+        "continuations: ~+6 bp at 1-2 decks, ~+1.5 bp at 6 decks "
+        "(2026-06-09\nbaselines: 40M games/config + 160M-game 6d precision "
+        "run)."
     )
 
 
