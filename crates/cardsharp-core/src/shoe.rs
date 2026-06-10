@@ -1,13 +1,16 @@
 //! Deal sources: the simulated multi-deck shoe and the injected card
 //! stream used for parity testing.
 //!
-//! `Shoe` mirrors `cardsharp.common.shoe.Shoe` in non-CSM, perfect-shuffle
-//! mode: the round-aware cut-card contract (`begin_round`/`end_round`), the
-//! between-rounds shuffle, burn cards, and the mid-round
-//! reshuffle-discards-only emergency path. CSM and realistic shuffles are
-//! deliberately out of scope here (beads-9ro.8).
+//! `Shoe` mirrors `cardsharp.common.shoe.Shoe`: the round-aware cut-card
+//! contract (`begin_round`/`end_round`), the between-rounds shuffle, burn
+//! cards, the mid-round reshuffle-discards-only emergency path, the CSM
+//! (continuous shuffling machine) mode, and the realistic shuffle
+//! procedures (GSR riffle, strip). Shuffle realism and CSM card selection
+//! are RNG-bound, so they are validated statistically and by mechanical
+//! invariants rather than by cross-engine stream parity.
 
 use crate::card::Rank;
+use rand::Rng;
 use rand::seq::SliceRandom;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use std::fmt;
@@ -38,15 +41,135 @@ pub trait DealSource {
     fn cards_remaining(&self) -> usize;
 }
 
+/// Shuffle procedure, mirroring `Shoe.shuffle_type`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShuffleStyle {
+    /// Fisher-Yates: cryptographically fair ordering.
+    Perfect,
+    /// Gilbert-Shannon-Reeds riffle: binomial cut, proportional interleave.
+    Riffle,
+    /// Strip shuffle (running cut): 3-15 card packets restacked on top.
+    Strip,
+}
+
+impl ShuffleStyle {
+    pub fn from_name(name: &str) -> Result<Self, String> {
+        match name {
+            "perfect" => Ok(ShuffleStyle::Perfect),
+            "riffle" => Ok(ShuffleStyle::Riffle),
+            "strip" => Ok(ShuffleStyle::Strip),
+            other => Err(format!(
+                "shuffle_type must be 'perfect', 'riffle', or 'strip', got '{other}'"
+            )),
+        }
+    }
+
+    /// Default pass count per shuffle, mirroring the Python defaults
+    /// (one perfect pass; four dealer riffles; six strips).
+    fn default_count(self) -> u32 {
+        match self {
+            ShuffleStyle::Perfect => 1,
+            ShuffleStyle::Riffle => 4,
+            ShuffleStyle::Strip => 6,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ShoeOptions {
+    pub num_decks: u32,
+    pub penetration: f64,
+    pub burn_cards: u32,
+    pub use_csm: bool,
+    pub shuffle_style: ShuffleStyle,
+    pub shuffle_count: Option<u32>,
+}
+
+impl ShoeOptions {
+    /// Standard cut-card shoe with a perfect shuffle.
+    pub fn classic(num_decks: u32, penetration: f64, burn_cards: u32) -> Self {
+        ShoeOptions {
+            num_decks,
+            penetration,
+            burn_cards,
+            use_csm: false,
+            shuffle_style: ShuffleStyle::Perfect,
+            shuffle_count: None,
+        }
+    }
+}
+
+/// One GSR (Gilbert-Shannon-Reeds) riffle pass, mirroring
+/// `Shoe._gsr_riffle_shuffle`: the cut point is Binomial(n, 1/2) and
+/// cards drop from each half with probability proportional to the
+/// half's remaining size.
+fn gsr_riffle(cards: Vec<Rank>, rng: &mut Xoshiro256PlusPlus) -> Vec<Rank> {
+    let n = cards.len();
+    if n <= 1 {
+        return cards;
+    }
+    let mut cut_point = 0usize;
+    for _ in 0..n {
+        if rng.random::<f64>() < 0.5 {
+            cut_point += 1;
+        }
+    }
+    let (left, right) = cards.split_at(cut_point);
+    let mut result = Vec::with_capacity(n);
+    let (mut li, mut ri) = (0usize, 0usize);
+    while li < left.len() || ri < right.len() {
+        let left_remaining = left.len() - li;
+        let right_remaining = right.len() - ri;
+        if left_remaining == 0 {
+            result.extend_from_slice(&right[ri..]);
+            break;
+        }
+        if right_remaining == 0 {
+            result.extend_from_slice(&left[li..]);
+            break;
+        }
+        let p_left = left_remaining as f64 / (left_remaining + right_remaining) as f64;
+        if rng.random::<f64>() < p_left {
+            result.push(left[li]);
+            li += 1;
+        } else {
+            result.push(right[ri]);
+            ri += 1;
+        }
+    }
+    result
+}
+
+/// One strip-shuffle pass, mirroring `Shoe._strip_shuffle`: packets of
+/// 3-15 cards are taken from the top and dropped on top of the result.
+fn strip_shuffle(cards: Vec<Rank>, rng: &mut Xoshiro256PlusPlus) -> Vec<Rank> {
+    let n = cards.len();
+    if n <= 1 {
+        return cards;
+    }
+    let mut result: Vec<Rank> = Vec::with_capacity(n);
+    let mut taken = 0usize;
+    while taken < n {
+        let packet_size = (rng.random_range(3..=15usize)).min(n - taken);
+        // Drop the packet on top of the result (prepend).
+        result.splice(0..0, cards[taken..taken + packet_size].iter().copied());
+        taken += packet_size;
+    }
+    result
+}
+
 pub struct Shoe {
     cards: Vec<Rank>,
+    /// Used cards awaiting return to the machine (CSM mode only).
+    discards: Vec<Rank>,
     next: usize,
     round_start: usize,
     in_round: bool,
     cut_card_reached: bool,
     reshuffle_point: usize,
     total_cards: usize,
-    burn_cards: usize,
+    options: ShoeOptions,
+    shuffle_passes: u32,
     rng: Xoshiro256PlusPlus,
     /// Cumulative shuffle count (test support: shuffle timing depends only
     /// on consumption counts, so the parity suite compares these epochs
@@ -57,23 +180,28 @@ pub struct Shoe {
 }
 
 impl Shoe {
-    pub fn new(num_decks: u32, penetration: f64, burn_cards: u32, rng: Xoshiro256PlusPlus) -> Self {
-        let mut cards = Vec::with_capacity(52 * num_decks as usize);
-        for _ in 0..num_decks {
+    pub fn new(options: ShoeOptions, rng: Xoshiro256PlusPlus) -> Self {
+        let mut cards = Vec::with_capacity(52 * options.num_decks as usize);
+        for _ in 0..options.num_decks {
             for _ in 0..4 {
                 cards.extend_from_slice(&Rank::ALL);
             }
         }
         let total_cards = cards.len();
+        let shuffle_passes = options
+            .shuffle_count
+            .unwrap_or_else(|| options.shuffle_style.default_count());
         let mut shoe = Shoe {
             cards,
+            discards: Vec::new(),
             next: 0,
             round_start: 0,
             in_round: false,
             cut_card_reached: false,
-            reshuffle_point: (total_cards as f64 * penetration) as usize,
+            reshuffle_point: (total_cards as f64 * options.penetration) as usize,
             total_cards,
-            burn_cards: burn_cards as usize,
+            options,
+            shuffle_passes,
             rng,
             shuffles: 0,
             mid_round_reshuffles: 0,
@@ -89,14 +217,36 @@ impl Shoe {
         self.mid_round_reshuffles = 0;
     }
 
+    /// Apply the configured shuffle procedure, mirroring `_shuffle_cards`.
+    fn run_shuffle_procedure(&mut self) {
+        match self.options.shuffle_style {
+            ShuffleStyle::Perfect => self.cards.shuffle(&mut self.rng),
+            ShuffleStyle::Riffle => {
+                for _ in 0..self.shuffle_passes {
+                    let cards = std::mem::take(&mut self.cards);
+                    self.cards = gsr_riffle(cards, &mut self.rng);
+                }
+            }
+            ShuffleStyle::Strip => {
+                for _ in 0..self.shuffle_passes {
+                    let cards = std::mem::take(&mut self.cards);
+                    self.cards = strip_shuffle(cards, &mut self.rng);
+                }
+            }
+        }
+    }
+
     fn shuffle(&mut self) {
         self.shuffles += 1;
-        self.cards.shuffle(&mut self.rng);
+        if self.options.use_csm && !self.discards.is_empty() {
+            self.cards.append(&mut self.discards);
+        }
+        self.run_shuffle_procedure();
         self.next = 0;
         self.round_start = 0;
         self.cut_card_reached = false;
-        if self.burn_cards > 0 {
-            let to_burn = self.burn_cards.min(self.cards.len());
+        if self.options.burn_cards > 0 && !self.options.use_csm {
+            let to_burn = (self.options.burn_cards as usize).min(self.cards.len());
             self.next += to_burn;
             self.round_start = self.next;
         }
@@ -114,7 +264,11 @@ impl Shoe {
         if pool.is_empty() {
             return Err(OutOfCards);
         }
-        pool.shuffle(&mut self.rng);
+        // The pool is reshuffled with the configured procedure, as
+        // `_reshuffle_discards_mid_round` delegates to `_shuffle_cards`.
+        self.cards = pool;
+        self.run_shuffle_procedure();
+        let pool = std::mem::take(&mut self.cards);
         self.next = in_play.len();
         self.round_start = 0;
         self.cut_card_reached = false;
@@ -123,11 +277,45 @@ impl Shoe {
         self.cards = cards;
         Ok(())
     }
+
+    /// CSM single-card deal, mirroring the Python CSM fast path: uniform
+    /// pick, swap-remove, immediate discard, and the partial refill when
+    /// the machine runs low (which uses a PERFECT shuffle regardless of
+    /// shuffle style, as the reference does).
+    fn deal_csm(&mut self) -> Result<Rank, OutOfCards> {
+        let mut cards_len = self.cards.len();
+        if cards_len < 1 {
+            if self.discards.is_empty() {
+                return Err(OutOfCards);
+            }
+            self.cards.append(&mut self.discards);
+            self.cards.shuffle(&mut self.rng);
+            cards_len = self.cards.len();
+        }
+
+        let card_index = self.rng.random_range(0..cards_len);
+        let card = self.cards[card_index];
+        self.cards[card_index] = self.cards[cards_len - 1];
+        self.cards.pop();
+        self.discards.push(card);
+
+        // Refill check uses the PRE-deal length, as the reference does.
+        if (cards_len as f64) < self.total_cards as f64 * 0.2
+            && (self.discards.len() as f64) > self.total_cards as f64 * 0.4
+        {
+            let num_to_return = self.discards.len() / 2;
+            let returned: Vec<Rank> = self.discards.drain(..num_to_return).collect();
+            self.cards.extend_from_slice(&returned);
+            self.cards.shuffle(&mut self.rng);
+        }
+
+        Ok(card)
+    }
 }
 
 impl DealSource for Shoe {
     fn begin_round(&mut self) {
-        if self.cut_card_reached || self.next >= self.reshuffle_point {
+        if !self.options.use_csm && (self.cut_card_reached || self.next >= self.reshuffle_point) {
             self.shuffle();
         }
         self.in_round = true;
@@ -139,6 +327,9 @@ impl DealSource for Shoe {
     }
 
     fn deal(&mut self) -> Result<Rank, OutOfCards> {
+        if self.options.use_csm {
+            return self.deal_csm();
+        }
         if self.in_round {
             if self.next >= self.cards.len() {
                 self.reshuffle_discards_mid_round()?;
@@ -158,7 +349,11 @@ impl DealSource for Shoe {
     }
 
     fn cards_remaining(&self) -> usize {
-        self.total_cards.saturating_sub(self.next)
+        if self.options.use_csm {
+            self.cards.len()
+        } else {
+            self.total_cards.saturating_sub(self.next)
+        }
     }
 }
 
@@ -200,14 +395,21 @@ impl DealSource for CardStream {
 mod tests {
     use super::*;
     use rand::SeedableRng;
+    use std::collections::HashMap;
 
     fn shoe(num_decks: u32, penetration: f64) -> Shoe {
         Shoe::new(
-            num_decks,
-            penetration,
-            0,
+            ShoeOptions::classic(num_decks, penetration, 0),
             Xoshiro256PlusPlus::seed_from_u64(7),
         )
+    }
+
+    fn rank_counts(cards: &[Rank]) -> HashMap<u8, usize> {
+        let mut counts = HashMap::new();
+        for card in cards {
+            *counts.entry(card.code()).or_insert(0) += 1;
+        }
+        counts
     }
 
     #[test]
@@ -222,8 +424,6 @@ mod tests {
     fn cut_card_does_not_interrupt_a_round() {
         let mut s = shoe(1, 0.5);
         s.begin_round();
-        // Deal through the cut card within one round: no shuffle may occur,
-        // so all 52 cards remain dealable in order.
         let mut seen = Vec::new();
         for _ in 0..40 {
             seen.push(s.deal().unwrap());
@@ -231,7 +431,6 @@ mod tests {
         assert!(s.cut_card_reached);
         assert_eq!(seen.len(), 40);
         s.end_round();
-        // Next round begins with a shuffle.
         s.begin_round();
         assert_eq!(s.next, 0);
         assert!(!s.cut_card_reached);
@@ -245,13 +444,10 @@ mod tests {
             s.deal().unwrap();
         }
         s.end_round();
-        // 2 cards remain; the next round needs more than that.
         s.begin_round();
         for _ in 0..10 {
             s.deal().unwrap();
         }
-        // The round survived by recycling discards; cards dealt this round
-        // were preserved at the front.
         assert_eq!(s.round_start, 0);
         assert!(s.next >= 10);
     }
@@ -263,5 +459,75 @@ mod tests {
         assert!(stream.deal().is_ok());
         assert!(stream.deal().is_err());
         assert_eq!(stream.consumed(), 2);
+    }
+
+    #[test]
+    fn riffle_and_strip_preserve_the_composition() {
+        for style in [ShuffleStyle::Riffle, ShuffleStyle::Strip] {
+            let mut options = ShoeOptions::classic(2, 0.75, 0);
+            options.shuffle_style = style;
+            let s = Shoe::new(options, Xoshiro256PlusPlus::seed_from_u64(11));
+            assert_eq!(s.cards.len(), 104);
+            let counts = rank_counts(&s.cards);
+            assert!(counts.values().all(|&n| n == 8), "{style:?} lost cards");
+        }
+    }
+
+    #[test]
+    fn shuffles_are_deterministic_per_seed() {
+        for style in [
+            ShuffleStyle::Perfect,
+            ShuffleStyle::Riffle,
+            ShuffleStyle::Strip,
+        ] {
+            let mut options = ShoeOptions::classic(1, 0.9, 0);
+            options.shuffle_style = style;
+            let a = Shoe::new(options.clone(), Xoshiro256PlusPlus::seed_from_u64(3));
+            let b = Shoe::new(options, Xoshiro256PlusPlus::seed_from_u64(3));
+            assert_eq!(a.cards, b.cards);
+        }
+    }
+
+    #[test]
+    fn csm_conserves_the_composition_across_heavy_dealing() {
+        let mut options = ShoeOptions::classic(2, 0.75, 0);
+        options.use_csm = true;
+        let mut s = Shoe::new(options, Xoshiro256PlusPlus::seed_from_u64(5));
+        let mut dealt_high = 0usize;
+        for _ in 0..5_000 {
+            s.begin_round();
+            for _ in 0..6 {
+                if s.deal().unwrap().bj_value() >= 10 {
+                    dealt_high += 1;
+                }
+            }
+            s.end_round();
+        }
+        // Machine + discards always hold the full two decks.
+        let mut all: Vec<Rank> = s.cards.clone();
+        all.extend_from_slice(&s.discards);
+        assert_eq!(all.len(), 104);
+        let counts = rank_counts(&all);
+        assert!(counts.values().all(|&n| n == 8));
+        // Sanity: ten-class frequency over 30k cards is near 5/13.
+        let high_rate = dealt_high as f64 / 30_000.0;
+        assert!((high_rate - 5.0 / 13.0).abs() < 0.02, "rate {high_rate}");
+    }
+
+    #[test]
+    fn csm_never_shuffles_at_round_boundaries() {
+        let mut options = ShoeOptions::classic(1, 0.1, 0);
+        options.use_csm = true;
+        let mut s = Shoe::new(options, Xoshiro256PlusPlus::seed_from_u64(9));
+        s.reset_counters();
+        for _ in 0..50 {
+            s.begin_round();
+            for _ in 0..5 {
+                s.deal().unwrap();
+            }
+            s.end_round();
+        }
+        assert_eq!(s.shuffles, 0); // refills are inline, not shuffle() calls
+        assert!(!s.cut_card_reached);
     }
 }

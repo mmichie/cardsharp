@@ -105,14 +105,16 @@ CardSharp uses a phased modernization architecture with these key components:
 When optimizing blackjack simulations:
 - Simulation runs on one of two engines, selected by `--engine {auto,fast,python}`:
   - The Rust fast core (`crates/cardsharp-core`, facade in `cardsharp/fastsim/`) plays
-    table-encodable strategies (basic, solver tables) and Hi-Lo counting (bet ramp,
-    Illustrious 18 deviations, TC-based insurance) on classic rules at ~2.9M
-    games/second on one thread and ~25-30M games/second across all cores
-    (Rayon-sharded; results are bit-identical for a given seed regardless of thread
-    count). It is an optional accelerator built with `uv sync --extra fast`.
+    table-encodable strategies (basic, solver tables), Hi-Lo counting (bet ramp,
+    Illustrious 18 deviations, TC-based insurance), CSM shoes, and realistic shuffles
+    (GSR riffle, strip) on classic rules at ~2.9M games/second on one thread and
+    ~15-30M games/second across all cores depending on shoe mode (Rayon-sharded;
+    results are bit-identical for a given seed regardless of thread count). It is an
+    optional accelerator built with `uv sync --extra fast`.
   - The pure-Python reference engine (~50,000 games/second single-threaded, ~350,000
     via multiprocessing) handles everything else: bet-progression and custom
-    strategies, CSM, realistic shuffles, control variates, per-round visualization.
+    strategies, non-classic variants, control variates, per-round visualization,
+    and interactive play.
 - `auto` (the default) uses the fast core when it is installed and the configuration
   is supported, and prints which engine ran and why.
 - In the Python engine: the main loop is `play_game()`/`play_game_batch()` in

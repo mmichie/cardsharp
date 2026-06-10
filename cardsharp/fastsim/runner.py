@@ -100,10 +100,8 @@ def resolve_engine(
         blockers.append(f"strategy {type(strategy).__name__} is not table-encodable")
     if getattr(rules, "variant_name", "classic") != "classic":
         blockers.append(f"variant '{rules.variant_name}' not supported yet")
-    if rules.is_using_csm():
-        blockers.append("CSM shoes not supported yet")
-    if shuffle_type != "perfect":
-        blockers.append(f"shuffle_type '{shuffle_type}' not supported yet")
+    if shuffle_type not in ("perfect", "riffle", "strip"):
+        blockers.append(f"unknown shuffle_type '{shuffle_type}'")
 
     if not blockers:
         return EngineChoice(True, "all features supported by the fast core")
@@ -122,6 +120,8 @@ def run_fast_batch(
     n_players: int = 1,
     initial_bankroll: float = 1000,
     threads: int = 0,
+    shuffle_type: str = "perfect",
+    shuffle_count=None,
 ) -> SimulationStats:
     """Run one batch on the Rust core and lift the report into stats.
 
@@ -142,6 +142,8 @@ def run_fast_batch(
         initial_bankroll=initial_bankroll,
         threads=threads,
         counting=counting,
+        shuffle_type=shuffle_type,
+        shuffle_count=shuffle_count,
     )
     return SimulationStats.from_dict(report)
 
@@ -214,7 +216,15 @@ def simulate(
     start = time.perf_counter()
     if choice.use_core:
         stats = run_fast_batch(
-            rules, strategy, num_rounds, seed, n_players, initial_bankroll, threads
+            rules,
+            strategy,
+            num_rounds,
+            seed,
+            n_players,
+            initial_bankroll,
+            threads,
+            shuffle_type,
+            shuffle_count,
         )
         engine_used = "fast"
     else:

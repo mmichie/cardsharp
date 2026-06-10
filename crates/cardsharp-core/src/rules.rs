@@ -82,6 +82,8 @@ pub struct Rules {
     pub hit_split_aces: bool,
     #[pyo3(get)]
     pub allow_obo: bool,
+    #[pyo3(get)]
+    pub use_csm: bool,
     pub double_on: DoubleOn,
 }
 
@@ -111,6 +113,7 @@ impl Rules {
         resplit_aces = false,
         hit_split_aces = false,
         allow_obo = true,
+        use_csm = false,
         double_on = "any",
     ))]
     fn new(
@@ -135,6 +138,7 @@ impl Rules {
         resplit_aces: bool,
         hit_split_aces: bool,
         allow_obo: bool,
+        use_csm: bool,
         double_on: &str,
     ) -> PyResult<Self> {
         if num_decks < 1 {
@@ -165,6 +169,7 @@ impl Rules {
             resplit_aces,
             hit_split_aces,
             allow_obo,
+            use_csm,
             double_on: DoubleOn::parse(double_on)?,
         })
     }

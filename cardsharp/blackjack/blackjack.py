@@ -1308,6 +1308,8 @@ def main():
                 master_seed,
                 n_players=args.num_players,
                 initial_bankroll=args.bankroll,
+                shuffle_type=args.shuffle_type,
+                shuffle_count=args.shuffle_count,
             )
             agg_stats.merge(fast_stats)
             running_net_earnings = fast_stats.net_sum

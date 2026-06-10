@@ -314,6 +314,50 @@ def test_counting_house_edge_beats_flat_basic():
     assert -0.04 < he < 0.004, f"counting house edge {he:.4%} outside expected band"
 
 
+def test_csm_house_edge_matches_fresh_shoe_band():
+    """A CSM continuously recycles discards, so there is no cut-card
+    effect: its house edge must sit at the fresh-shoe value. Loose
+    multi-sigma band; the CSM mechanics themselves are unit-tested in
+    the crate (composition conservation, refill thresholds)."""
+    fresh = make_rules(penetration=0.01)
+    csm = make_rules(use_csm=True)
+    table = encode_strategy_table(BasicStrategy(), fresh)
+    a = SimulationStats.from_dict(
+        cardsharp_core.simulate_batch(make_core_rules(fresh), table, 2_000_000, seed=31)
+    )
+    b = SimulationStats.from_dict(
+        cardsharp_core.simulate_batch(make_core_rules(csm), table, 2_000_000, seed=32)
+    )
+    he_fresh = -a.net_sum / a.bet_sum
+    he_csm = -b.net_sum / b.bet_sum
+    assert (
+        abs(he_fresh - he_csm) < 0.0035
+    ), f"CSM HE {he_csm:.4%} vs fresh-shoe HE {he_fresh:.4%}"
+
+
+def test_realistic_shuffles_house_edge_matches_perfect_band():
+    """Four GSR riffles (or six strips) are not perfectly random, but for
+    a fixed table strategy the EV effect is far below this resolution:
+    a material gap means the shuffle implementation is broken."""
+    rules = make_rules()
+    table = encode_strategy_table(BasicStrategy(), rules)
+    core_rules = make_core_rules(rules)
+    perfect = SimulationStats.from_dict(
+        cardsharp_core.simulate_batch(core_rules, table, 2_000_000, seed=41)
+    )
+    he_perfect = -perfect.net_sum / perfect.bet_sum
+    for shuffle_type in ("riffle", "strip"):
+        s = SimulationStats.from_dict(
+            cardsharp_core.simulate_batch(
+                core_rules, table, 2_000_000, seed=42, shuffle_type=shuffle_type
+            )
+        )
+        he = -s.net_sum / s.bet_sum
+        assert (
+            abs(he - he_perfect) < 0.0035
+        ), f"{shuffle_type} HE {he:.4%} vs perfect {he_perfect:.4%}"
+
+
 def test_simulate_batch_house_edge_in_plausible_band():
     """Loose 4-sigma guard against gross engine breakage (the tight
     statistical gate is beads-9ro.6)."""

@@ -4,7 +4,7 @@ use crate::card::Rank;
 use crate::counting::{Counter, CountingConfig};
 use crate::round::{RoundConfig, RoundResult, play_round};
 use crate::rules::Rules;
-use crate::shoe::{CardStream, DealSource, Shoe};
+use crate::shoe::{CardStream, DealSource, Shoe, ShoeOptions, ShuffleStyle};
 use crate::stats::SimStats;
 use crate::strategy::StrategyTable;
 use pyo3::exceptions::PyValueError;
@@ -47,11 +47,12 @@ fn run_shard(
     table: &StrategyTable,
     cfg: &RoundConfig,
     counting: Option<&CountingConfig>,
+    shoe_options: &ShoeOptions,
     rounds: u64,
     shard_seed: u64,
 ) -> Result<SimStats, crate::shoe::OutOfCards> {
     let rng = Xoshiro256PlusPlus::seed_from_u64(shard_seed);
-    let mut shoe = Shoe::new(rules.num_decks, rules.penetration, rules.burn_cards, rng);
+    let mut shoe = Shoe::new(shoe_options.clone(), rng);
     let mut stats = SimStats::new();
     // The count is per-shard, matching the per-worker count of the old
     // multiprocess Python runs (each shard starts a fresh shoe anyway).
@@ -75,7 +76,7 @@ fn run_shard(
 /// results for a given seed (shards are self-contained and merged in
 /// shard order). The GIL is released for the duration of the simulation.
 #[pyfunction]
-#[pyo3(signature = (rules, table, n_rounds, seed, n_players = 1, initial_bankroll = 1000.0, always_insure = false, threads = 0, counting = None))]
+#[pyo3(signature = (rules, table, n_rounds, seed, n_players = 1, initial_bankroll = 1000.0, always_insure = false, threads = 0, counting = None, shuffle_type = "perfect", shuffle_count = None))]
 #[allow(clippy::too_many_arguments)]
 pub fn simulate_batch<'py>(
     py: Python<'py>,
@@ -88,6 +89,8 @@ pub fn simulate_batch<'py>(
     always_insure: bool,
     threads: usize,
     counting: Option<PyRef<'py, CountingConfig>>,
+    shuffle_type: &str,
+    shuffle_count: Option<u32>,
 ) -> PyResult<Bound<'py, PyDict>> {
     if n_players < 1 {
         return Err(PyValueError::new_err("n_players must be at least 1"));
@@ -95,6 +98,14 @@ pub fn simulate_batch<'py>(
     let table = parse_table(table)?;
     let rules: Rules = rules.clone();
     let counting: Option<CountingConfig> = counting.map(|c| c.clone());
+    let shoe_options = ShoeOptions {
+        num_decks: rules.num_decks,
+        penetration: rules.penetration,
+        burn_cards: rules.burn_cards,
+        use_csm: rules.use_csm,
+        shuffle_style: ShuffleStyle::from_name(shuffle_type).map_err(PyValueError::new_err)?,
+        shuffle_count,
+    };
     let cfg = RoundConfig {
         n_players,
         initial_bankroll,
@@ -127,6 +138,7 @@ pub fn simulate_batch<'py>(
                             &table,
                             &cfg,
                             counting.as_ref(),
+                            &shoe_options,
                             *rounds,
                             *shard_seed,
                         )
@@ -273,10 +285,11 @@ pub fn trace_shoe(
     deals_per_round: Vec<u32>,
     seed: u64,
 ) -> PyResult<Vec<(u64, u64)>> {
-    use crate::shoe::DealSource;
-
     let rng = Xoshiro256PlusPlus::seed_from_u64(seed);
-    let mut shoe = Shoe::new(num_decks, penetration, burn_cards, rng);
+    let mut shoe = Shoe::new(
+        ShoeOptions::classic(num_decks, penetration, burn_cards),
+        rng,
+    );
     shoe.reset_counters();
 
     let mut trace = Vec::with_capacity(deals_per_round.len());

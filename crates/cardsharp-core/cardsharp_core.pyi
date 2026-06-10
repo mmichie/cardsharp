@@ -27,6 +27,7 @@ class Rules:
     resplit_aces: bool
     hit_split_aces: bool
     allow_obo: bool
+    use_csm: bool
     double_on: str
 
     def __init__(
@@ -52,6 +53,7 @@ class Rules:
         resplit_aces: bool = False,
         hit_split_aces: bool = False,
         allow_obo: bool = True,
+        use_csm: bool = False,
         double_on: str = "any",
     ) -> None: ...
 
@@ -89,6 +91,8 @@ def simulate_batch(
     always_insure: bool = False,
     threads: int = 0,
     counting: CountingConfig | None = None,
+    shuffle_type: str = "perfect",
+    shuffle_count: int | None = None,
 ) -> dict: ...
 def play_card_stream(
     rules: Rules,

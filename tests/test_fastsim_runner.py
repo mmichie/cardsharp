@@ -79,11 +79,11 @@ CORE_MAPPED = {
     "resplit_aces",
     "hit_split_aces",
     "allow_obo",
+    "use_csm",
     "double_on",
 }
 
 CORE_REFUSED = {
-    "use_csm",  # rules_kwargs raises; resolve_engine falls back
     "variant",  # classic only; rules_kwargs raises otherwise
 }
 
@@ -153,11 +153,16 @@ def test_cv_and_vis_force_the_reference_engine():
     assert not resolve_engine(rules, strategy, needs_per_round=True).use_core
 
 
-def test_csm_and_realistic_shuffles_force_the_reference_engine():
-    assert not resolve_engine(make_rules(use_csm=True), BasicStrategy()).use_core
-    assert not resolve_engine(
-        make_rules(), BasicStrategy(), shuffle_type="riffle"
-    ).use_core
+@needs_core
+def test_csm_and_realistic_shuffles_run_on_the_core():
+    assert resolve_engine(make_rules(use_csm=True), BasicStrategy()).use_core
+    assert resolve_engine(make_rules(), BasicStrategy(), shuffle_type="riffle").use_core
+
+
+def test_unknown_shuffle_type_falls_back():
+    choice = resolve_engine(make_rules(), BasicStrategy(), shuffle_type="wash")
+    assert not choice.use_core
+    assert "unknown shuffle_type" in choice.reason
 
 
 def test_requested_fast_raises_with_blockers():

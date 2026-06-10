@@ -65,16 +65,15 @@ def encode_strategy_table(strategy, rules=None) -> bytes:
 def rules_kwargs(rules) -> dict:
     """Map a cardsharp Rules object onto cardsharp_core.Rules arguments.
 
-    The core implements the classic variant only; CSM shoes and other
-    variants stay on the pure-Python engine until beads-9ro.8.
+    The core implements the classic variant only; other variants stay on
+    the pure-Python engine (they need their own validators and payout
+    calculators, not just deck composition).
     """
     if getattr(rules, "variant_name", "classic") != "classic":
         raise ValueError(
             f"cardsharp_core supports the classic variant only, got "
             f"'{rules.variant_name}'"
         )
-    if rules.is_using_csm():
-        raise ValueError("cardsharp_core does not support CSM shoes yet")
 
     return {
         "blackjack_payout": rules.blackjack_payout,
@@ -98,6 +97,7 @@ def rules_kwargs(rules) -> dict:
         "resplit_aces": rules.resplit_aces,
         "hit_split_aces": rules.hit_split_aces,
         "allow_obo": getattr(rules, "allow_obo", True),
+        "use_csm": rules.is_using_csm(),
         "double_on": rules.double_on,
     }
 
