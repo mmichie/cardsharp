@@ -1,0 +1,3 @@
+{"header":{"always_insure":false,"bankroll":1000.0,"cards_per_stream":null,"conditional_settlement":false,"config":"crafted-split-aces","counting":false,"n_players":1,"n_streams":1,"rules":{"allow_resplitting":true,"resplit_aces":true},"seed":null,"weights":null}}
+{"cards":[1,9,1,8,1,10,10],"stream":0}
+{"record":{"conditional_net":null,"consumed":6,"dealer":[9,8],"players":[{"actions":[["split"],[]],"bets":[10.0,0.0],"blackjack":false,"hands":[[1,1],[1,10]],"initial_bet":10.0,"money":1000.0,"net":0.0,"original_bets":[10.0,10.0],"total_bet":20.0,"winners":["dealer","player"]}]},"round":0,"stream":0}

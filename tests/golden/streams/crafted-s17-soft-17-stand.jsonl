@@ -1,0 +1,3 @@
+{"header":{"always_insure":false,"bankroll":1000.0,"cards_per_stream":null,"conditional_settlement":false,"config":"crafted-s17-soft-17-stand","counting":false,"n_players":1,"n_streams":1,"rules":{"dealer_hit_soft_17":false},"seed":null,"weights":null}}
+{"cards":[10,1,10,6,4,9],"stream":0}
+{"record":{"conditional_net":null,"consumed":4,"dealer":[1,6],"players":[{"actions":[["stand"]],"bets":[0.0],"blackjack":false,"hands":[[10,10]],"initial_bet":10.0,"money":1010.0,"net":10.0,"original_bets":[10.0],"total_bet":10.0,"winners":["player"]}]},"round":0,"stream":0}

@@ -1,0 +1,5 @@
+{"header":{"always_insure":false,"bankroll":1000.0,"cards_per_stream":null,"conditional_settlement":false,"config":"crafted-bet-ramp","counting":true,"n_players":1,"n_streams":1,"rules":{},"seed":null,"weights":null}}
+{"cards":[2,3,4,5,6,2,3,4,5,6,2,3,4,5,6,2,3,4,5,6,10,10,10,10,10,10],"stream":0}
+{"record":{"conditional_net":null,"consumed":9,"dealer":[3,5,3,4,5],"players":[{"actions":[["hit","hit","stand"]],"bets":[10.0],"blackjack":false,"hands":[[2,4,6,2]],"initial_bet":10.0,"money":990.0,"net":-10.0,"original_bets":[10.0],"total_bet":10.0,"winners":["dealer"]}]},"round":0,"stream":0}
+{"record":{"conditional_net":null,"consumed":8,"dealer":[2,4,6,2,3],"players":[{"actions":[["double"]],"bets":[400.0],"blackjack":false,"hands":[[6,3,5]],"initial_bet":200.0,"money":600.0,"net":-400.0,"original_bets":[200.0],"total_bet":400.0,"winners":["dealer"]}]},"round":1,"stream":0}
+{"record":{"conditional_net":null,"consumed":6,"dealer":[5,10,10],"players":[{"actions":[["double"]],"bets":[0.0],"blackjack":false,"hands":[[4,6,10]],"initial_bet":200.0,"money":1400.0,"net":400.0,"original_bets":[200.0],"total_bet":400.0,"winners":["player"]}]},"round":2,"stream":0}

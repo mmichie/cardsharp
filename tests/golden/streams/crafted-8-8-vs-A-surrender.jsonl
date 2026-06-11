@@ -1,0 +1,4 @@
+{"header":{"always_insure":false,"bankroll":1000.0,"cards_per_stream":null,"conditional_settlement":false,"config":"crafted-8-8-vs-A-surrender","counting":false,"n_players":1,"n_streams":1,"rules":{},"seed":null,"weights":null}}
+{"cards":[8,1,8,9,10,10,10,5,9],"stream":0}
+{"record":{"conditional_net":null,"consumed":4,"dealer":[1,9],"players":[{"actions":[["surrender"]],"bets":[0.0],"blackjack":false,"hands":[[8,8]],"initial_bet":10.0,"money":995.0,"net":-5.0,"original_bets":[10.0],"total_bet":10.0,"winners":["dealer"]}]},"round":0,"stream":0}
+{"record":{"conditional_net":null,"consumed":5,"dealer":[10,5,9],"players":[{"actions":[["stand"]],"bets":[0.0],"blackjack":false,"hands":[[10,10]],"initial_bet":10.0,"money":1010.0,"net":10.0,"original_bets":[10.0],"total_bet":10.0,"winners":["player"]}]},"round":1,"stream":0}

@@ -124,6 +124,11 @@ When optimizing blackjack simulations:
 - The two engines are kept equivalent by a card-stream parity suite
   (`tests/test_fastsim_core.py`); any change to round semantics must land in both
   engines with parity proven
+- The fast core is additionally regression-locked by a golden corpus
+  (`tests/golden/`, replayed by `tests/test_fastsim_golden.py`): frozen
+  parity-proven outputs compared exactly. Intentional semantic changes regenerate
+  it (`uv run python -m cardsharp.tools.golden_corpus`) in the same commit, with
+  the data diff reviewed; see `tests/golden/README.md`
 
 **IMPORTANT**: When optimizing performance, never compromise accuracy. See `docs/optimization_principles.md` for guidelines. A fast but inaccurate simulation is worthless.
 

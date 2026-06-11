@@ -153,7 +153,17 @@ The simulator's accuracy is anchored end to end:
    confirms item 4's structural account while correcting the magnitude
    guess in strategy_house_edge's docstring: the continuation residual
    is not an order of magnitude smaller than the first-decision effect
-   -- at every pinned config it is larger.
+   -- at every pinned config it is larger. (c) History: a golden corpus
+   (tests/golden/, replayed by tests/test_fastsim_golden.py) freezes
+   parity-proven outputs as committed data -- per-round stream records
+   across the rule surface including counting and conditional
+   settlement, batch and paired-CRN report moments, and shuffle epochs
+   -- and asserts exact equality on every run. This regression-locks
+   the core against its own verified history independently of the
+   Python engine; it is the lock that replaces live parity once the
+   reference engine retires (beads-i2s). Intentional semantic changes
+   regenerate the corpus reviewably (cardsharp/tools/golden_corpus.py),
+   never silently; see tests/golden/README.md.
 
 Simulation mechanics that this chain guards (all have regression tests):
 

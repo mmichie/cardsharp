@@ -1,0 +1,183 @@
+{
+ "paired-das-vs-no-das": {
+  "params": {
+   "config": "paired-das-vs-no-das",
+   "n_rounds": 60000,
+   "rules_a": {
+    "num_decks": 2
+   },
+   "rules_b": {
+    "allow_double_after_split": false,
+    "num_decks": 2
+   },
+   "seed": 3102
+  },
+  "result": {
+   "a": {
+    "bet_M2": 0.0,
+    "bet_mean": 10.0,
+    "bet_sum": 600000.0,
+    "cv_mu_y": null,
+    "cv_n": 0,
+    "cv_x_M2": 0.0,
+    "cv_x_mean": 0.0,
+    "cv_xy_C": 0.0,
+    "cv_y_M2": 0.0,
+    "cv_y_mean": 0.0,
+    "dealer_wins": 29199,
+    "draws": 5166,
+    "games_played": 60000,
+    "n_rounds": 60000,
+    "net_M2": 7605528.184999982,
+    "net_bet_C": 0.0,
+    "net_mean": -0.13049999999999962,
+    "net_sum": -7830.0,
+    "player_wins": 26757,
+    "total_bet_sum": 672560.0
+   },
+   "b": {
+    "bet_M2": 0.0,
+    "bet_mean": 10.0,
+    "bet_sum": 600000.0,
+    "cv_mu_y": null,
+    "cv_n": 0,
+    "cv_x_M2": 0.0,
+    "cv_x_mean": 0.0,
+    "cv_xy_C": 0.0,
+    "cv_y_M2": 0.0,
+    "cv_y_mean": 0.0,
+    "dealer_wins": 29194,
+    "draws": 5167,
+    "games_played": 60000,
+    "n_rounds": 60000,
+    "net_M2": 7486245.83333324,
+    "net_bet_C": 0.0,
+    "net_mean": -0.1416666666666662,
+    "net_sum": -8500.0,
+    "player_wins": 26761,
+    "total_bet_sum": 669640.0
+   },
+   "diff_M2": 418.9251833333333,
+   "diff_mean": -0.001116666666666667,
+   "diff_n": 60000
+  }
+ },
+ "paired-h17-vs-s17": {
+  "params": {
+   "config": "paired-h17-vs-s17",
+   "n_rounds": 100000,
+   "rules_a": {},
+   "rules_b": {
+    "dealer_hit_soft_17": false
+   },
+   "seed": 3101
+  },
+  "result": {
+   "a": {
+    "bet_M2": 0.0,
+    "bet_mean": 10.0,
+    "bet_sum": 1000000.0,
+    "cv_mu_y": null,
+    "cv_n": 0,
+    "cv_x_M2": 0.0,
+    "cv_x_mean": 0.0,
+    "cv_xy_C": 0.0,
+    "cv_y_M2": 0.0,
+    "cv_y_mean": 0.0,
+    "dealer_wins": 48204,
+    "draws": 8777,
+    "games_played": 100000,
+    "n_rounds": 100000,
+    "net_M2": 12792630.9797498,
+    "net_bet_C": 0.0,
+    "net_mean": -0.03795000000000063,
+    "net_sum": -3795.0,
+    "player_wins": 45044,
+    "total_bet_sum": 1126200.0
+   },
+   "b": {
+    "bet_M2": 0.0,
+    "bet_mean": 10.0,
+    "bet_sum": 1000000.0,
+    "cv_mu_y": null,
+    "cv_n": 0,
+    "cv_x_M2": 0.0,
+    "cv_x_mean": 0.0,
+    "cv_xy_C": 0.0,
+    "cv_y_M2": 0.0,
+    "cv_y_mean": 0.0,
+    "dealer_wins": 48232,
+    "draws": 8828,
+    "games_played": 100000,
+    "n_rounds": 100000,
+    "net_M2": 12711792.05774983,
+    "net_bet_C": 0.0,
+    "net_mean": -0.01815000000000001,
+    "net_sum": -1815.0,
+    "player_wins": 44990,
+    "total_bet_sum": 1122830.0
+   },
+   "diff_M2": 2658.107959999978,
+   "diff_mean": 0.001979999999999987,
+   "diff_n": 100000
+  }
+ },
+ "paired-identical": {
+  "params": {
+   "config": "paired-identical",
+   "n_rounds": 30000,
+   "rules_a": {},
+   "rules_b": {},
+   "seed": 3103
+  },
+  "result": {
+   "a": {
+    "bet_M2": 0.0,
+    "bet_mean": 10.0,
+    "bet_sum": 300000.0,
+    "cv_mu_y": null,
+    "cv_n": 0,
+    "cv_x_M2": 0.0,
+    "cv_x_mean": 0.0,
+    "cv_xy_C": 0.0,
+    "cv_y_M2": 0.0,
+    "cv_y_mean": 0.0,
+    "dealer_wins": 14421,
+    "draws": 2680,
+    "games_played": 30000,
+    "n_rounds": 30000,
+    "net_M2": 3781254.3966666544,
+    "net_bet_C": 0.0,
+    "net_mean": -0.06966666666666664,
+    "net_sum": -2090.0,
+    "player_wins": 13489,
+    "total_bet_sum": 336790.0
+   },
+   "b": {
+    "bet_M2": 0.0,
+    "bet_mean": 10.0,
+    "bet_sum": 300000.0,
+    "cv_mu_y": null,
+    "cv_n": 0,
+    "cv_x_M2": 0.0,
+    "cv_x_mean": 0.0,
+    "cv_xy_C": 0.0,
+    "cv_y_M2": 0.0,
+    "cv_y_mean": 0.0,
+    "dealer_wins": 14421,
+    "draws": 2680,
+    "games_played": 30000,
+    "n_rounds": 30000,
+    "net_M2": 3781254.3966666544,
+    "net_bet_C": 0.0,
+    "net_mean": -0.06966666666666664,
+    "net_sum": -2090.0,
+    "player_wins": 13489,
+    "total_bet_sum": 336790.0
+   },
+   "diff_M2": 0.0,
+   "diff_mean": 0.0,
+   "diff_n": 30000
+  }
+ }
+}
