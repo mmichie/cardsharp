@@ -2,7 +2,7 @@
 
 use crate::card::Rank;
 use crate::counting::{Counter, CountingConfig};
-use crate::round::{RoundConfig, RoundResult, play_round};
+use crate::round::{Decider, PlayerRound, RoundConfig, RoundResult, TableDecider, play_round};
 use crate::rules::Rules;
 use crate::shoe::{CardStream, DealSource, Shoe, ShoeOptions, ShuffleStyle};
 use crate::stats::SimStats;
@@ -87,11 +87,20 @@ impl PerDealTable {
     }
 }
 
+/// Batch-level round parameters: the shared RoundConfig plus the seat
+/// layout and test hooks that `play_round` no longer owns (callers build
+/// the seats; the decider answers insurance).
+struct BatchCfg {
+    round: RoundConfig,
+    n_players: usize,
+    always_insure: bool,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_shard(
     rules: &Rules,
     table: &StrategyTable,
-    cfg: &RoundConfig,
+    batch: &BatchCfg,
     counting: Option<&CountingConfig>,
     shoe_options: &ShoeOptions,
     rounds: u64,
@@ -104,13 +113,18 @@ fn run_shard(
     let mut deals = per_deal.then(PerDealTable::new);
     // The count is per-shard, matching the per-worker count of the old
     // multiprocess Python runs (each shard starts a fresh shoe anyway).
-    let mut counter = counting.map(|c| Counter::new(c.clone()));
+    let mut decider = TableDecider::new(
+        table,
+        counting.map(|c| Counter::new(c.clone())),
+        batch.always_insure,
+    );
     for _ in 0..rounds {
         let remaining_before = shoe.cards_remaining();
-        let result = play_round(&mut shoe, rules, table, cfg, counter.as_mut())?;
-        if let Some(c) = counter.as_mut() {
-            c.finish_round(remaining_before, shoe.cards_remaining());
-        }
+        let players: Vec<PlayerRound> = (0..batch.n_players)
+            .map(|_| PlayerRound::new(batch.round.initial_bankroll))
+            .collect();
+        let result = play_round(&mut shoe, rules, &batch.round, &mut decider, players)?;
+        decider.finish_round(remaining_before, shoe.cards_remaining());
         accumulate(&mut stats, &result);
         if let Some(d) = deals.as_mut() {
             // per_deal requires n_players == 1, so the round net (or its
@@ -182,11 +196,13 @@ pub fn simulate_batch<'py>(
         shuffle_style: ShuffleStyle::from_name(shuffle_type).map_err(PyValueError::new_err)?,
         shuffle_count,
     };
-    let cfg = RoundConfig {
+    let batch = BatchCfg {
+        round: RoundConfig {
+            initial_bankroll,
+            conditional_settlement,
+        },
         n_players,
-        initial_bankroll,
         always_insure,
-        conditional_settlement,
     };
 
     // Fixed-size shards with explicitly derived seeds: the shard layout
@@ -214,7 +230,7 @@ pub fn simulate_batch<'py>(
                         run_shard(
                             &rules,
                             &table,
-                            &cfg,
+                            &batch,
                             counting.as_ref(),
                             &shoe_options,
                             *rounds,
@@ -334,14 +350,16 @@ pub fn play_card_stream(
     let table = parse_table(table)?;
     let rules: Rules = rules.clone();
     let cfg = RoundConfig {
-        n_players,
         initial_bankroll,
-        always_insure,
         conditional_settlement,
     };
 
     let mut stream = CardStream::new(parse_stream(&cards)?);
-    let mut counter = counting.map(|c| Counter::new(c.clone()));
+    let mut decider = TableDecider::new(
+        &table,
+        counting.map(|c| Counter::new(c.clone())),
+        always_insure,
+    );
     let mut records = Vec::new();
 
     loop {
@@ -352,11 +370,12 @@ pub fn play_card_stream(
         }
         let before = stream.consumed();
         let remaining_before = stream.cards_remaining();
-        match play_round(&mut stream, &rules, &table, &cfg, counter.as_mut()) {
+        let players: Vec<PlayerRound> = (0..n_players)
+            .map(|_| PlayerRound::new(initial_bankroll))
+            .collect();
+        match play_round(&mut stream, &rules, &cfg, &mut decider, players) {
             Ok(result) => {
-                if let Some(c) = counter.as_mut() {
-                    c.finish_round(remaining_before, stream.cards_remaining());
-                }
+                decider.finish_round(remaining_before, stream.cards_remaining());
                 let consumed = (stream.consumed() - before) as u32;
                 records.push(make_record(result, consumed));
             }
@@ -497,7 +516,7 @@ fn run_paired_shard(
     table_a: &StrategyTable,
     rules_b: &Rules,
     table_b: &StrategyTable,
-    cfg: &RoundConfig,
+    batch: &BatchCfg,
     rounds: u64,
     shard_seed: u64,
 ) -> Result<PairedStats, crate::shoe::OutOfCards> {
@@ -519,7 +538,11 @@ fn run_paired_shard(
                 ShoeOptions::classic(rules.num_decks, rules.penetration, rules.burn_cards),
                 rng,
             );
-            let result = play_round(&mut shoe, rules, table, cfg, None)?;
+            let mut decider = TableDecider::new(table, None, false);
+            let players: Vec<PlayerRound> = (0..batch.n_players)
+                .map(|_| PlayerRound::new(batch.round.initial_bankroll))
+                .collect();
+            let result = play_round(&mut shoe, rules, &batch.round, &mut decider, players)?;
             let net: f64 = result
                 .conditional_net
                 .unwrap_or_else(|| result.players.iter().map(|p| p.net()).sum());
@@ -580,11 +603,13 @@ pub fn simulate_paired<'py>(
     }
     let table_a = parse_table(table_a)?;
     let table_b = parse_table(table_b)?;
-    let cfg = RoundConfig {
+    let batch = BatchCfg {
+        round: RoundConfig {
+            initial_bankroll,
+            conditional_settlement,
+        },
         n_players,
-        initial_bankroll,
         always_insure: false,
-        conditional_settlement,
     };
 
     let mut seed_state = seed;
@@ -611,7 +636,7 @@ pub fn simulate_paired<'py>(
                             &table_a,
                             &rules_b,
                             &table_b,
-                            &cfg,
+                            &batch,
                             *rounds,
                             *shard_seed,
                         )

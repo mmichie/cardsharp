@@ -15,35 +15,129 @@ use crate::settle::{self, LiveHand};
 use crate::shoe::{DealSource, OutOfCards};
 use crate::strategy::{Action, StrategyTable, ValidActions};
 
-/// Deal one card, letting an active counter see it (every dealt card is
-/// visible to the counting strategy in the reference engine, including
+/// Deal one card, letting the decider observe it (every dealt card is
+/// visible to a counting strategy in the reference engine, including
 /// the dealer's hole card).
-fn deal_card<S: DealSource>(
-    shoe: &mut S,
-    counter: &mut Option<&mut Counter>,
-) -> Result<Rank, OutOfCards> {
+fn deal_card<S: DealSource, D: Decider>(shoe: &mut S, decider: &mut D) -> Result<Rank, OutOfCards> {
     let card = shoe.deal()?;
-    if let Some(c) = counter.as_deref_mut() {
-        c.saw_card(card);
-    }
+    decider.saw_card(card);
     Ok(card)
 }
 
-/// One play decision: counting deviations first (which fold pending cards
-/// into the count), then the strategy chart.
-fn choose_action(
-    table: &StrategyTable,
-    counter: &mut Option<&mut Counter>,
-    hand: &Hand,
-    dealer_up: Rank,
-    valid: &ValidActions,
-) -> Action {
-    if let Some(c) = counter.as_deref_mut()
-        && let Some(action) = c.decide_deviation(hand, dealer_up)
-    {
-        return action;
+/// Which engine phase is asking for a decision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DecisionPhase {
+    /// The pre-peek early-surrender offer; the engine acts only on a
+    /// Surrender answer and ignores anything else.
+    EarlySurrender,
+    /// The main per-hand play loop.
+    Play,
+}
+
+/// Inversion-of-control seam for everything the round flow asks an
+/// outside party: bets, insurance, and play decisions, plus card
+/// visibility (counting) and the between-rounds reshuffle hook. The
+/// batch entry points use `TableDecider` (strategy chart + optional
+/// Hi-Lo counter); interactive sessions use a channel-backed decider
+/// that blocks on the user (session.rs). One round implementation
+/// serves both -- that is the point: there is no second state machine
+/// to drift.
+pub trait Decider {
+    /// Observe a dealt card (counting); default: ignore.
+    fn saw_card(&mut self, _card: Rank) {}
+
+    /// The bet `seat` places this round.
+    fn bet(&mut self, seat: usize, rules: &Rules, money: f64) -> f64;
+
+    /// Whether `seat` takes insurance against a dealer ace.
+    fn wants_insurance(&mut self, seat: usize, players: &[PlayerRound], dealer_up: Rank) -> bool;
+
+    /// Choose an action for `players[seat].hands[hand_index]`.
+    fn decide(
+        &mut self,
+        seat: usize,
+        hand_index: usize,
+        phase: DecisionPhase,
+        players: &[PlayerRound],
+        dealer_up: Rank,
+        valid: &ValidActions,
+    ) -> Action;
+
+    /// Between-rounds hook (reshuffle detection for the counter).
+    fn finish_round(&mut self, _remaining_before: usize, _remaining_after: usize) {}
+}
+
+/// The batch decider: strategy chart lookups, optionally with Hi-Lo
+/// counting (bet ramp, Illustrious 18 deviations, TC insurance) and the
+/// always-insure test hook. Monomorphized into the round flow, this
+/// compiles to the same decisions the pre-trait code made inline.
+pub struct TableDecider<'a> {
+    table: &'a StrategyTable,
+    counter: Option<Counter>,
+    always_insure: bool,
+}
+
+impl<'a> TableDecider<'a> {
+    pub fn new(table: &'a StrategyTable, counter: Option<Counter>, always_insure: bool) -> Self {
+        TableDecider {
+            table,
+            counter,
+            always_insure,
+        }
     }
-    table.decide(hand, dealer_up, valid)
+}
+
+impl Decider for TableDecider<'_> {
+    fn saw_card(&mut self, card: Rank) {
+        if let Some(c) = self.counter.as_mut() {
+            c.saw_card(card);
+        }
+    }
+
+    fn bet(&mut self, _seat: usize, rules: &Rules, money: f64) -> f64 {
+        match self.counter.as_ref() {
+            Some(c) => c.bet_amount(rules.min_bet, rules.max_bet, money),
+            None => rules.min_bet,
+        }
+    }
+
+    fn wants_insurance(
+        &mut self,
+        _seat: usize,
+        _players: &[PlayerRound],
+        _dealer_up: Rank,
+    ) -> bool {
+        match self.counter.as_ref() {
+            Some(c) => c.wants_insurance(),
+            None => self.always_insure,
+        }
+    }
+
+    fn decide(
+        &mut self,
+        seat: usize,
+        hand_index: usize,
+        _phase: DecisionPhase,
+        players: &[PlayerRound],
+        dealer_up: Rank,
+        valid: &ValidActions,
+    ) -> Action {
+        let hand = &players[seat].hands[hand_index];
+        // Counting deviations first (which fold pending cards into the
+        // count), then the strategy chart.
+        if let Some(c) = self.counter.as_mut()
+            && let Some(action) = c.decide_deviation(hand, dealer_up)
+        {
+            return action;
+        }
+        self.table.decide(hand, dealer_up, valid)
+    }
+
+    fn finish_round(&mut self, remaining_before: usize, remaining_after: usize) {
+        if let Some(c) = self.counter.as_mut() {
+            c.finish_round(remaining_before, remaining_after);
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,7 +179,7 @@ pub struct PlayerRound {
 }
 
 impl PlayerRound {
-    fn new(initial_bankroll: f64) -> Self {
+    pub fn new(initial_bankroll: f64) -> Self {
         PlayerRound {
             money: initial_bankroll,
             initial_bankroll,
@@ -206,11 +300,11 @@ impl PlayerRound {
 }
 
 pub struct RoundConfig {
-    pub n_players: usize,
+    /// Per-seat starting bankroll, used only as the conditional
+    /// settlement baseline; the `players` passed to `play_round` carry
+    /// their own bankrolls (sessions persist per-seat money across
+    /// rounds and never enable conditional settlement).
     pub initial_bankroll: f64,
-    /// Stand-in for `Strategy.decide_insurance`; basic strategy never
-    /// insures, but the insurance machinery is testable with this on.
-    pub always_insure: bool,
     /// Rao-Blackwellized settlement: record the exact expected net over
     /// the dealer's draw distribution instead of the realized net. The
     /// dealer still draws physically. See settle.rs for scope.
@@ -231,28 +325,24 @@ pub struct RoundResult {
 }
 
 /// Play one full round. The shoe's `begin_round`/`end_round` bracketing
-/// matches `DealingState.deal` and `EndRoundState.handle`. An active
-/// `counter` drives bets, insurance, and play deviations exactly as the
-/// reference engine's CountingStrategy does.
-pub fn play_round<S: DealSource>(
+/// matches `DealingState.deal` and `EndRoundState.handle`. The caller
+/// builds the seats (so sessions can persist per-seat bankrolls); the
+/// decider answers every bet, insurance, and play question -- a
+/// `TableDecider` reproduces the reference engine's strategy-driven
+/// rounds exactly.
+pub fn play_round<S: DealSource, D: Decider>(
     shoe: &mut S,
     rules: &Rules,
-    table: &StrategyTable,
     cfg: &RoundConfig,
-    mut counter: Option<&mut Counter>,
+    decider: &mut D,
+    mut players: Vec<PlayerRound>,
 ) -> Result<RoundResult, OutOfCards> {
-    // PlacingBetsState: the strategy's get_bet_amount -- table minimum for
-    // flat betting, the true-count ramp when counting. The count used is
-    // the round-start count (cards dealt this round are not folded in
-    // until a play decision).
-    let mut players: Vec<PlayerRound> = (0..cfg.n_players)
-        .map(|_| PlayerRound::new(cfg.initial_bankroll))
-        .collect();
-    for player in &mut players {
-        let bet = match counter.as_deref() {
-            Some(c) => c.bet_amount(rules.min_bet, rules.max_bet, player.money),
-            None => rules.min_bet,
-        };
+    // PlacingBetsState: the decider's bet -- table minimum for flat
+    // betting, the true-count ramp when counting, the user's wager in a
+    // session. A counting decider uses the round-start count (cards
+    // dealt this round are not folded in until a play decision).
+    for (seat, player) in players.iter_mut().enumerate() {
+        let bet = decider.bet(seat, rules, player.money);
         player.place_bet(bet);
     }
 
@@ -261,11 +351,11 @@ pub fn play_round<S: DealSource>(
     shoe.begin_round();
     let mut dealer = Hand::new();
     for _pass in 0..2 {
-        for player in &mut players {
-            let card = deal_card(shoe, &mut counter)?;
+        for player in players.iter_mut() {
+            let card = deal_card(shoe, decider)?;
             player.hands[0].add(card);
         }
-        dealer.add(deal_card(shoe, &mut counter)?);
+        dealer.add(deal_card(shoe, decider)?);
     }
 
     let first_cards: Vec<(Rank, Rank)> = players
@@ -294,21 +384,19 @@ pub fn play_round<S: DealSource>(
     // surrender, peek (dealer blackjack / insurance loss / natural payout).
     // Counting insures at TC >= 3 using the round-start count (the
     // reference's decide_insurance never folds in this round's cards).
+    // Each seat is asked individually; the batch decider answers the
+    // same for every seat, preserving the old single-question semantics.
     if dealer_up == Rank::Ace && rules.allow_insurance {
-        let wants_insurance = match counter.as_deref() {
-            Some(c) => c.wants_insurance(),
-            None => cfg.always_insure,
-        };
-        if wants_insurance {
-            for player in &mut players {
-                let insurance_bet = player.bets[0] / 2.0;
-                player.buy_insurance(insurance_bet);
+        for seat in 0..players.len() {
+            if decider.wants_insurance(seat, &players, dealer_up) {
+                let insurance_bet = players[seat].bets[0] / 2.0;
+                players[seat].buy_insurance(insurance_bet);
             }
         }
     }
 
     if rules.allow_early_surrender {
-        early_surrender_phase(&mut players, dealer_up, rules, table, &mut counter);
+        early_surrender_phase(&mut players, dealer_up, rules, decider);
     }
 
     if rules.dealer_peek {
@@ -338,11 +426,11 @@ pub fn play_round<S: DealSource>(
 
     let mut conditional_payout_net: Option<f64> = None;
     if !round_over {
-        players_turn(&mut players, dealer_up, shoe, rules, table, &mut counter)?;
+        players_turn(&mut players, dealer_up, shoe, rules, decider)?;
         if cfg.conditional_settlement {
             conditional_payout_net = conditional_round_net(&players, &dealer, shoe, rules, cfg);
         }
-        dealers_turn(&players, &mut dealer, shoe, rules, &mut counter)?;
+        dealers_turn(&players, &mut dealer, shoe, rules, decider)?;
     }
 
     // EndRoundState.
@@ -423,21 +511,27 @@ fn conditional_round_net<S: DealSource>(
 /// Early surrender offer, before the dealer peeks. The Python engine asks
 /// the strategy through `Player.valid_actions` (the property variant, not
 /// the state-machine variant) and acts only on a Surrender answer.
-fn early_surrender_phase(
+fn early_surrender_phase<D: Decider>(
     players: &mut [PlayerRound],
     dealer_up: Rank,
     rules: &Rules,
-    table: &StrategyTable,
-    counter: &mut Option<&mut Counter>,
+    decider: &mut D,
 ) {
-    for player in players {
-        if player.hand_done[0] {
+    for seat in 0..players.len() {
+        if players[seat].hand_done[0] {
             continue;
         }
-        let valid = valid_actions_property(player, rules);
-        let action = choose_action(table, counter, &player.hands[0], dealer_up, &valid);
+        let valid = valid_actions_property(&players[seat], rules);
+        let action = decider.decide(
+            seat,
+            0,
+            DecisionPhase::EarlySurrender,
+            players,
+            dealer_up,
+            &valid,
+        );
         if action == Action::Surrender {
-            player.surrender(0);
+            players[seat].surrender(0);
         }
     }
 }
@@ -536,35 +630,40 @@ fn valid_actions_property(player: &PlayerRound, rules: &Rules) -> ValidActions {
 
 /// Mirrors `PlayersTurnState.handle`: each hand is played to completion in
 /// seat order; hands appended by splits are picked up by the growing index.
-fn players_turn<S: DealSource>(
+fn players_turn<S: DealSource, D: Decider>(
     players: &mut [PlayerRound],
     dealer_up: Rank,
     shoe: &mut S,
     rules: &Rules,
-    table: &StrategyTable,
-    counter: &mut Option<&mut Counter>,
+    decider: &mut D,
 ) -> Result<(), OutOfCards> {
-    for player in players {
+    for seat in 0..players.len() {
         let mut hand_index = 0;
-        while hand_index < player.hands.len() {
-            if player.hand_done[hand_index] {
+        while hand_index < players[seat].hands.len() {
+            if players[seat].hand_done[hand_index] {
                 hand_index += 1;
                 continue;
             }
-            while !player.hand_done[hand_index] {
-                let valid = valid_actions_state(player, hand_index, rules);
-                let action =
-                    choose_action(table, counter, &player.hands[hand_index], dealer_up, &valid);
+            while !players[seat].hand_done[hand_index] {
+                let valid = valid_actions_state(&players[seat], hand_index, rules);
+                let action = decider.decide(
+                    seat,
+                    hand_index,
+                    DecisionPhase::Play,
+                    players,
+                    dealer_up,
+                    &valid,
+                );
                 if valid.contains(action) {
-                    player_action(player, hand_index, action, shoe, rules, counter)?;
+                    player_action(&mut players[seat], hand_index, action, shoe, rules, decider)?;
                 } else {
                     // The reference engine forces a stand on an invalid
                     // action; unreachable with a well-formed table, kept
                     // for fidelity.
-                    player.hand_done[hand_index] = true;
+                    players[seat].hand_done[hand_index] = true;
                 }
-                let busted = player.hands[hand_index].value() > 21;
-                if busted || player.is_done() {
+                let busted = players[seat].hands[hand_index].value() > 21;
+                if busted || players[seat].is_done() {
                     break;
                 }
             }
@@ -575,13 +674,13 @@ fn players_turn<S: DealSource>(
 }
 
 /// Mirrors `PlayersTurnState.player_action`.
-fn player_action<S: DealSource>(
+fn player_action<S: DealSource, D: Decider>(
     player: &mut PlayerRound,
     hand_index: usize,
     action: Action,
     shoe: &mut S,
     rules: &Rules,
-    counter: &mut Option<&mut Counter>,
+    decider: &mut D,
 ) -> Result<(), OutOfCards> {
     player.action_history[hand_index].push(action);
 
@@ -597,7 +696,7 @@ fn player_action<S: DealSource>(
                 return Ok(());
             }
 
-            let card = deal_card(shoe, counter)?;
+            let card = deal_card(shoe, decider)?;
             player.hit(hand_index, card);
 
             let hand = &player.hands[hand_index];
@@ -620,7 +719,7 @@ fn player_action<S: DealSource>(
             // One card to the original hand, then one to the new hand.
             let new_hand_index = player.hands.len() - 1;
             for i in [hand_index, new_hand_index] {
-                let card = deal_card(shoe, counter)?;
+                let card = deal_card(shoe, decider)?;
                 player.hands[i].add(card);
                 if is_splitting_aces {
                     player.hand_done[i] = true;
@@ -636,7 +735,7 @@ fn player_action<S: DealSource>(
                 return Ok(());
             }
             player.double_down(hand_index);
-            let card = deal_card(shoe, counter)?;
+            let card = deal_card(shoe, decider)?;
             player.hit(hand_index, card);
             player.hand_done[hand_index] = true;
         }
@@ -655,16 +754,16 @@ fn player_action<S: DealSource>(
 
 /// Mirrors `DealersTurnState`: the dealer completes the hand only while at
 /// least one player hand's outcome still depends on the dealer's total.
-fn dealers_turn<S: DealSource>(
+fn dealers_turn<S: DealSource, D: Decider>(
     players: &[PlayerRound],
     dealer: &mut Hand,
     shoe: &mut S,
     rules: &Rules,
-    counter: &mut Option<&mut Counter>,
+    decider: &mut D,
 ) -> Result<(), OutOfCards> {
     if any_live_hand(players) {
         while rules.should_dealer_hit(dealer) {
-            dealer.add(deal_card(shoe, counter)?);
+            dealer.add(deal_card(shoe, decider)?);
         }
     }
     Ok(())
