@@ -423,7 +423,7 @@ pub fn trace_shoe(
     Ok(trace)
 }
 
-fn make_record(result: RoundResult, cards_consumed: u32) -> RoundRecord {
+pub(crate) fn make_record(result: RoundResult, cards_consumed: u32) -> RoundRecord {
     let players = result
         .players
         .iter()

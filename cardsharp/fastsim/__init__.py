@@ -27,6 +27,7 @@ from cardsharp.fastsim.runner import (
     simulate,
     strategy_is_encodable,
 )
+from cardsharp.fastsim.session import open_session
 
 __all__ = [
     "CORE_AVAILABLE",
@@ -35,6 +36,7 @@ __all__ = [
     "encode_counting_config",
     "encode_strategy_table",
     "make_core_rules",
+    "open_session",
     "resolve_engine",
     "rules_kwargs",
     "run_fast_batch",

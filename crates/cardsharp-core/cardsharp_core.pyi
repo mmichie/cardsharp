@@ -128,3 +128,39 @@ def trace_shoe(
     deals_per_round: list[int],
     seed: int = 0,
 ) -> list[tuple[int, int]]: ...
+
+class SeatSnapshot:
+    hands: list[list[int]]
+    actions: list[list[str]]
+    bets: list[float]
+    hand_done: list[bool]
+    insurance: float
+    money: float
+
+class SessionStep:
+    phase: str  # "insurance" | "early_surrender" | "decision" | "round_over"
+    seat: int | None
+    hand_index: int | None
+    valid_actions: list[str]
+    players: list[SeatSnapshot]
+    dealer_cards: list[int]  # upcard only until round_over
+    result: RoundRecord | None
+
+class Session:
+    money: list[float]
+    n_players: int
+    round_active: bool
+
+    def __init__(
+        self,
+        rules: Rules,
+        n_players: int = 1,
+        bankroll: float = 1000.0,
+        seed: int = 0,
+        cards: bytes | None = None,
+        shuffle_type: str = "perfect",
+        shuffle_count: int | None = None,
+    ) -> None: ...
+    def begin_round(self, bets: list[float]) -> SessionStep: ...
+    def apply(self, action: str) -> SessionStep: ...
+    def close(self) -> None: ...

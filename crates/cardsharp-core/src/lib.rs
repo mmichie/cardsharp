@@ -12,6 +12,7 @@ mod counting;
 mod hand;
 mod round;
 mod rules;
+mod session;
 mod settle;
 mod shoe;
 mod sim;
@@ -46,6 +47,9 @@ fn cardsharp_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<counting::CountingConfig>()?;
     m.add_class::<sim::RoundRecord>()?;
     m.add_class::<sim::PlayerRecord>()?;
+    m.add_class::<session::Session>()?;
+    m.add_class::<session::SessionStep>()?;
+    m.add_class::<session::SeatSnapshot>()?;
     m.add("STRATEGY_TABLE_BYTES", strategy::TABLE_BYTES)?;
     Ok(())
 }
