@@ -42,6 +42,52 @@ fn splitmix64(state: &mut u64) -> u64 {
     z ^ (z >> 31)
 }
 
+/// Per-deal accumulator for the EV diagnostic: X = net / initial_bet
+/// bucketed by the round's deal state (c1, c2, upcard) in solver card
+/// values (Ace=1, ten-classes collapsed to 10). A flat 10x10x10 grid
+/// indexed by ((lo-1)*10 + (hi-1))*10 + (up-1); only lo <= hi cells
+/// ever populate. The Python side subtracts the solver's per-deal EV
+/// from these raw X moments (the deal EV is a constant per cell, so
+/// the d = X - Y moments derive exactly from the X moments).
+#[derive(Clone)]
+pub struct PerDealTable {
+    cells: Vec<(u64, f64, f64)>, // (n, sum_x, sum_x2)
+}
+
+impl PerDealTable {
+    fn new() -> Self {
+        PerDealTable {
+            cells: vec![(0, 0.0, 0.0); 1000],
+        }
+    }
+
+    fn solver_value(rank: Rank) -> usize {
+        (rank.code() as usize).min(10)
+    }
+
+    fn record(&mut self, c1: Rank, c2: Rank, up: Rank, x: f64) {
+        let a = Self::solver_value(c1);
+        let b = Self::solver_value(c2);
+        let (lo, hi) = if a <= b { (a, b) } else { (b, a) };
+        let up = Self::solver_value(up);
+        let cell = &mut self.cells[((lo - 1) * 10 + (hi - 1)) * 10 + (up - 1)];
+        cell.0 += 1;
+        cell.1 += x;
+        cell.2 += x * x;
+    }
+
+    /// Element-wise fold in shard order: float sums stay deterministic
+    /// regardless of thread count, like SimStats::merge.
+    fn merge(&mut self, other: &PerDealTable) {
+        for (a, b) in self.cells.iter_mut().zip(&other.cells) {
+            a.0 += b.0;
+            a.1 += b.1;
+            a.2 += b.2;
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run_shard(
     rules: &Rules,
     table: &StrategyTable,
@@ -50,10 +96,12 @@ fn run_shard(
     shoe_options: &ShoeOptions,
     rounds: u64,
     shard_seed: u64,
-) -> Result<SimStats, crate::shoe::OutOfCards> {
+    per_deal: bool,
+) -> Result<(SimStats, Option<PerDealTable>), crate::shoe::OutOfCards> {
     let rng = Xoshiro256PlusPlus::seed_from_u64(shard_seed);
     let mut shoe = Shoe::new(shoe_options.clone(), rng);
     let mut stats = SimStats::new();
+    let mut deals = per_deal.then(PerDealTable::new);
     // The count is per-shard, matching the per-worker count of the old
     // multiprocess Python runs (each shard starts a fresh shoe anyway).
     let mut counter = counting.map(|c| Counter::new(c.clone()));
@@ -64,8 +112,16 @@ fn run_shard(
             c.finish_round(remaining_before, shoe.cards_remaining());
         }
         accumulate(&mut stats, &result);
+        if let Some(d) = deals.as_mut() {
+            // per_deal requires n_players == 1, so the round net (or its
+            // Rao-Blackwellized version) IS player 0's net.
+            let player = &result.players[0];
+            let x = result.conditional_net.unwrap_or_else(|| player.net()) / player.initial_bets;
+            let (c1, c2) = result.first_cards[0];
+            d.record(c1, c2, result.dealer.ranks()[0], x);
+        }
     }
-    Ok(stats)
+    Ok((stats, deals))
 }
 
 /// Simulate `n_rounds` of classic blackjack, sharded across threads.
@@ -75,8 +131,14 @@ fn run_shard(
 /// `threads` = 0 uses all available cores; any value yields bit-identical
 /// results for a given seed (shards are self-contained and merged in
 /// shard order). The GIL is released for the duration of the simulation.
+///
+/// With `per_deal=true` (single player only), the report additionally
+/// carries a "per_deal" list of 1000 `(n, sum_x, sum_x2)` cells, X =
+/// net/initial_bet bucketed by (c1, c2, upcard) in solver card values,
+/// indexed `((lo-1)*10 + (hi-1))*10 + (up-1)` -- the raw material of the
+/// per-deal EV diagnostic (cardsharp/tools/deal_ev_diagnostic.py).
 #[pyfunction]
-#[pyo3(signature = (rules, table, n_rounds, seed, n_players = 1, initial_bankroll = 1000.0, always_insure = false, threads = 0, counting = None, shuffle_type = "perfect", shuffle_count = None, conditional_settlement = false))]
+#[pyo3(signature = (rules, table, n_rounds, seed, n_players = 1, initial_bankroll = 1000.0, always_insure = false, threads = 0, counting = None, shuffle_type = "perfect", shuffle_count = None, conditional_settlement = false, per_deal = false))]
 #[allow(clippy::too_many_arguments)]
 pub fn simulate_batch<'py>(
     py: Python<'py>,
@@ -92,9 +154,16 @@ pub fn simulate_batch<'py>(
     shuffle_type: &str,
     shuffle_count: Option<u32>,
     conditional_settlement: bool,
+    per_deal: bool,
 ) -> PyResult<Bound<'py, PyDict>> {
     if n_players < 1 {
         return Err(PyValueError::new_err("n_players must be at least 1"));
+    }
+    if per_deal && n_players != 1 {
+        return Err(PyValueError::new_err(
+            "per_deal requires n_players=1: the deal key is a single \
+             player's first two cards plus the dealer upcard",
+        ));
     }
     if conditional_settlement && (!rules.dealer_peek || rules.use_csm) {
         return Err(PyValueError::new_err(
@@ -135,9 +204,10 @@ pub fn simulate_batch<'py>(
         })
         .collect();
 
-    let stats = py
-        .detach(|| -> Result<SimStats, crate::shoe::OutOfCards> {
-            let run_all = || -> Result<Vec<SimStats>, crate::shoe::OutOfCards> {
+    type ShardOut = (SimStats, Option<PerDealTable>);
+    let (stats, deals) = py
+        .detach(|| -> Result<ShardOut, crate::shoe::OutOfCards> {
+            let run_all = || -> Result<Vec<ShardOut>, crate::shoe::OutOfCards> {
                 shards
                     .par_iter()
                     .map(|(rounds, shard_seed)| {
@@ -149,6 +219,7 @@ pub fn simulate_batch<'py>(
                             &shoe_options,
                             *rounds,
                             *shard_seed,
+                            per_deal,
                         )
                     })
                     .collect()
@@ -165,14 +236,22 @@ pub fn simulate_batch<'py>(
             // Deterministic ordered fold (par_iter + collect preserves
             // shard order).
             let mut total = SimStats::new();
-            for s in &shard_stats {
+            let mut total_deals = per_deal.then(PerDealTable::new);
+            for (s, d) in &shard_stats {
                 total.merge(s);
+                if let (Some(td), Some(d)) = (total_deals.as_mut(), d.as_ref()) {
+                    td.merge(d);
+                }
             }
-            Ok(total)
+            Ok((total, total_deals))
         })
         .map_err(|e| PyValueError::new_err(e.to_string()))?;
 
-    stats.to_dict(py)
+    let out = stats.to_dict(py)?;
+    if let Some(d) = deals {
+        out.set_item("per_deal", d.cells)?;
+    }
+    Ok(out)
 }
 
 fn accumulate(stats: &mut SimStats, result: &RoundResult) {
@@ -204,6 +283,9 @@ pub struct PlayerRecord {
     pub actions: Vec<Vec<String>>,
     /// Per-hand outcomes: "player" / "dealer" / "draw".
     pub winners: Vec<String>,
+    /// The first two cards as dealt (rank codes), before any split or
+    /// hit reshapes the hands -- the player's half of the deal key.
+    pub first_cards: Vec<u32>,
     /// Per-hand bets as they stand after payouts (paid hands are zeroed).
     pub bets: Vec<f64>,
     pub original_bets: Vec<f64>,
@@ -326,7 +408,8 @@ fn make_record(result: RoundResult, cards_consumed: u32) -> RoundRecord {
     let players = result
         .players
         .iter()
-        .map(|p| PlayerRecord {
+        .enumerate()
+        .map(|(i, p)| PlayerRecord {
             hands: p
                 .hands
                 .iter()
@@ -338,6 +421,10 @@ fn make_record(result: RoundResult, cards_consumed: u32) -> RoundRecord {
                 .map(|hist| hist.iter().map(|a| a.as_str().to_string()).collect())
                 .collect(),
             winners: p.winners.iter().map(|w| w.as_str().to_string()).collect(),
+            first_cards: {
+                let (a, b) = result.first_cards[i];
+                vec![a.code() as u32, b.code() as u32]
+            },
             bets: p.bets.clone(),
             original_bets: p.original_bets.clone(),
             net: p.net(),

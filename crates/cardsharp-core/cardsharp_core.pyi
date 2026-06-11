@@ -68,6 +68,7 @@ class PlayerRecord:
     hands: list[list[int]]
     actions: list[list[str]]
     winners: list[str]
+    first_cards: list[int]
     bets: list[float]
     original_bets: list[float]
     net: float
@@ -95,6 +96,7 @@ def simulate_batch(
     shuffle_type: str = "perfect",
     shuffle_count: int | None = None,
     conditional_settlement: bool = False,
+    per_deal: bool = False,
 ) -> dict: ...
 def simulate_paired(
     rules_a: Rules,

@@ -224,6 +224,10 @@ pub struct RoundResult {
     /// on. Equals the realized net exactly when no hand's outcome
     /// depended on the dealer's draws.
     pub conditional_net: Option<f64>,
+    /// Each player's first two cards as dealt, before any split or hit
+    /// reshapes the hands. With the dealer upcard this is the round's
+    /// deal state -- the key the per-deal EV diagnostic buckets by.
+    pub first_cards: Vec<(Rank, Rank)>,
 }
 
 /// Play one full round. The shoe's `begin_round`/`end_round` bracketing
@@ -263,6 +267,14 @@ pub fn play_round<S: DealSource>(
         }
         dealer.add(deal_card(shoe, &mut counter)?);
     }
+
+    let first_cards: Vec<(Rank, Rank)> = players
+        .iter()
+        .map(|p| {
+            let ranks = p.hands[0].ranks();
+            (ranks[0], ranks[1])
+        })
+        .collect();
 
     // DealingState.check_blackjack: in no-peek mode, naturals are flagged
     // so they stand automatically; resolution waits for EndRound.
@@ -353,6 +365,7 @@ pub fn play_round<S: DealSource>(
         players,
         dealer,
         conditional_net,
+        first_cards,
     })
 }
 

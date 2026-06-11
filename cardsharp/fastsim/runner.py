@@ -155,6 +155,39 @@ def run_fast_batch(
     return SimulationStats.from_dict(report)
 
 
+def run_fast_per_deal(
+    rules,
+    strategy,
+    num_rounds: int,
+    seed: int,
+    threads: int = 0,
+    conditional_settlement: bool = False,
+):
+    """Single-player batch with the core's per-deal accumulator.
+
+    Returns ``(stats, cells)`` where ``cells`` is a flat list of 1000
+    ``(n, sum_x, sum_x2)`` tuples with X = net/initial_bet bucketed by
+    the round's deal state (c1, c2, upcard) in solver card values
+    (Ace=1, ten-classes collapsed), indexed
+    ``((lo-1)*10 + (hi-1))*10 + (up-1)``; only lo <= hi cells populate.
+    The per-deal EV diagnostic subtracts its solver reference Y per cell
+    -- Y is constant within a cell, so the d = X - Y moments derive
+    exactly from these X moments (cardsharp/tools/deal_ev_diagnostic.py).
+    """
+    table = encode_strategy_table(strategy, rules)
+    report = cardsharp_core.simulate_batch(
+        make_core_rules(rules),
+        table,
+        num_rounds,
+        seed=seed % (2**64),
+        threads=threads,
+        conditional_settlement=conditional_settlement,
+        per_deal=True,
+    )
+    cells = report.pop("per_deal")
+    return SimulationStats.from_dict(report), cells
+
+
 def run_fast_paired(
     rules_a,
     strategy_a,

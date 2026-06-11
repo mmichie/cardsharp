@@ -3,19 +3,39 @@
 
 For each simulated round, X = net/initial_bet and Y = the solver's exact
 E[X | deal] for the round's (card1, card2, upcard) deal (with the
-dealer-blackjack branch folded in, via build_deal_ev_table). Under the
-solver's model, E[X - Y | deal] = 0 for every deal, so any deal category
-with a significantly nonzero mean(X - Y) localizes a simulator/solver
-mismatch: pairs implicate the split model, A/10-up columns implicate
-peek conditioning, naturals implicate payout handling, and so on.
+dealer-blackjack branch folded in, via build_deal_ev_table). Any deal
+category whose mean(X - Y) moves from its expected baseline localizes a
+simulator/solver mismatch: pairs implicate the split model, A/10-up
+columns implicate peek conditioning, naturals implicate payout handling,
+and so on.
 
 Runs fresh-shoe rounds (penetration=0.01: the shoe reshuffles before
-every round) with the composition-dependent solver strategy, so the
-simulator plays exactly the strategy the solver's house_edge models.
+every round), matching the solver's per-round composition model.
+
+Two engine legs with different expected baselines:
+
+- --engine python (default): the reference engine plays the
+  composition-dependent solver strategy (SolverStrategy
+  use_ev_table=True) -- exactly the strategy whose per-deal EVs Y
+  models for first decisions. E[X - Y | deal] is then ~0 except for
+  the post-first-decision continuation effect (accuracy chain item 4),
+  so significant per-deal residuals point at real mismatches.
+- --engine fast: the Rust core plays the PURE solver table at every
+  decision (composition-dependent play is not table-encodable), with
+  per-deal bucketing done in the core (simulate_batch per_deal=True).
+  Y stays the solver's CD optimum, so the TOTAL row reproduces the
+  documented achievability gap (accuracy chain item 7b) and the table
+  shows WHERE table play gives up EV against the CD optimum --
+  concentrated where post-hit re-optimization matters. Future drift
+  shows up as a CHANGE from that recorded baseline, decomposed by deal.
 
 Examples:
-    # 1-deck H17 (combinatorial solver), 4M rounds
+    # 1-deck H17 (combinatorial solver), 4M rounds, reference engine
     python -m cardsharp.tools.deal_ev_diagnostic --num_decks 1 --num_rounds 4000000
+
+    # Same config on the fast core: ~1000x faster per round
+    python -m cardsharp.tools.deal_ev_diagnostic --num_decks 1 \\
+        --num_rounds 100000000 --engine fast
 
     # Quick 6-deck sanity pass
     python -m cardsharp.tools.deal_ev_diagnostic --num_decks 6 --num_rounds 500000
@@ -34,7 +54,7 @@ from cardsharp.blackjack.blackjack import (
     _solver_card_value,
 )
 from cardsharp.blackjack.rules import Rules
-from cardsharp.blackjack.solver import solve
+from cardsharp.blackjack.solver import solve, strategy_house_edge
 from cardsharp.blackjack.state import (
     _state_placing_bets,
     STATE_DEALING,
@@ -84,6 +104,54 @@ def simulate(rules, num_rounds, seed):
     return per_key
 
 
+def simulate_fast(rules, num_rounds, seed, threads=0):
+    """Fast-core leg: pure solver-table play, per-deal bucketing in the core.
+
+    The core returns raw X moments per (c1, c2, upcard) cell; Y is
+    constant within a cell, so the d = X - Y moments are derived here
+    exactly: sum_d = sum_x - n*y, sum_d2 = sum_x2 - 2y*sum_x + n*y^2.
+    """
+    print("solving...", flush=True)
+    sol = solve(rules, mode="auto")
+    table_he = strategy_house_edge(sol, rules)
+    print(
+        f"solver HE = {sol.house_edge * 100:.4f}%  "
+        f"table HE = {table_he * 100:.4f}%  "
+        f"(expected TOTAL baseline: the achievability gap between table "
+        f"play and the CD optimum)",
+        flush=True,
+    )
+    deal_ev = build_deal_ev_table(sol.ev_table, rules)
+
+    from cardsharp.fastsim import run_fast_per_deal
+
+    strategy = SolverStrategy(sol)  # table-only: encodable for the core
+    stats, cells = run_fast_per_deal(rules, strategy, num_rounds, seed, threads=threads)
+    he = stats.house_edge_with_ci()
+    if he is not None:
+        print(
+            f"simulated HE = {he[0] * 100:.4f}% +/- {he[3] * 100:.4f}% "
+            f"({stats.n_rounds:,} rounds)",
+            flush=True,
+        )
+
+    per_key = defaultdict(lambda: [0, 0.0, 0.0])
+    for idx, (n, sx, sx2) in enumerate(cells):
+        if n == 0:
+            continue
+        lo = idx // 100 + 1
+        hi = (idx // 10) % 10 + 1
+        up = idx % 10 + 1
+        y = deal_ev.get((lo, hi, up))
+        if y is None:
+            raise RuntimeError(
+                f"deal ({lo},{hi},{up}) was simulated but is absent from "
+                f"the solver's deal-EV table"
+            )
+        per_key[(lo, hi, up)] = [n, sx - n * y, sx2 - 2.0 * y * sx + n * y * y]
+    return per_key
+
+
 def _category(key):
     c1, c2, _ = key
     if c1 == 1 and c2 == 10:
@@ -117,7 +185,9 @@ def report(per_key, groups):
     var = max(total_d2 / total_n - mean * mean, 0.0)
     se = math.sqrt(var / total_n)
     z = mean / se if se > 0 else 0.0
-    print(f"{'TOTAL':<22}{total_n:>10,}  {mean * 1e4:>12.2f}  {se * 1e4:>8.2f}  {z:>6.1f}")
+    print(
+        f"{'TOTAL':<22}{total_n:>10,}  {mean * 1e4:>12.2f}  {se * 1e4:>8.2f}  {z:>6.1f}"
+    )
 
 
 def main():
@@ -132,7 +202,25 @@ def main():
     parser.add_argument("--num_rounds", type=int, default=4_000_000)
     parser.add_argument("--seed", type=int, default=99)
     parser.add_argument("--s17", action="store_true", help="dealer stands on soft 17")
-    parser.add_argument("--no_das", action="store_true", help="disable double after split")
+    parser.add_argument(
+        "--no_das", action="store_true", help="disable double after split"
+    )
+    parser.add_argument(
+        "--engine",
+        choices=["python", "fast"],
+        default="python",
+        help="python: reference engine with the CD solver strategy "
+        "(residuals ~0 by construction). fast: Rust core with the pure "
+        "solver table (TOTAL reproduces the achievability gap; see module "
+        "docstring), orders of magnitude more rounds per second.",
+    )
+    parser.add_argument(
+        "--threads",
+        type=int,
+        default=0,
+        help="fast engine only: 0 = all cores (bit-identical results "
+        "regardless of thread count)",
+    )
     args = parser.parse_args()
 
     rules = Rules(
@@ -151,7 +239,10 @@ def main():
         max_bet=1000,
     )
 
-    per_key = simulate(rules, args.num_rounds, args.seed)
+    if args.engine == "fast":
+        per_key = simulate_fast(rules, args.num_rounds, args.seed, args.threads)
+    else:
+        per_key = simulate(rules, args.num_rounds, args.seed)
 
     all_keys = list(per_key.keys())
     by_cat = defaultdict(list)
@@ -178,7 +269,9 @@ def main():
     print("\nworst keys (c1,c2,up) by |z| (multiple-comparison caveat applies):")
     print(f"{'key':<14}{'n':>9}  {'mean(X-Y) bp':>12}  {'SE bp':>8}  {'z':>6}")
     for _, k, n, mean, se in rows[:15]:
-        print(f"{str(k):<14}{n:>9,}  {mean * 1e4:>12.2f}  {se * 1e4:>8.2f}  {mean / se:>6.1f}")
+        print(
+            f"{str(k):<14}{n:>9,}  {mean * 1e4:>12.2f}  {se * 1e4:>8.2f}  {mean / se:>6.1f}"
+        )
 
 
 if __name__ == "__main__":

@@ -484,3 +484,124 @@ def test_simulate_batch_house_edge_in_plausible_band():
     assert report["n_rounds"] == 2_000_000
     # 6-deck H17 DAS LS basic strategy sits near 0.65%.
     assert 0.0030 < he < 0.0100, f"house edge {he:.4%} outside plausible band"
+
+
+# ---------------------------------------------------------------------------
+# Per-deal accumulator and first_cards (beads-i2s.4)
+
+
+def _decode_deal_index(idx):
+    return idx // 100 + 1, (idx // 10) % 10 + 1, idx % 10 + 1
+
+
+def test_first_cards_survive_splits_surrender_and_blackjack():
+    """first_cards must record the deal as dealt, not the reshaped hands:
+    it is the player's half of the per-deal key."""
+    rules = make_rules(allow_resplitting=True)
+    table = encode_strategy_table(BasicStrategy(), rules)
+
+    # 8,8 vs 6 splits into two hands; first_cards stays (8, 8).
+    rec = cardsharp_core.play_card_stream(
+        make_core_rules(rules), table, bytes([8, 6, 8, 10, 5, 9, 10, 10, 10])
+    )
+    player = rec[0].players[0]
+    assert player.first_cards == [8, 8]
+    assert len(player.hands) >= 2
+
+    # 10,6 vs 10 surrenders; the hand is untouched but the key must match.
+    rec = cardsharp_core.play_card_stream(
+        make_core_rules(rules), table, bytes([10, 10, 6, 5, 10, 10])
+    )
+    player = rec[0].players[0]
+    assert player.actions == [["surrender"]]
+    assert player.first_cards == [10, 6]
+
+    # Player blackjack: ace-ten recorded in deal order.
+    rec = cardsharp_core.play_card_stream(
+        make_core_rules(rules), table, bytes([1, 9, 13, 5, 10, 8])
+    )
+    player = rec[0].players[0]
+    assert player.blackjack
+    assert player.first_cards == [1, 13]
+
+
+def test_per_deal_cells_are_complete_and_consistent():
+    rules = make_rules()
+    table = encode_strategy_table(BasicStrategy(), rules)
+    report = cardsharp_core.simulate_batch(
+        make_core_rules(rules), table, 50_000, seed=421, per_deal=True
+    )
+    cells = report["per_deal"]
+    assert len(cells) == 1000
+
+    # Every round lands in exactly one cell, and only in the legal
+    # lo <= hi triangle.
+    assert sum(n for n, _, _ in cells) == 50_000
+    for idx, (n, _, _) in enumerate(cells):
+        lo, hi, _up = _decode_deal_index(idx)
+        if lo > hi:
+            assert n == 0
+
+    # Flat bets: the ratio-of-sums house edge equals the per-round mean
+    # of X = net/initial, so the cells must reproduce the report's edge
+    # (different summation order: tolerance at float-noise scale).
+    sum_x = sum(s for _, s, _ in cells)
+    he_cells = -sum_x / 50_000
+    he_report = -report["net_sum"] / report["bet_sum"]
+    assert abs(he_cells - he_report) < 1e-12
+
+    # All ten-class pairs collapse into (10, 10): four times the weight
+    # of any single-rank pair, so it must dominate pair cells.
+    ten_ten = sum(cells[((10 - 1) * 10 + (10 - 1)) * 10 + up][0] for up in range(10))
+    assert ten_ten / 50_000 > 0.05
+
+
+def test_per_deal_is_deterministic_and_thread_invariant():
+    """Cells merge in shard order, so the table is a pure function of
+    (seed, n_rounds, config) -- two shards exercise the merge path."""
+    rules = make_rules()
+    table = encode_strategy_table(BasicStrategy(), rules)
+    runs = [
+        cardsharp_core.simulate_batch(
+            make_core_rules(rules),
+            table,
+            300_000,
+            seed=77,
+            threads=threads,
+            per_deal=True,
+        )["per_deal"]
+        for threads in (1, 2, 1)
+    ]
+    assert runs[0] == runs[1] == runs[2]
+
+
+def test_per_deal_requires_single_player_and_defaults_off():
+    rules = make_rules()
+    table = encode_strategy_table(BasicStrategy(), rules)
+    with pytest.raises(ValueError, match="per_deal requires n_players=1"):
+        cardsharp_core.simulate_batch(
+            make_core_rules(rules), table, 100, seed=1, n_players=2, per_deal=True
+        )
+    report = cardsharp_core.simulate_batch(make_core_rules(rules), table, 100, seed=1)
+    assert "per_deal" not in report
+
+
+def test_per_deal_composes_with_conditional_settlement():
+    """With settlement on, X is the Rao-Blackwellized net: totals still
+    cover every round and the cells reproduce the report's (conditional)
+    financial sums."""
+    rules = make_rules()
+    table = encode_strategy_table(BasicStrategy(), rules)
+    report = cardsharp_core.simulate_batch(
+        make_core_rules(rules),
+        table,
+        50_000,
+        seed=88,
+        per_deal=True,
+        conditional_settlement=True,
+    )
+    cells = report["per_deal"]
+    assert sum(n for n, _, _ in cells) == 50_000
+    he_cells = -sum(s for _, s, _ in cells) / 50_000
+    he_report = -report["net_sum"] / report["bet_sum"]
+    assert abs(he_cells - he_report) < 1e-12

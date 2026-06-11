@@ -210,3 +210,17 @@ def test_solver_strategy_without_ev_table_is_encodable():
 
     cd_strategy = SolverStrategy(sol, use_ev_table=True)
     assert not strategy_is_encodable(cd_strategy)
+
+
+@needs_core
+def test_run_fast_per_deal_returns_stats_and_cells():
+    """Facade for the per-deal EV diagnostic: stats lift into
+    SimulationStats (per_deal key consumed, not leaked) and the cells
+    cover every simulated round."""
+    from cardsharp.fastsim import run_fast_per_deal
+
+    rules = make_rules(penetration=0.01)  # fresh shoe: the diagnostic's mode
+    stats, cells = run_fast_per_deal(rules, BasicStrategy(), 5_000, seed=31)
+    assert stats.n_rounds == 5_000
+    assert len(cells) == 1000
+    assert sum(n for n, _, _ in cells) == 5_000

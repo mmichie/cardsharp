@@ -163,7 +163,21 @@ The simulator's accuracy is anchored end to end:
    Python engine; it is the lock that replaces live parity once the
    reference engine retires (beads-i2s). Intentional semantic changes
    regenerate the corpus reviewably (cardsharp/tools/golden_corpus.py),
-   never silently; see tests/golden/README.md.
+   never silently; see tests/golden/README.md. (d) Forensics: the
+   per-deal EV diagnostic runs on the core (deal_ev_diagnostic.py
+   --engine fast; simulate_batch per_deal=True buckets X = net/initial
+   by (c1, c2, upcard) in-core, deterministically merged). Because the
+   core plays the pure table, the expected baseline is the
+   achievability gap, not zero: measured 2026-06-11 at 100M 1-deck H17
+   fresh-shoe rounds (16.6s wall), TOTAL mean(X-Y) = -11.45 bp +/- 1.03
+   -- matching item (b)'s sim-solver band -- decomposed as pairs -41.3,
+   hard -7.7, soft -4.9, naturals +0.5 (payout handling exact; the gap
+   is pure play EV, concentrated where post-hit/post-split CD
+   re-optimization matters, e.g. 7+8 vs ten at -230 bp). At 6 decks, 2M
+   rounds: TOTAL -3.15 +/- 7.24 bp, consistent with the +2.9/+4.1 band.
+   Future divergence shows as a CHANGE from these baselines, localized
+   by deal -- the instrument that attributed the 1-deck residual to
+   play EV (item 4) now outlives the Python engine.
 
 Simulation mechanics that this chain guards (all have regression tests):
 
