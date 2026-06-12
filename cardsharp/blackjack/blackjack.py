@@ -23,6 +23,7 @@ import io
 import matplotlib.pyplot as plt
 import threading
 import os
+import warnings
 
 import random
 
@@ -51,6 +52,26 @@ from cardsharp.blackjack.rules import Rules
 from cardsharp.blackjack.decision_logger import decision_logger
 from cardsharp.fastsim import resolve_engine, run_fast_batch, run_fast_cv
 from typing import Optional
+
+
+_PYTHON_ENGINE_DEPRECATION = (
+    "The pure-Python blackjack round engine is deprecated since v0.7.0 and "
+    "will be removed in the next release. Simulation, interactive play, and "
+    "the estimators all run on the Rust fast core (uv sync --extra fast); "
+    "see the single-engine plan in beads-i2s."
+)
+_python_engine_warned = False
+
+
+def _warn_python_engine_deprecated():
+    """One warning per process, at the round chokepoints every Python-engine
+    code path passes through (the boolean guard keeps the per-round cost at
+    one branch for multi-million-round simulations)."""
+    global _python_engine_warned
+    if _python_engine_warned:
+        return
+    _python_engine_warned = True
+    warnings.warn(_PYTHON_ENGINE_DEPRECATION, DeprecationWarning, stacklevel=3)
 
 
 class BlackjackGraph:
@@ -252,6 +273,7 @@ class BlackjackGame:
 
     def play_round(self):
         """Play a round of the game until it reaches the end state."""
+        _warn_python_engine_deprecated()
         while self.current_state.STATE_ID != STATE_END_ROUND:
             self.current_state.handle(self)
         self.current_state.handle(self)
@@ -528,6 +550,7 @@ def play_game(
     DEALING and PLAYERS_TURN states and looked up in ev_table to provide a
     control-variate Y to record_round.
     """
+    _warn_python_engine_deprecated()
     cards_before = shoe.cards_remaining if shoe else None
 
     players = [
@@ -1223,7 +1246,10 @@ def main():
                     raise RuntimeError(
                         f"--engine fast is unavailable for console mode: {reason}"
                     )
-                print(f"Console: using the Python engine ({reason})")
+                print(
+                    f"Console: using the Python engine ({reason}) "
+                    f"[deprecated since v0.7.0; removal scheduled]"
+                )
 
         if use_core:
             from cardsharp.blackjack.console import run_console_game

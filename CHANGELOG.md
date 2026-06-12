@@ -2,6 +2,50 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.7.0
+
+* Rust fast core (crates/cardsharp-core): classic blackjack at ~2.9M
+  games/second single-threaded, ~15-30M games/second Rayon-sharded with
+  bit-identical results for a given seed regardless of thread count
+* Hi-Lo counting (bet ramp, Illustrious 18 deviations, TC insurance),
+  CSM shoes, and GSR riffle/strip shuffles on the fast core
+* Card-stream parity suite proving round-for-round identity with the
+  Python engine across the rule surface, plus a rules-surface tripwire
+* Golden card-stream regression corpus (tests/golden/): frozen
+  parity-proven outputs replayed exactly in CI
+* Conditional dealer settlement (Rao-Blackwellized, validated and off
+  by default) and CRN rule comparisons (--compare_rules, ~9.6x tighter
+  CIs) on the core
+* Per-deal EV diagnostic fast leg (100M 1-deck rounds in ~17s) and the
+  deal-EV control variate (--cv) on the core via exact CV-moment
+  reconstruction from per-deal cells
+* Interactive resumable session API (cardsharp.fastsim.open_session);
+  the console mode and the event-driven engine behind the CLI/web
+  adapters now drive core sessions (fixes the dealer-ace insurance
+  crash in console mode and the dealer hole-card leak to adapters)
+* WoO benchmark fast leg; 1B-round statistical validation recorded in
+  the accuracy chain
+* The pure-Python round engine is FROZEN and deprecated: a
+  DeprecationWarning fires on every entry, and the engine, the parity
+  suite, and the fallback branches are scheduled for deletion in the
+  next release (single-engine end state, beads-i2s)
+
+## 0.6.0
+
+* Exact probabilistic solver with fast/exact/combinatorial modes,
+  finite-deck support, correlated split evaluation, resplit support,
+  and --solve CLI; pinned against the Wizard of Odds within ~1 bp
+* 5x simulation speedup (17K -> 92K hands/s) plus state-machine and
+  strategy-lookup optimizations
+* Professional card counting with play deviations, shuffle detection,
+  and a counting-beats-basic same-shoe validation
+* European no-peek with OBO, double_on/resplit_aces/hit_split_aces
+  rules, five-card charlie, penetration/cut-card and burn cards
+* Blackjack variant architecture with Spanish 21; Durak, Baccarat, and
+  Dragon Tiger implementations
+* Scenario-based testing with RiggedShoe; pyrefly type checking;
+  migration from Poetry to uv; Python 3.14
+
 ## 0.5.0
 
 * Fix event handler cleanup in WarGame and HighCardGame to match BlackjackGame implementation

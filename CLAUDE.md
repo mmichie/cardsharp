@@ -125,15 +125,20 @@ When optimizing blackjack simulations:
     via multiprocessing) handles what remains: bet-progression and custom
     strategies, composition-dependent play (`--cd_strategy`), non-classic
     variants, multi-seat control variates, and per-round visualization (`--vis`).
+    It is FROZEN and deprecated as of v0.7.0 (beads-i2s.6): no new features, a
+    DeprecationWarning on every entry, and deletion scheduled for the next
+    release along with the parity suite and fallback branches.
 - `auto` (the default) uses the fast core when it is installed and the configuration
   is supported, and prints which engine ran and why.
 - In the Python engine: the main loop is `play_game()`/`play_game_batch()` in
   `cardsharp/blackjack/blackjack.py`, dealing is `Shoe` in `cardsharp/common/shoe.py`,
   strategy lookups are in `cardsharp/blackjack/strategy.py`; per-round profile in
   `docs/perf/baseline-single-cpu-2026-06-09.md`
-- The two engines are kept equivalent by a card-stream parity suite
-  (`tests/test_fastsim_core.py`); any change to round semantics must land in both
-  engines with parity proven
+- Until deletion, the frozen engine is still gated by the card-stream parity suite
+  (`tests/test_fastsim_parity.py`) against accidental drift. Round-semantics
+  changes now land in the CORE (with golden-corpus regeneration and, while the
+  frozen engine lives, matching parity); the Python engine accepts no new
+  features
 - The fast core is additionally regression-locked by a golden corpus
   (`tests/golden/`, replayed by `tests/test_fastsim_golden.py`): frozen
   parity-proven outputs compared exactly. Intentional semantic changes regenerate

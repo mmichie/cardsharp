@@ -88,7 +88,11 @@ def resolve_engine(
     full list of blockers instead of silently falling back.
     """
     if requested == "python":
-        return EngineChoice(False, "Python engine requested")
+        return EngineChoice(
+            False,
+            "Python engine requested (deprecated since v0.7.0; removal "
+            "scheduled for the next release)",
+        )
 
     blockers = []
     if not CORE_AVAILABLE:
