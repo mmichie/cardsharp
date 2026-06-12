@@ -1202,24 +1202,60 @@ def main():
         profiler.enable()
 
     if args.console:
-        # Initialize shoe once for console mode
-        shoe = Shoe(
-            num_decks=rules.num_decks,
-            penetration=rules.penetration,
-            use_csm=rules.is_using_csm(),
-            burn_cards=rules.burn_cards,
-            deck_factory=rules.variant.create_deck if rules.variant else None,
-            shuffle_type=args.shuffle_type,
-            shuffle_count=args.shuffle_count,
-        )
-        for _ in range(args.num_games):
-            game = BlackjackGame(rules, io_interface, shoe)
-            player = Player(
-                "Player1", io_interface, strategy, initial_money=args.bankroll
+        # Interactive play runs on the fast core's session API; the old
+        # state-machine loop remains only as the fallback while the
+        # Python round engine awaits retirement (beads-i2s).
+        use_core = False
+        if args.engine != "python":
+            from cardsharp.fastsim.encoding import CORE_AVAILABLE
+
+            if not CORE_AVAILABLE:
+                reason = "cardsharp-core extension not installed (uv sync --extra fast)"
+            elif getattr(rules, "variant_name", "classic") != "classic":
+                reason = (
+                    f"variant '{rules.variant_name}' not supported by the fast core"
+                )
+            else:
+                use_core = True
+                reason = ""
+            if not use_core:
+                if args.engine == "fast":
+                    raise RuntimeError(
+                        f"--engine fast is unavailable for console mode: {reason}"
+                    )
+                print(f"Console: using the Python engine ({reason})")
+
+        if use_core:
+            from cardsharp.blackjack.console import run_console_game
+
+            run_console_game(
+                rules,
+                io_interface,
+                args.num_games,
+                args.bankroll,
+                seed=args.seed,
+                shuffle_type=args.shuffle_type,
+                shuffle_count=args.shuffle_count,
             )
-            game.add_player(player)
-            game.play_round()
-            shoe = game.shoe  # Update shoe state for next game
+        else:
+            # Initialize shoe once for console mode
+            shoe = Shoe(
+                num_decks=rules.num_decks,
+                penetration=rules.penetration,
+                use_csm=rules.is_using_csm(),
+                burn_cards=rules.burn_cards,
+                deck_factory=rules.variant.create_deck if rules.variant else None,
+                shuffle_type=args.shuffle_type,
+                shuffle_count=args.shuffle_count,
+            )
+            for _ in range(args.num_games):
+                game = BlackjackGame(rules, io_interface, shoe)
+                player = Player(
+                    "Player1", io_interface, strategy, initial_money=args.bankroll
+                )
+                game.add_player(player)
+                game.play_round()
+                shoe = game.shoe  # Update shoe state for next game
 
     elif args.solve:
         run_solver(args, rules)

@@ -112,7 +112,11 @@ When optimizing blackjack simulations:
     results are bit-identical for a given seed regardless of thread count). It also
     provides an interactive resumable session API (`cardsharp.fastsim.open_session`:
     begin_round/apply steps over a persistent shoe) that runs the same round
-    implementation as the batch paths. It is an optional accelerator built with
+    implementation as the batch paths; interactive play -- the `--console` mode
+    (`cardsharp/blackjack/console.py`) and the event-driven engine behind the
+    CLI/web adapters (`cardsharp/engine/blackjack.py`) -- drives sessions, with
+    the old state-machine console kept only as the no-core fallback until the
+    engine retires (beads-i2s.6). It is an optional accelerator built with
     `uv sync --extra fast`.
   - The pure-Python reference engine (~50,000 games/second single-threaded, ~350,000
     via multiprocessing) handles everything else: bet-progression and custom
