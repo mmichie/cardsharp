@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 
 from cardsharp.adapters import PlatformAdapter
 from cardsharp.blackjack.action import Action
-from cardsharp.blackjack.console import card_name
+from cardsharp.blackjack.console import card_name, hand_value
 from cardsharp.blackjack.rules import Rules
 from cardsharp.engine.base import CardsharpEngine
 from cardsharp.events import EngineEventType
@@ -279,6 +279,7 @@ class BlackjackEngine(CardsharpEngine):
         self._external_actions = asyncio.Queue()
         try:
             step = self._session.begin_round(bets)
+            self._emit_initial_deal(step, roster)
             self._project_step(step, roster)
             await self.render_state()
 
@@ -292,6 +293,7 @@ class BlackjackEngine(CardsharpEngine):
             self._external_actions = None
 
         record = step.result
+        self._emit_dealer_reveal(record)
         self._settle_round(record, roster, bets)
 
     async def _answer_step(self, step, roster):
@@ -327,6 +329,7 @@ class BlackjackEngine(CardsharpEngine):
 
         next_step = self._session.apply(answer)
         self._current_decision_player = None
+        self._emit_action_cards(action, player, seat, step, next_step)
         self.event_bus.emit(
             EngineEventType.PLAYER_ACTION,
             {
@@ -363,6 +366,104 @@ class BlackjackEngine(CardsharpEngine):
         except asyncio.TimeoutError:
             return await self.adapter.handle_timeout(
                 player_id=player.id, player_name=player.name
+            )
+
+    # -- card events (the old transitions layer emitted these; the
+    # translation layer reconstructs them from session steps) -----------
+
+    @staticmethod
+    def _hands_of(step, seat_index):
+        source = step.result.players if step.phase == "round_over" else step.players
+        return [list(h) for h in source[seat_index].hands]
+
+    def _emit_card(
+        self, card, player=None, hand_index=0, is_hole=False, before=0, after=0
+    ) -> None:
+        data = {
+            "game_id": self.state.id,
+            "card": card,
+            "is_dealer": player is None,
+            "hand_value_before": before,
+            "hand_value_after": after,
+            "timestamp": time.time(),
+        }
+        if player is None:
+            data["is_hole_card"] = is_hole
+        else:
+            data["player_id"] = player.id
+            data["player_name"] = player.name
+            data["hand_index"] = hand_index
+        self.event_bus.emit(EngineEventType.CARD_DEALT, data)
+
+    def _emit_initial_deal(self, step, roster) -> None:
+        """One CARD_DEALT per dealt card, in table order: first pass to
+        each seat, dealer upcard, second pass, then the facedown hole
+        card as '?' (the old transitions layer leaked the real hole card
+        into this event; the session never exposes it early)."""
+        first_two = [self._hands_of(step, i)[0][:2] for i in range(len(roster))]
+        upcard = (
+            step.result.dealer_cards[0]
+            if step.phase == "round_over"
+            else step.dealer_cards[0]
+        )
+        for deal_pass in (0, 1):
+            for seat, base in enumerate(roster):
+                cards = first_two[seat]
+                self._emit_card(
+                    card_name(cards[deal_pass]),
+                    player=base,
+                    before=hand_value(cards[:deal_pass]),
+                    after=hand_value(cards[: deal_pass + 1]),
+                )
+            if deal_pass == 0:
+                up_value = hand_value([upcard])
+                self._emit_card(card_name(upcard), after=up_value)
+            else:
+                up_value = hand_value([upcard])
+                self._emit_card("?", is_hole=True, before=up_value, after=up_value)
+
+    def _emit_action_cards(self, action, player, seat, prev_step, next_step) -> None:
+        """Cards drawn by the applied action. Keyed on the action (hit
+        and double draw one to the acting hand; split draws one to each
+        affected hand) and guarded by actual growth, so refused draws
+        (the split-ace quirks) emit nothing."""
+        if action not in (Action.HIT, Action.DOUBLE, Action.SPLIT):
+            return
+        prev_hands = self._hands_of(prev_step, seat)
+        hands = self._hands_of(next_step, seat)
+        if action == Action.SPLIT:
+            if len(hands) <= len(prev_hands):
+                return
+            affected = [prev_step.hand_index, len(hands) - 1]
+        else:
+            hand_index = prev_step.hand_index
+            if len(hands[hand_index]) <= len(prev_hands[hand_index]):
+                return
+            affected = [hand_index]
+        for index in affected:
+            codes = hands[index]
+            self._emit_card(
+                card_name(codes[-1]),
+                player=player,
+                hand_index=index,
+                before=hand_value(codes[:-1]),
+                after=hand_value(codes),
+            )
+
+    def _emit_dealer_reveal(self, record) -> None:
+        """The hole card turns over, then any dealer draws."""
+        cards = list(record.dealer_cards)
+        self._emit_card(
+            card_name(cards[1]),
+            is_hole=True,
+            before=hand_value(cards[:1]),
+            after=hand_value(cards[:2]),
+        )
+        for i in range(2, len(cards)):
+            self._emit_card(
+                card_name(cards[i]),
+                before=hand_value(cards[:i]),
+                after=hand_value(cards[: i + 1]),
             )
 
     def _project_step(self, step, roster) -> None:

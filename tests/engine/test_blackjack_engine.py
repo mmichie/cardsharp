@@ -293,3 +293,32 @@ async def test_multi_round_shoe_and_balance_continuity():
     assert engine.state.players[0].balance == 1020.0
     assert engine.state.round_number == 2
     await engine.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_card_dealt_events_cover_the_round_without_leaking():
+    """CARD_DEALT is part of the engine's event contract: every dealt
+    card gets an event in table order, the hole card crosses as '?'
+    until the reveal, and refused draws emit nothing."""
+    cards_seen = []
+    adapter = scripted_adapter(["hit"])
+    engine = make_engine(adapter, cards=[10, 7, 6, 9, 10, 5, 5])
+    unsub = engine.event_bus.on(
+        EngineEventType.CARD_DEALT,
+        lambda d: cards_seen.append((d["is_dealer"], d["card"])),
+    )
+    try:
+        await play_one_round(engine)
+        # Deal: T to player, upcard 7, 6 to player, hole '?'; hit T;
+        # reveal hole 9. Player busts so the dealer draws nothing.
+        assert cards_seen == [
+            (False, "T"),
+            (True, "7"),
+            (False, "6"),
+            (True, "?"),
+            (False, "T"),
+            (True, "9"),
+        ]
+    finally:
+        unsub()
+        await engine.shutdown()
