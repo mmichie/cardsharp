@@ -29,7 +29,11 @@ def blackjack_system():
         }
     )
 
-    # Create a config for the engine
+    # Create a config for the engine. The injected card stream makes
+    # every round identical and decision-bearing (player T,9 = 19 vs
+    # dealer 8,7 drawing a ten): a random shoe resolves ~7% of rounds at
+    # the deal (naturals, dealer blackjacks) with no player decision,
+    # which is exactly the flake beads-k58 documented.
     config = {
         "rules": {
             "blackjack_pays": 1.5,
@@ -41,6 +45,7 @@ def blackjack_system():
             "min_bet": 5.0,
             "max_bet": 1000.0,
         },
+        "card_stream": [10, 8, 9, 7, 10] * 60,
     }
 
     # Create a blackjack engine
