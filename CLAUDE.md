@@ -118,10 +118,13 @@ When optimizing blackjack simulations:
     the old state-machine console kept only as the no-core fallback until the
     engine retires (beads-i2s.6). It is an optional accelerator built with
     `uv sync --extra fast`.
+  - The fast core also runs the deal-EV control variate (`--cv`, single seat:
+    the per-deal accumulator yields the exact CV moments) and CRN rule
+    comparisons (`--compare_rules`).
   - The pure-Python reference engine (~50,000 games/second single-threaded, ~350,000
-    via multiprocessing) handles everything else: bet-progression and custom
-    strategies, non-classic variants, control variates, per-round visualization,
-    and interactive play.
+    via multiprocessing) handles what remains: bet-progression and custom
+    strategies, composition-dependent play (`--cd_strategy`), non-classic
+    variants, multi-seat control variates, and per-round visualization (`--vis`).
 - `auto` (the default) uses the fast core when it is installed and the configuration
   is supported, and prints which engine ran and why.
 - In the Python engine: the main loop is `play_game()`/`play_game_batch()` in

@@ -134,6 +134,17 @@ The simulator's accuracy is anchored end to end:
    rounds the H17-S17 delta resolves to +19.05 bp +/- 2.30 bp, 9.6x
    tighter than independent runs of the same budget (~92x effective
    rounds), in seconds rather than the Python CRN path's hours.
+   (c) Deal-EV control variate on the core (2026-06-11, beads-i2s.5):
+   --cv runs through the per-deal accumulator -- Y is constant within a
+   (c1, c2, upcard) cell, so every joint (X, Y) moment the CV estimator
+   needs reconstructs EXACTLY from the cells' X moments
+   (attach_cv_from_cells; algebraic identity with the per-round Welford
+   accumulation, regression-tested to 1e-12). Cross-engine equivalence
+   verified statistically against the Python CV path; measured 18.9%
+   variance reduction at 6-deck fresh shoe with beta = 1.001 (matching
+   the ~20% the Python path delivered), at core speed: 2M CV rounds in
+   0.23s. Single seat only (the per-deal key is one player's deal);
+   multi-seat CV stays on the reference engine until retirement.
 7. The Rust fast core (crates/cardsharp-core, --engine fast) is held to
    the same chain two ways. (a) Equivalence: the card-stream parity suite
    (tests/test_fastsim_parity.py, in CI) proves round-for-round identity

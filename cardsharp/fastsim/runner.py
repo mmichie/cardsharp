@@ -80,6 +80,7 @@ def resolve_engine(
     needs_per_round: bool = False,
     needs_cv: bool = False,
     shuffle_type: str = "perfect",
+    n_players: int = 1,
 ) -> EngineChoice:
     """Decide which engine runs this configuration.
 
@@ -94,8 +95,11 @@ def resolve_engine(
         blockers.append("cardsharp-core extension not installed (uv sync --extra fast)")
     if needs_per_round:
         blockers.append("per-round output (--vis) requires the Python engine")
-    if needs_cv:
-        blockers.append("control variates (--cv) require the Python engine")
+    if needs_cv and n_players > 1:
+        blockers.append(
+            "control variates with multiple players require the Python "
+            "engine (the core's per-deal accumulator is single-seat)"
+        )
     if not strategy_is_encodable(strategy):
         blockers.append(f"strategy {type(strategy).__name__} is not table-encodable")
     if getattr(rules, "variant_name", "classic") != "classic":
@@ -162,6 +166,8 @@ def run_fast_per_deal(
     seed: int,
     threads: int = 0,
     conditional_settlement: bool = False,
+    shuffle_type: str = "perfect",
+    shuffle_count=None,
 ):
     """Single-player batch with the core's per-deal accumulator.
 
@@ -170,22 +176,106 @@ def run_fast_per_deal(
     the round's deal state (c1, c2, upcard) in solver card values
     (Ace=1, ten-classes collapsed), indexed
     ``((lo-1)*10 + (hi-1))*10 + (up-1)``; only lo <= hi cells populate.
-    The per-deal EV diagnostic subtracts its solver reference Y per cell
-    -- Y is constant within a cell, so the d = X - Y moments derive
-    exactly from these X moments (cardsharp/tools/deal_ev_diagnostic.py).
+    Y references are subtracted Python-side -- Y is constant within a
+    cell, so both the EV diagnostic's d = X - Y moments and the control
+    variate's joint (X, Y) moments derive exactly from these X moments.
     """
     table = encode_strategy_table(strategy, rules)
+    counting = (
+        encode_counting_config(strategy) if type(strategy) is CountingStrategy else None
+    )
     report = cardsharp_core.simulate_batch(
         make_core_rules(rules),
         table,
         num_rounds,
         seed=seed % (2**64),
         threads=threads,
+        counting=counting,
+        shuffle_type=shuffle_type,
+        shuffle_count=shuffle_count,
         conditional_settlement=conditional_settlement,
         per_deal=True,
     )
     cells = report.pop("per_deal")
     return SimulationStats.from_dict(report), cells
+
+
+def attach_cv_from_cells(stats: SimulationStats, cells, deal_ev_table, mu_y):
+    """Fill ``stats``' control-variate accumulators from per-deal cells.
+
+    The control variate Y is the solver's exact E[X | deal] for the
+    round's (c1, c2, upcard); it is CONSTANT within a per-deal cell, so
+    every joint moment the CV estimator needs reconstructs exactly from
+    the cells' X moments: sum_y = sum_k n_k y_k, sum_xy = sum_k y_k
+    sum_x_k, and so on. This is mathematically identical to the
+    per-round Welford accumulation the Python engine performed (float
+    summation order differs at ~1e-15), so
+    ``SimulationStats.control_variate_he_with_ci`` works unchanged.
+    """
+    n = 0
+    sum_x = sum_x2 = 0.0
+    sum_y = sum_y2 = sum_xy = 0.0
+    for idx, (cell_n, cell_sx, cell_sx2) in enumerate(cells):
+        if cell_n == 0:
+            continue
+        lo = idx // 100 + 1
+        hi = (idx // 10) % 10 + 1
+        up = idx % 10 + 1
+        y = deal_ev_table.get((lo, hi, up))
+        if y is None:
+            raise RuntimeError(
+                f"deal ({lo},{hi},{up}) was simulated but is absent from "
+                f"the solver's deal-EV table"
+            )
+        n += cell_n
+        sum_x += cell_sx
+        sum_x2 += cell_sx2
+        sum_y += cell_n * y
+        sum_y2 += cell_n * y * y
+        sum_xy += y * cell_sx
+    if n == 0:
+        return stats
+
+    x_mean = sum_x / n
+    y_mean = sum_y / n
+    stats.cv_n = n
+    stats.cv_x_mean = x_mean
+    stats.cv_y_mean = y_mean
+    stats.cv_x_M2 = max(sum_x2 - n * x_mean * x_mean, 0.0)
+    stats.cv_y_M2 = max(sum_y2 - n * y_mean * y_mean, 0.0)
+    stats.cv_xy_C = sum_xy - n * x_mean * y_mean
+    stats.cv_mu_y = mu_y
+    return stats
+
+
+def run_fast_cv(
+    rules,
+    strategy,
+    num_rounds: int,
+    seed: int,
+    deal_ev_table,
+    mu_y: float,
+    threads: int = 0,
+    shuffle_type: str = "perfect",
+    shuffle_count=None,
+):
+    """Control-variate simulation on the fast core (single player).
+
+    Runs the per-deal batch and derives the CV accumulators from the
+    cells, so the returned ``SimulationStats`` reports both the plain
+    and the CV-adjusted house edge exactly like the Python engine's
+    --cv path did.
+    """
+    stats, cells = run_fast_per_deal(
+        rules,
+        strategy,
+        num_rounds,
+        seed,
+        threads=threads,
+        shuffle_type=shuffle_type,
+        shuffle_count=shuffle_count,
+    )
+    return attach_cv_from_cells(stats, cells, deal_ev_table, mu_y)
 
 
 def run_fast_paired(

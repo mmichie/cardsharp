@@ -49,7 +49,7 @@ from cardsharp.common.io_interface import (
 )
 from cardsharp.blackjack.rules import Rules
 from cardsharp.blackjack.decision_logger import decision_logger
-from cardsharp.fastsim import resolve_engine, run_fast_batch
+from cardsharp.fastsim import resolve_engine, run_fast_batch, run_fast_cv
 from typing import Optional
 
 
@@ -1328,6 +1328,7 @@ def main():
                 needs_per_round=bool(args.vis),
                 needs_cv=bool(args.cv),
                 shuffle_type=args.shuffle_type,
+                n_players=args.num_players,
             )
         except RuntimeError as e:
             print(f"Error: {e}")
@@ -1338,16 +1339,31 @@ def main():
             print(f"Engine: Python reference ({engine_choice.reason})")
 
         if engine_choice.use_core:
-            fast_stats = run_fast_batch(
-                rules,
-                strategy,
-                args.num_games,
-                master_seed,
-                n_players=args.num_players,
-                initial_bankroll=args.bankroll,
-                shuffle_type=args.shuffle_type,
-                shuffle_count=args.shuffle_count,
-            )
+            if args.cv:
+                # The control variate runs on the core's per-deal
+                # accumulator: Y is constant per deal cell, so the CV
+                # moments derive exactly from the per-deal X moments.
+                fast_stats = run_fast_cv(
+                    rules,
+                    strategy,
+                    args.num_games,
+                    master_seed,
+                    deal_ev_table,
+                    cv_mu_y,
+                    shuffle_type=args.shuffle_type,
+                    shuffle_count=args.shuffle_count,
+                )
+            else:
+                fast_stats = run_fast_batch(
+                    rules,
+                    strategy,
+                    args.num_games,
+                    master_seed,
+                    n_players=args.num_players,
+                    initial_bankroll=args.bankroll,
+                    shuffle_type=args.shuffle_type,
+                    shuffle_count=args.shuffle_count,
+                )
             agg_stats.merge(fast_stats)
             running_net_earnings = fast_stats.net_sum
             total_bets = fast_stats.total_bet_sum
