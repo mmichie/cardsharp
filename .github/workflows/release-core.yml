@@ -1,0 +1,161 @@
+# Build and publish cardsharp-core wheels to PyPI (beads-i2s.6 / beads-6zw).
+#
+# The crate is built with PyO3 abi3-py312, so ONE wheel per platform serves
+# every CPython >= 3.12 -- the matrix is platforms only, not platforms x
+# versions. Publishing uses PyPI Trusted Publishing (OIDC): no API tokens.
+#
+# Release line is independent of the main `cardsharp` package: this fires on
+# `core-v*` tags (e.g. core-v0.1.0), `cardsharp` releases on `v*`. See
+# RELEASING.md for the one-time PyPI trusted-publisher setup and the cut
+# procedure.
+name: Release cardsharp-core
+
+on:
+  push:
+    tags: ["core-v*"]
+  workflow_dispatch: # build wheels on demand without publishing
+
+permissions:
+  contents: read
+
+env:
+  MANIFEST: crates/cardsharp-core/Cargo.toml
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheels (manylinux)
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --manifest-path ${{ env.MANIFEST }}
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          manylinux: auto
+      - name: Smoke-test the native wheel
+        if: ${{ matrix.target == 'x86_64' }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install cardsharp-core --no-index --find-links dist
+          python -c "import cardsharp_core as c; assert c.ping(1) == 2; print('engine', c.engine_version())"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-manylinux-${{ matrix.target }}
+          path: dist
+
+  musllinux:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheels (musllinux)
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --manifest-path ${{ env.MANIFEST }}
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          manylinux: musllinux_1_2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-musllinux-${{ matrix.target }}
+          path: dist
+
+  macos:
+    strategy:
+      matrix:
+        include:
+          - runner: macos-13 # Intel
+            target: x86_64
+          - runner: macos-14 # Apple Silicon
+            target: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --manifest-path ${{ env.MANIFEST }}
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      - name: Smoke-test the native wheel
+        run: |
+          python -m pip install --upgrade pip
+          pip install cardsharp-core --no-index --find-links dist
+          python -c "import cardsharp_core as c; assert c.ping(1) == 2; print('engine', c.engine_version())"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-${{ matrix.target }}
+          path: dist
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: x64
+          args: --release --out dist --manifest-path ${{ env.MANIFEST }}
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      - name: Smoke-test the native wheel
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install cardsharp-core --no-index --find-links dist
+          python -c "import cardsharp_core as c; assert c.ping(1) == 2; print('engine', c.engine_version())"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows-x64
+          path: dist
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist --manifest-path ${{ env.MANIFEST }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist
+          path: dist
+
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: [linux, musllinux, macos, windows, sdist]
+    # Only on a core-v* tag; workflow_dispatch builds wheels but never publishes.
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    environment: pypi # gate: configure required reviewers in repo settings
+    permissions:
+      id-token: write # OIDC for Trusted Publishing -- no stored token
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: wheels-*
+          merge-multiple: true
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist

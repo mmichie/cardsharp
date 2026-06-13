@@ -29,11 +29,13 @@ dependencies = [
 ui = [
     "streamlit>=1.38.0,<2.0.0",
 ]
-# Optional Rust accelerator (requires a Rust toolchain to build from source).
-# The pure-Python engine remains the default; cardsharp falls back to it
-# transparently when this extension is not installed.
+# Optional Rust accelerator, published as a separate PyPI package with
+# prebuilt abi3 wheels (.github/workflows/release-core.yml). In the git
+# checkout [tool.uv.sources] redirects this to the workspace crate; the
+# published metadata carries the bare floor pin below, which resolves
+# from PyPI once cardsharp-core wheels are uploaded.
 fast = [
-    "cardsharp-core",
+    "cardsharp-core>=0.1.0",
 ]
 dev = [
     "black>=24.10,<26.0",
