@@ -13,6 +13,16 @@ bd.sock
 sync-state.json
 last-touched
 
+# Dolt storage and runtime (local, per-machine; the committed source of
+# truth is issues.jsonl / interactions.jsonl, not the Dolt database).
+# Covers both embedded mode (embeddeddolt/) and the legacy server mode
+# (dolt/ + dolt-server.* runtime files).
+dolt/
+embeddeddolt/
+dolt-server.*
+backup/
+export-state.json
+
 # Local version tracking (prevents upgrade notification spam after git ops)
 .local_version
 
