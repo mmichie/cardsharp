@@ -98,6 +98,25 @@ def simulate_batch(
     conditional_settlement: bool = False,
     per_deal: bool = False,
 ) -> dict: ...
+
+# True when the extension was compiled with the gpu feature; runtime
+# usability is reported by gpu_probe().
+GPU_SUPPORT: bool
+
+def gpu_probe() -> tuple[bool, str]: ...
+def simulate_batch_gpu(
+    rules: Rules,
+    table: bytes,
+    n_rounds: int,
+    seed: int,
+    n_players: int = 1,
+    initial_bankroll: float = 1000.0,
+    always_insure: bool = False,
+    threads: int = 0,
+    counting: CountingConfig | None = None,
+    shuffle_type: str = "perfect",
+    shuffle_count: int | None = None,
+) -> dict: ...
 def simulate_paired(
     rules_a: Rules,
     table_a: bytes,

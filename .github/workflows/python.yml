@@ -53,7 +53,8 @@ jobs:
       run: |
         cargo fmt --check
         cargo clippy --all-targets -- -D warnings
+        cargo clippy --all-targets --features gpu -- -D warnings
     - name: Build extension
       run: uv sync --extra dev --extra fast
     - name: Test extension (smoke, runner, parity suite)
-      run: uv run pytest tests/test_fastsim_core.py tests/test_fastsim_runner.py tests/test_fastsim_parity.py -v
+      run: uv run pytest tests/test_fastsim_core.py tests/test_fastsim_runner.py tests/test_fastsim_parity.py tests/test_fastsim_gpu.py -v

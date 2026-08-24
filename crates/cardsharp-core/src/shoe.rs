@@ -162,6 +162,92 @@ fn strip_shuffle(cards: Vec<Rank>, rng: &mut Xoshiro256PlusPlus) -> Vec<Rank> {
     result
 }
 
+/// Apply one full shuffle procedure (all passes) to `cards` in place,
+/// making exactly the RNG calls `Shoe::run_shuffle_procedure` makes. The
+/// single implementation is shared by `Shoe` and `OrderingGen` so the
+/// GPU engine's host-generated orderings can never drift from the shoe's.
+fn apply_shuffle_procedure(
+    cards: &mut Vec<Rank>,
+    style: ShuffleStyle,
+    passes: u32,
+    rng: &mut Xoshiro256PlusPlus,
+) {
+    match style {
+        ShuffleStyle::Perfect => cards.shuffle(rng),
+        ShuffleStyle::Riffle => {
+            for _ in 0..passes {
+                let taken = std::mem::take(cards);
+                *cards = gsr_riffle(taken, rng);
+            }
+        }
+        ShuffleStyle::Strip => {
+            for _ in 0..passes {
+                let taken = std::mem::take(cards);
+                *cards = strip_shuffle(taken, rng);
+            }
+        }
+    }
+}
+
+/// Build the ordered (pre-shuffle) card vector for `num_decks` decks,
+/// exactly as `Shoe::new` does.
+fn build_deck(num_decks: u32) -> Vec<Rank> {
+    let mut cards = Vec::with_capacity(52 * num_decks as usize);
+    for _ in 0..num_decks {
+        for _ in 0..4 {
+            cards.extend_from_slice(&Rank::ALL);
+        }
+    }
+    cards
+}
+
+/// The exact sequence of post-shuffle orderings a classic (non-CSM)
+/// `Shoe` with the same options and RNG would deal from, without playing.
+///
+/// In the classic path the shoe consumes RNG only inside `shuffle()`, and
+/// every between-rounds shuffle reshuffles the full card vector in its
+/// current order, so the ordering sequence is a pure function of
+/// (options, seed) -- independent of how many cards each round consumed.
+/// The one exception is the mid-round exhaustion reshuffle (partial pool),
+/// which the GPU engine detects and routes back to the CPU shard runner.
+#[cfg_attr(not(feature = "gpu"), allow(dead_code))]
+pub struct OrderingGen {
+    cards: Vec<Rank>,
+    style: ShuffleStyle,
+    passes: u32,
+    rng: Xoshiro256PlusPlus,
+}
+
+#[cfg_attr(not(feature = "gpu"), allow(dead_code))]
+impl OrderingGen {
+    /// Mirrors `Shoe::new` for the classic path: after construction,
+    /// `current()` is the ordering the shoe's construction shuffle
+    /// produced (position starts at `burn_cards`, the caller's job).
+    pub fn new(options: &ShoeOptions, mut rng: Xoshiro256PlusPlus) -> Self {
+        assert!(!options.use_csm, "OrderingGen models cut-card shoes only");
+        let mut cards = build_deck(options.num_decks);
+        let passes = options
+            .shuffle_count
+            .unwrap_or_else(|| options.shuffle_style.default_count());
+        apply_shuffle_procedure(&mut cards, options.shuffle_style, passes, &mut rng);
+        OrderingGen {
+            cards,
+            style: options.shuffle_style,
+            passes,
+            rng,
+        }
+    }
+
+    pub fn current(&self) -> &[Rank] {
+        &self.cards
+    }
+
+    /// Advance to the ordering the next `begin_round` shuffle would deal.
+    pub fn advance(&mut self) {
+        apply_shuffle_procedure(&mut self.cards, self.style, self.passes, &mut self.rng);
+    }
+}
+
 pub struct Shoe {
     cards: Vec<Rank>,
     /// Used cards awaiting return to the machine (CSM mode only).
@@ -185,12 +271,7 @@ pub struct Shoe {
 
 impl Shoe {
     pub fn new(options: ShoeOptions, rng: Xoshiro256PlusPlus) -> Self {
-        let mut cards = Vec::with_capacity(52 * options.num_decks as usize);
-        for _ in 0..options.num_decks {
-            for _ in 0..4 {
-                cards.extend_from_slice(&Rank::ALL);
-            }
-        }
+        let cards = build_deck(options.num_decks);
         let total_cards = cards.len();
         let shuffle_passes = options
             .shuffle_count
@@ -223,21 +304,12 @@ impl Shoe {
 
     /// Apply the configured shuffle procedure, mirroring `_shuffle_cards`.
     fn run_shuffle_procedure(&mut self) {
-        match self.options.shuffle_style {
-            ShuffleStyle::Perfect => self.cards.shuffle(&mut self.rng),
-            ShuffleStyle::Riffle => {
-                for _ in 0..self.shuffle_passes {
-                    let cards = std::mem::take(&mut self.cards);
-                    self.cards = gsr_riffle(cards, &mut self.rng);
-                }
-            }
-            ShuffleStyle::Strip => {
-                for _ in 0..self.shuffle_passes {
-                    let cards = std::mem::take(&mut self.cards);
-                    self.cards = strip_shuffle(cards, &mut self.rng);
-                }
-            }
-        }
+        apply_shuffle_procedure(
+            &mut self.cards,
+            self.options.shuffle_style,
+            self.shuffle_passes,
+            &mut self.rng,
+        );
     }
 
     fn shuffle(&mut self) {
@@ -537,6 +609,38 @@ mod tests {
         // Sanity: ten-class frequency over 30k cards is near 5/13.
         let high_rate = dealt_high as f64 / 30_000.0;
         assert!((high_rate - 5.0 / 13.0).abs() < 0.02, "rate {high_rate}");
+    }
+
+    #[test]
+    fn ordering_gen_matches_the_shoe_deal_stream() {
+        for style in [
+            ShuffleStyle::Perfect,
+            ShuffleStyle::Riffle,
+            ShuffleStyle::Strip,
+        ] {
+            let mut options = ShoeOptions::classic(2, 0.75, 3);
+            options.shuffle_style = style;
+            let seed = 42;
+            let mut shoe = Shoe::new(options.clone(), Xoshiro256PlusPlus::seed_from_u64(seed));
+            let mut orderings = OrderingGen::new(&options, Xoshiro256PlusPlus::seed_from_u64(seed));
+            let total = 104usize;
+            let burn = 3usize;
+            for epoch in 0..5 {
+                if epoch > 0 {
+                    orderings.advance();
+                }
+                // Deal exactly the rest of the shoe in one bracketed round
+                // (never past the end, so no mid-round reshuffle fires).
+                shoe.begin_round();
+                let dealt: Vec<Rank> = (0..total - burn).map(|_| shoe.deal().unwrap()).collect();
+                shoe.end_round();
+                assert_eq!(
+                    dealt,
+                    orderings.current()[burn..],
+                    "{style:?} ordering {epoch} diverged"
+                );
+            }
+        }
     }
 
     #[test]

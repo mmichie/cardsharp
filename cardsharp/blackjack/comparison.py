@@ -175,6 +175,12 @@ def compare_rules(
     # Avoid circular import at module load
     from cardsharp.blackjack.blackjack import BlackjackGame
 
+    if engine == "gpu":
+        raise RuntimeError(
+            "--engine gpu does not support --compare_rules (the CRN "
+            "comparison runs on the CPU core); use --engine auto or fast"
+        )
+
     if seed is None:
         seed = random.SystemRandom().randint(0, 2**63 - 1)
 

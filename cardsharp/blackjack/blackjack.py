@@ -1002,12 +1002,15 @@ def main():
     parser.add_argument(
         "--engine",
         type=str,
-        choices=["auto", "fast", "python"],
+        choices=["auto", "fast", "gpu", "python"],
         default="auto",
         help="Simulation engine: 'auto' uses the Rust fast core when it is "
         "installed and supports the requested configuration, 'fast' "
-        "requires it (error otherwise), 'python' forces the reference "
-        "engine (combine with --single_cpu to avoid multiprocessing).",
+        "requires it (error otherwise), 'gpu' runs batches on the core's "
+        "wgpu backend (bit-identical to 'fast' for the same seed; "
+        "requires a usable GPU and errors otherwise), 'python' forces "
+        "the reference engine (combine with --single_cpu to avoid "
+        "multiprocessing).",
     )
     parser.add_argument(
         "--profile",
@@ -1359,7 +1362,12 @@ def main():
         except RuntimeError as e:
             print(f"Error: {e}")
             return
-        if engine_choice.use_core:
+        if engine_choice.use_gpu:
+            from cardsharp.fastsim.encoding import cardsharp_core
+
+            _, gpu_info = cardsharp_core.gpu_probe()
+            print(f"Engine: Rust fast core, GPU backend ({gpu_info})")
+        elif engine_choice.use_core:
             print("Engine: Rust fast core (cardsharp-core)")
         else:
             print(f"Engine: Python reference ({engine_choice.reason})")
@@ -1389,6 +1397,7 @@ def main():
                     initial_bankroll=args.bankroll,
                     shuffle_type=args.shuffle_type,
                     shuffle_count=args.shuffle_count,
+                    use_gpu=engine_choice.use_gpu,
                 )
             agg_stats.merge(fast_stats)
             running_net_earnings = fast_stats.net_sum

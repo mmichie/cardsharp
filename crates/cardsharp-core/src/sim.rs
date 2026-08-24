@@ -34,7 +34,7 @@ const SHARD_ROUNDS: u64 = 250_000;
 
 /// SplitMix64: stable, explicit derivation of per-shard seeds from the
 /// master seed (independent of any RNG crate internals).
-fn splitmix64(state: &mut u64) -> u64 {
+pub(crate) fn splitmix64(state: &mut u64) -> u64 {
     *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
     let mut z = *state;
     z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
@@ -90,14 +90,33 @@ impl PerDealTable {
 /// Batch-level round parameters: the shared RoundConfig plus the seat
 /// layout and test hooks that `play_round` no longer owns (callers build
 /// the seats; the decider answers insurance).
-struct BatchCfg {
-    round: RoundConfig,
-    n_players: usize,
-    always_insure: bool,
+pub(crate) struct BatchCfg {
+    pub(crate) round: RoundConfig,
+    pub(crate) n_players: usize,
+    pub(crate) always_insure: bool,
+}
+
+/// Fixed-size shards with explicitly derived seeds: the shard layout
+/// depends only on (seed, n_rounds), never on the thread count. Shared
+/// by the CPU batch runner and the GPU engine so both play the same
+/// (rounds, shard_seed) sequence.
+pub(crate) fn shard_layout(n_rounds: u64, seed: u64) -> Vec<(u64, u64)> {
+    let mut seed_state = seed;
+    let n_shards = n_rounds.div_ceil(SHARD_ROUNDS).max(1);
+    (0..n_shards)
+        .map(|i| {
+            let rounds = if i == n_shards - 1 {
+                n_rounds - i * SHARD_ROUNDS
+            } else {
+                SHARD_ROUNDS
+            };
+            (rounds, splitmix64(&mut seed_state))
+        })
+        .collect()
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run_shard(
+pub(crate) fn run_shard(
     rules: &Rules,
     table: &StrategyTable,
     batch: &BatchCfg,
@@ -205,61 +224,19 @@ pub fn simulate_batch<'py>(
         always_insure,
     };
 
-    // Fixed-size shards with explicitly derived seeds: the shard layout
-    // depends only on (seed, n_rounds), never on the thread count.
-    let mut seed_state = seed;
-    let n_shards = n_rounds.div_ceil(SHARD_ROUNDS).max(1);
-    let shards: Vec<(u64, u64)> = (0..n_shards)
-        .map(|i| {
-            let rounds = if i == n_shards - 1 {
-                n_rounds - i * SHARD_ROUNDS
-            } else {
-                SHARD_ROUNDS
-            };
-            (rounds, splitmix64(&mut seed_state))
-        })
-        .collect();
-
-    type ShardOut = (SimStats, Option<PerDealTable>);
     let (stats, deals) = py
-        .detach(|| -> Result<ShardOut, crate::shoe::OutOfCards> {
-            let run_all = || -> Result<Vec<ShardOut>, crate::shoe::OutOfCards> {
-                shards
-                    .par_iter()
-                    .map(|(rounds, shard_seed)| {
-                        run_shard(
-                            &rules,
-                            &table,
-                            &batch,
-                            counting.as_ref(),
-                            &shoe_options,
-                            *rounds,
-                            *shard_seed,
-                            per_deal,
-                        )
-                    })
-                    .collect()
-            };
-            let shard_stats = if threads == 0 {
-                run_all()?
-            } else {
-                rayon::ThreadPoolBuilder::new()
-                    .num_threads(threads)
-                    .build()
-                    .expect("failed to build thread pool")
-                    .install(run_all)?
-            };
-            // Deterministic ordered fold (par_iter + collect preserves
-            // shard order).
-            let mut total = SimStats::new();
-            let mut total_deals = per_deal.then(PerDealTable::new);
-            for (s, d) in &shard_stats {
-                total.merge(s);
-                if let (Some(td), Some(d)) = (total_deals.as_mut(), d.as_ref()) {
-                    td.merge(d);
-                }
-            }
-            Ok((total, total_deals))
+        .detach(|| {
+            run_batch_cpu(
+                &rules,
+                &table,
+                &batch,
+                counting.as_ref(),
+                &shoe_options,
+                n_rounds,
+                seed,
+                threads,
+                per_deal,
+            )
         })
         .map_err(|e| PyValueError::new_err(e.to_string()))?;
 
@@ -268,6 +245,62 @@ pub fn simulate_batch<'py>(
         out.set_item("per_deal", d.cells)?;
     }
     Ok(out)
+}
+
+/// The CPU batch loop shared by `simulate_batch` (via `py.detach`) and the
+/// GPU engine's exactness tests / fallback path: shard, run in parallel,
+/// fold in shard order.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_batch_cpu(
+    rules: &Rules,
+    table: &StrategyTable,
+    batch: &BatchCfg,
+    counting: Option<&CountingConfig>,
+    shoe_options: &ShoeOptions,
+    n_rounds: u64,
+    seed: u64,
+    threads: usize,
+    per_deal: bool,
+) -> Result<(SimStats, Option<PerDealTable>), crate::shoe::OutOfCards> {
+    let shards = shard_layout(n_rounds, seed);
+    type ShardOut = (SimStats, Option<PerDealTable>);
+    let run_all = || -> Result<Vec<ShardOut>, crate::shoe::OutOfCards> {
+        shards
+            .par_iter()
+            .map(|(rounds, shard_seed)| {
+                run_shard(
+                    rules,
+                    table,
+                    batch,
+                    counting,
+                    shoe_options,
+                    *rounds,
+                    *shard_seed,
+                    per_deal,
+                )
+            })
+            .collect()
+    };
+    let shard_stats = if threads == 0 {
+        run_all()?
+    } else {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .expect("failed to build thread pool")
+            .install(run_all)?
+    };
+    // Deterministic ordered fold (par_iter + collect preserves shard
+    // order).
+    let mut total = SimStats::new();
+    let mut total_deals = per_deal.then(PerDealTable::new);
+    for (s, d) in &shard_stats {
+        total.merge(s);
+        if let (Some(td), Some(d)) = (total_deals.as_mut(), d.as_ref()) {
+            td.merge(d);
+        }
+    }
+    Ok((total, total_deals))
 }
 
 fn accumulate(stats: &mut SimStats, result: &RoundResult) {

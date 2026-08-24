@@ -14,8 +14,15 @@ crate-type = ["cdylib"]
 # Enabled by maturin (see pyproject.toml). Kept behind a feature so plain
 # `cargo test`/`cargo clippy` link against libpython and still work.
 extension-module = ["pyo3/extension-module"]
+# Optional wgpu compute backend (--engine gpu). Compiled into the wheels
+# (see [tool.maturin] features in pyproject.toml); availability is
+# detected at runtime, so machines without a usable adapter simply
+# report the GPU engine as unavailable.
+gpu = ["dep:wgpu", "dep:pollster", "dep:bytemuck"]
 
 [dependencies]
+bytemuck = { version = "1.25.2", features = ["derive"], optional = true }
+pollster = { version = "1.0.1", optional = true }
 # abi3-py312: one wheel per platform, forward-compatible across CPython
 # versions. The Python<->Rust boundary is one call per simulation batch,
 # so the stable-ABI overhead is irrelevant to throughput.
@@ -24,3 +31,4 @@ rand = "0.9"
 # Explicit, version-stable PRNG algorithm so seeded runs stay reproducible.
 rand_xoshiro = "0.7"
 rayon = "1"
+wgpu = { version = "30.0.1", optional = true }

@@ -103,7 +103,7 @@ CardSharp uses a phased modernization architecture with these key components:
 ### Performance Considerations
 
 When optimizing blackjack simulations:
-- Simulation runs on one of two engines, selected by `--engine {auto,fast,python}`:
+- Simulation runs on one of two engines, selected by `--engine {auto,fast,gpu,python}`:
   - The Rust fast core (`crates/cardsharp-core`, facade in `cardsharp/fastsim/`) plays
     table-encodable strategies (basic, solver tables), Hi-Lo counting (bet ramp,
     Illustrious 18 deviations, TC-based insurance), CSM shoes, and realistic shuffles
@@ -121,6 +121,20 @@ When optimizing blackjack simulations:
   - The fast core also runs the deal-EV control variate (`--cv`, single seat:
     the per-deal accumulator yields the exact CV moments) and CRN rule
     comparisons (`--compare_rules`).
+  - The fast core additionally ships a GPU backend (`--engine gpu`, wgpu/Metal,
+    `crates/cardsharp-core/src/gpu/`) that is BIT-IDENTICAL to the CPU core for
+    every configuration it accepts: the host generates the exact shuffle
+    orderings the shoe would deal (RNG lives only in shuffles on the classic
+    path), the WGSL kernel plays rounds in pure integer arithmetic, and the
+    host replays money/Welford f64 arithmetic in engine order. Flat-bet runs
+    parallelize per shoe (~76M rounds/s at 1B rounds on an M5, ~4.7x the CPU
+    core); counting runs parallelize per shard only (count carries across
+    shoes) and land at CPU parity while leaving the CPU idle. CSM, `--cv`,
+    conditional settlement, per-deal, >7 seats, max_splits>3, and non-quarter
+    money values refuse loudly; `auto` never picks the GPU on its own. The
+    equality suite (`tests/test_fastsim_gpu.py`, `cargo test --features gpu`)
+    asserts exact report equality including a golden-corpus replay, and skips
+    where no adapter exists. Numbers: `docs/perf/gpu-engine-2026-08-24.md`.
   - The pure-Python reference engine (~50,000 games/second single-threaded, ~350,000
     via multiprocessing) handles what remains: bet-progression and custom
     strategies, composition-dependent play (`--cd_strategy`), non-classic

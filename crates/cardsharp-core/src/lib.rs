@@ -9,6 +9,8 @@
 
 mod card;
 mod counting;
+#[cfg(feature = "gpu")]
+mod gpu;
 mod hand;
 mod round;
 mod rules;
@@ -51,5 +53,13 @@ fn cardsharp_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<session::SessionStep>()?;
     m.add_class::<session::SeatSnapshot>()?;
     m.add("STRATEGY_TABLE_BYTES", strategy::TABLE_BYTES)?;
+    // GPU engine surface: present only when the crate was built with the
+    // `gpu` feature; availability is still a runtime question (gpu_probe).
+    m.add("GPU_SUPPORT", cfg!(feature = "gpu"))?;
+    #[cfg(feature = "gpu")]
+    {
+        m.add_function(wrap_pyfunction!(gpu::simulate_batch_gpu, m)?)?;
+        m.add_function(wrap_pyfunction!(gpu::gpu_probe, m)?)?;
+    }
     Ok(())
 }

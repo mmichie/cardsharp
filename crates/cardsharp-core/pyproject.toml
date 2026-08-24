@@ -15,4 +15,6 @@ classifiers = [
 
 [tool.maturin]
 module-name = "cardsharp_core"
-features = ["extension-module"]
+# The gpu feature compiles the wgpu backend into every build; whether a
+# usable adapter exists is a runtime question (cardsharp_core.gpu_probe).
+features = ["extension-module", "gpu"]

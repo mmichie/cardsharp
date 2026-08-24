@@ -37,6 +37,10 @@ class EngineChoice:
 
     use_core: bool
     reason: str
+    # Route the batch through the core's GPU backend (bit-identical to the
+    # CPU core for every configuration it accepts). Only set when the user
+    # explicitly requested engine="gpu"; "auto" prefers the CPU core.
+    use_gpu: bool = False
 
 
 @dataclass(frozen=True)
@@ -44,7 +48,7 @@ class SimulationRun:
     """A completed simulation: aggregate stats plus run metadata."""
 
     stats: SimulationStats
-    engine: str  # "fast" or "python"
+    engine: str  # "fast", "gpu", or "python"
     seed: int
     duration: float
 
@@ -84,8 +88,11 @@ def resolve_engine(
 ) -> EngineChoice:
     """Decide which engine runs this configuration.
 
-    ``requested`` is "auto", "fast", or "python". "fast" raises with the
-    full list of blockers instead of silently falling back.
+    ``requested`` is "auto", "fast", "gpu", or "python". "fast" and "gpu"
+    raise with the full list of blockers instead of silently falling
+    back. "gpu" routes batches through the core's wgpu backend, which is
+    bit-identical to the CPU core for every configuration it accepts;
+    "auto" never picks the GPU on its own.
     """
     if requested == "python":
         return EngineChoice(
@@ -111,6 +118,26 @@ def resolve_engine(
     if shuffle_type not in ("perfect", "riffle", "strip"):
         blockers.append(f"unknown shuffle_type '{shuffle_type}'")
 
+    if requested == "gpu":
+        if needs_cv:
+            blockers.append(
+                "control variates run on the CPU core's per-deal accumulator"
+            )
+        if n_players > 7:
+            blockers.append("the GPU engine supports at most 7 seats")
+        if CORE_AVAILABLE:
+            if not getattr(cardsharp_core, "GPU_SUPPORT", False):
+                blockers.append("cardsharp-core was built without the gpu feature")
+            else:
+                available, info = cardsharp_core.gpu_probe()
+                if not available:
+                    blockers.append(f"no usable GPU: {info}")
+        if blockers:
+            raise RuntimeError(f"--engine gpu is unavailable: {'; '.join(blockers)}")
+        return EngineChoice(
+            True, "GPU engine requested (bit-identical to the CPU core)", use_gpu=True
+        )
+
     if not blockers:
         return EngineChoice(True, "all features supported by the fast core")
 
@@ -131,6 +158,7 @@ def run_fast_batch(
     shuffle_type: str = "perfect",
     shuffle_count=None,
     conditional_settlement: bool = False,
+    use_gpu: bool = False,
 ) -> SimulationStats:
     """Run one batch on the Rust core and lift the report into stats.
 
@@ -142,15 +170,22 @@ def run_fast_batch(
     over the dealer's draw distribution (Rao-Blackwellization) instead
     of the realized net: same mean, less variance, tighter CIs for the
     same number of rounds. Peek rules and non-CSM shoes only.
+
+    ``use_gpu`` routes the batch through the core's wgpu backend
+    (``simulate_batch_gpu``), which produces the SAME report bit-for-bit
+    for every configuration it accepts and raises for the rest
+    (conditional settlement, CSM, >7 seats, non-quarter money values).
     """
     table = encode_strategy_table(strategy, rules)
     counting = (
         encode_counting_config(strategy) if type(strategy) is CountingStrategy else None
     )
-    report = cardsharp_core.simulate_batch(
-        make_core_rules(rules),
-        table,
-        num_rounds,
+    if use_gpu and conditional_settlement:
+        raise RuntimeError(
+            "--engine gpu does not support conditional settlement (--cv); "
+            "use --engine auto or fast"
+        )
+    common = dict(
         seed=seed % (2**64),
         n_players=n_players,
         initial_bankroll=initial_bankroll,
@@ -158,8 +193,24 @@ def run_fast_batch(
         counting=counting,
         shuffle_type=shuffle_type,
         shuffle_count=shuffle_count,
-        conditional_settlement=conditional_settlement,
     )
+    if use_gpu:
+        try:
+            report = cardsharp_core.simulate_batch_gpu(
+                make_core_rules(rules), table, num_rounds, **common
+            )
+        except ValueError as e:
+            raise RuntimeError(
+                f"--engine gpu is unavailable for this configuration: {e}"
+            ) from e
+    else:
+        report = cardsharp_core.simulate_batch(
+            make_core_rules(rules),
+            table,
+            num_rounds,
+            conditional_settlement=conditional_settlement,
+            **common,
+        )
     return SimulationStats.from_dict(report)
 
 
@@ -405,8 +456,9 @@ def simulate(
             threads,
             shuffle_type,
             shuffle_count,
+            use_gpu=choice.use_gpu,
         )
-        engine_used = "fast"
+        engine_used = "gpu" if choice.use_gpu else "fast"
     else:
         stats = _run_python_batch(
             rules,
