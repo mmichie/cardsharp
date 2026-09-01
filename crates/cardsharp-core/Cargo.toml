@@ -8,17 +8,37 @@ publish = false
 
 [lib]
 name = "cardsharp_core"
-crate-type = ["cdylib"]
+# Both crate types are live. The cdylib is the `cardsharp_core` Python
+# extension maturin builds; the rlib is what a downstream Rust crate links
+# to get the round engine, the rules and the shoe with no libpython
+# anywhere on its link line (which is what `python` being off by default
+# buys -- see [features]).
+crate-type = ["cdylib", "rlib"]
 
 [features]
-# Enabled by maturin (see pyproject.toml). Kept behind a feature so plain
-# `cargo test`/`cargo clippy` link against libpython and still work.
-extension-module = ["pyo3/extension-module"]
+# The whole PyO3 boundary: the pyclasses, the pyfunctions, the pymodule
+# and the `session` module. OFF by default, so `cargo build`, `cargo test`
+# and a Rust consumer's dependency graph never mention pyo3. Only maturin
+# turns it on (see [tool.maturin] features in pyproject.toml).
+#
+# Do NOT make this a default feature. Cargo unifies features per package
+# across a build, so a default would put libpython back on the link line
+# of every downstream crate that happens to share the graph.
+python = ["dep:pyo3"]
+# What the WHEEL build adds on top of `python`: tells PyO3 not to link
+# libpython, which is what makes an importable extension module. Implies
+# `python`, so maturin enabling this alone is sufficient.
+extension-module = ["python", "pyo3/extension-module"]
 # Optional wgpu compute backend (--engine gpu). Compiled into the wheels
 # (see [tool.maturin] features in pyproject.toml); availability is
 # detected at runtime, so machines without a usable adapter simply
 # report the GPU engine as unavailable.
-gpu = ["dep:wgpu", "dep:pollster", "dep:bytemuck"]
+#
+# It implies `python` because that is what it is: the backend exists to
+# serve `simulate_batch_gpu`, and every line of it -- the kernel, the
+# host replay, the exactness gates -- is reachable only from that entry
+# point. There is no Rust-facing GPU API to keep alive without it.
+gpu = ["python", "dep:wgpu", "dep:pollster", "dep:bytemuck"]
 
 [dependencies]
 bytemuck = { version = "1.25.2", features = ["derive"], optional = true }
@@ -26,7 +46,7 @@ pollster = { version = "1.0.1", optional = true }
 # abi3-py312: one wheel per platform, forward-compatible across CPython
 # versions. The Python<->Rust boundary is one call per simulation batch,
 # so the stable-ABI overhead is irrelevant to throughput.
-pyo3 = { version = "0.26", features = ["abi3-py312"] }
+pyo3 = { version = "0.26", features = ["abi3-py312"], optional = true }
 rand = "0.9"
 # Explicit, version-stable PRNG algorithm so seeded runs stay reproducible.
 rand_xoshiro = "0.7"

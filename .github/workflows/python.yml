@@ -52,8 +52,18 @@ jobs:
       working-directory: crates/cardsharp-core
       run: |
         cargo fmt --check
+        # Each feature carries code the others do not, so each is linted.
+        # The bare run is the build a Rust consumer of the rlib gets --
+        # no pyo3 in the graph at all -- and is the one that would stop
+        # covering the PyO3 boundary if `--features python` were dropped.
         cargo clippy --all-targets -- -D warnings
+        cargo clippy --all-targets --features python -- -D warnings
         cargo clippy --all-targets --features gpu -- -D warnings
+    - name: Test Rust core
+      working-directory: crates/cardsharp-core
+      run: |
+        cargo test
+        cargo test --features python
     - name: Build extension
       run: uv sync --extra dev --extra fast
     - name: Test extension (smoke, runner, parity suite)

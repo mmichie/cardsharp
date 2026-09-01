@@ -6,7 +6,10 @@
 //! exact `report()` key set, ready for `SimulationStats.from_dict`.
 
 use crate::round::Winner;
+
+#[cfg(feature = "python")]
 use pyo3::prelude::*;
+#[cfg(feature = "python")]
 use pyo3::types::PyDict;
 
 #[derive(Debug, Default, Clone)]
@@ -106,6 +109,7 @@ impl SimStats {
     /// Emit the exact `SimulationStats.report()` dictionary shape. The
     /// control-variate fields are zero/None: the CV estimator stays on the
     /// Python side.
+    #[cfg(feature = "python")]
     pub fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let d = PyDict::new(py);
         d.set_item("games_played", self.games_played)?;

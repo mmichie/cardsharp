@@ -1,23 +1,36 @@
-//! Python entry points: `simulate_batch` and `play_card_stream`.
+//! Batch simulation, and the Python entry points over it.
+//!
+//! The shard runner, the batch loop and the round records below are
+//! native; `simulate_batch`, `simulate_paired`, `play_card_stream` and
+//! `trace_shoe` are the PyO3 surface over them and compile only under the
+//! `python` feature.
 
 use crate::card::Rank;
 use crate::counting::{Counter, CountingConfig};
 use crate::round::{Decider, PlayerRound, RoundConfig, RoundResult, TableDecider, play_round};
 use crate::rules::Rules;
-use crate::shoe::{CardStream, DealSource, Shoe, ShoeOptions, ShuffleStyle};
+#[cfg(feature = "python")]
+use crate::shoe::{CardStream, ShuffleStyle};
+use crate::shoe::{DealSource, Shoe, ShoeOptions};
 use crate::stats::SimStats;
 use crate::strategy::StrategyTable;
-use pyo3::exceptions::PyValueError;
-use pyo3::prelude::*;
-use pyo3::types::PyDict;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
 use rayon::prelude::*;
 
+#[cfg(feature = "python")]
+use pyo3::exceptions::PyValueError;
+#[cfg(feature = "python")]
+use pyo3::prelude::*;
+#[cfg(feature = "python")]
+use pyo3::types::PyDict;
+
+#[cfg(feature = "python")]
 fn parse_table(table: &[u8]) -> PyResult<StrategyTable> {
     StrategyTable::from_bytes(table).map_err(|e| PyValueError::new_err(e.to_string()))
 }
 
+#[cfg(feature = "python")]
 fn parse_stream(cards: &[u8]) -> PyResult<Vec<Rank>> {
     cards
         .iter()
@@ -34,7 +47,7 @@ const SHARD_ROUNDS: u64 = 250_000;
 
 /// SplitMix64: stable, explicit derivation of per-shard seeds from the
 /// master seed (independent of any RNG crate internals).
-pub(crate) fn splitmix64(state: &mut u64) -> u64 {
+pub fn splitmix64(state: &mut u64) -> u64 {
     *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
     let mut z = *state;
     z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
@@ -78,6 +91,11 @@ impl PerDealTable {
 
     /// Element-wise fold in shard order: float sums stay deterministic
     /// regardless of thread count, like SimStats::merge.
+    /// The flat 10x10x10 grid of `(n, sum_x, sum_x2)` cells.
+    pub fn cells(&self) -> &[(u64, f64, f64)] {
+        &self.cells
+    }
+
     fn merge(&mut self, other: &PerDealTable) {
         for (a, b) in self.cells.iter_mut().zip(&other.cells) {
             a.0 += b.0;
@@ -90,17 +108,17 @@ impl PerDealTable {
 /// Batch-level round parameters: the shared RoundConfig plus the seat
 /// layout and test hooks that `play_round` no longer owns (callers build
 /// the seats; the decider answers insurance).
-pub(crate) struct BatchCfg {
-    pub(crate) round: RoundConfig,
-    pub(crate) n_players: usize,
-    pub(crate) always_insure: bool,
+pub struct BatchCfg {
+    pub round: RoundConfig,
+    pub n_players: usize,
+    pub always_insure: bool,
 }
 
 /// Fixed-size shards with explicitly derived seeds: the shard layout
 /// depends only on (seed, n_rounds), never on the thread count. Shared
 /// by the CPU batch runner and the GPU engine so both play the same
 /// (rounds, shard_seed) sequence.
-pub(crate) fn shard_layout(n_rounds: u64, seed: u64) -> Vec<(u64, u64)> {
+pub fn shard_layout(n_rounds: u64, seed: u64) -> Vec<(u64, u64)> {
     let mut seed_state = seed;
     let n_shards = n_rounds.div_ceil(SHARD_ROUNDS).max(1);
     (0..n_shards)
@@ -116,7 +134,7 @@ pub(crate) fn shard_layout(n_rounds: u64, seed: u64) -> Vec<(u64, u64)> {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_shard(
+pub fn run_shard(
     rules: &Rules,
     table: &StrategyTable,
     batch: &BatchCfg,
@@ -170,6 +188,7 @@ pub(crate) fn run_shard(
 /// net/initial_bet bucketed by (c1, c2, upcard) in solver card values,
 /// indexed `((lo-1)*10 + (hi-1))*10 + (up-1)` -- the raw material of the
 /// per-deal EV diagnostic (cardsharp/tools/deal_ev_diagnostic.py).
+#[cfg(feature = "python")]
 #[pyfunction]
 #[pyo3(signature = (rules, table, n_rounds, seed, n_players = 1, initial_bankroll = 1000.0, always_insure = false, threads = 0, counting = None, shuffle_type = "perfect", shuffle_count = None, conditional_settlement = false, per_deal = false))]
 #[allow(clippy::too_many_arguments)]
@@ -251,7 +270,7 @@ pub fn simulate_batch<'py>(
 /// GPU engine's exactness tests / fallback path: shard, run in parallel,
 /// fold in shard order.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_batch_cpu(
+pub fn run_batch_cpu(
     rules: &Rules,
     table: &StrategyTable,
     batch: &BatchCfg,
@@ -320,7 +339,7 @@ fn accumulate(stats: &mut SimStats, result: &RoundResult) {
 }
 
 /// One player's view of a completed round, for parity testing.
-#[pyclass(get_all)]
+#[cfg_attr(feature = "python", pyclass(get_all))]
 #[derive(Debug, Clone)]
 pub struct PlayerRecord {
     /// Final hands as rank codes (Ace=1 .. King=13), in play order.
@@ -345,7 +364,7 @@ pub struct PlayerRecord {
     pub money: f64,
 }
 
-#[pyclass(get_all)]
+#[cfg_attr(feature = "python", pyclass(get_all))]
 #[derive(Debug, Clone)]
 pub struct RoundRecord {
     pub players: Vec<PlayerRecord>,
@@ -363,6 +382,7 @@ pub struct RoundRecord {
 ///
 /// The parity suite feeds the same sequence to the Python engine via a
 /// pre-loaded `Shoe` and asserts the records match.
+#[cfg(feature = "python")]
 #[pyfunction]
 #[pyo3(signature = (rules, table, cards, n_players = 1, initial_bankroll = 1000.0, always_insure = false, max_rounds = None, counting = None, conditional_settlement = false))]
 #[allow(clippy::too_many_arguments)]
@@ -426,6 +446,7 @@ pub fn play_card_stream(
 /// comparable with the Python shoe's despite the different RNGs. Returns,
 /// per round, the cumulative (shuffles_before_dealing, mid_round_reshuffles
 /// _after_dealing) counters; the construction shuffle is excluded.
+#[cfg(feature = "python")]
 #[pyfunction]
 #[pyo3(signature = (num_decks, penetration, burn_cards, deals_per_round, seed = 0))]
 pub fn trace_shoe(
@@ -456,7 +477,7 @@ pub fn trace_shoe(
     Ok(trace)
 }
 
-pub(crate) fn make_record(result: RoundResult, cards_consumed: u32) -> RoundRecord {
+pub fn make_record(result: RoundResult, cards_consumed: u32) -> RoundRecord {
     let players = result
         .players
         .iter()
@@ -502,6 +523,9 @@ pub(crate) fn make_record(result: RoundResult, cards_consumed: u32) -> RoundReco
 
 /// Paired-difference accumulator across two rule variants played on
 /// common random numbers, mirroring `cardsharp.blackjack.comparison`.
+/// Nothing but `simulate_paired` uses it, so it follows that entry point
+/// behind the `python` feature.
+#[cfg(feature = "python")]
 #[derive(Default, Clone)]
 struct PairedStats {
     a: SimStats,
@@ -511,6 +535,7 @@ struct PairedStats {
     diff_m2: f64,
 }
 
+#[cfg(feature = "python")]
 impl PairedStats {
     fn record_diff(&mut self, diff: f64) {
         self.diff_n += 1;
@@ -543,6 +568,7 @@ impl PairedStats {
     }
 }
 
+#[cfg(feature = "python")]
 #[allow(clippy::too_many_arguments)]
 fn run_paired_shard(
     rules_a: &Rules,
@@ -605,6 +631,7 @@ fn run_paired_shard(
 /// (per-round fresh shoes; counting is unsupported because per-round
 /// resets destroy the count). Returns per-variant report dicts plus the
 /// paired-difference Welford state, all thread-count invariant.
+#[cfg(feature = "python")]
 #[pyfunction]
 #[pyo3(signature = (rules_a, table_a, rules_b, table_b, n_rounds, seed, n_players = 1, initial_bankroll = 10_000_000.0, threads = 0, conditional_settlement = false))]
 #[allow(clippy::too_many_arguments)]
