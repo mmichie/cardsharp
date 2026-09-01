@@ -21,15 +21,18 @@
 //!
 //! The Rust surface is the round engine ([`round::play_round`] and the
 //! [`round::Decider`] seam), the rule set ([`rules::Rules`]), the shoe
-//! ([`shoe`]), the strategy table ([`strategy`]) and the Hi-Lo counter
-//! ([`counting`]). The `session` module -- the interactive pyclass -- is
-//! the one module that exists only under `python`.
+//! ([`shoe`]), the strategy table ([`strategy`]), the Hi-Lo counter
+//! ([`counting`]) and the resumable round state machine
+//! ([`machine::RoundMachine`]). The `session` module -- the pyclass
+//! wrapper over that machine -- is the one module that exists only under
+//! `python`.
 
 pub mod card;
 pub mod counting;
 #[cfg(feature = "gpu")]
 mod gpu;
 pub mod hand;
+pub mod machine;
 pub mod round;
 pub mod rules;
 #[cfg(feature = "python")]
@@ -73,7 +76,7 @@ fn cardsharp_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<sim::PlayerRecord>()?;
     m.add_class::<session::Session>()?;
     m.add_class::<session::SessionStep>()?;
-    m.add_class::<session::SeatSnapshot>()?;
+    m.add_class::<machine::SeatSnapshot>()?;
     m.add("STRATEGY_TABLE_BYTES", strategy::TABLE_BYTES)?;
     // GPU engine surface: present only when the crate was built with the
     // `gpu` feature; availability is still a runtime question (gpu_probe).

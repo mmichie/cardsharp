@@ -248,6 +248,10 @@ impl OrderingGen {
     }
 }
 
+/// `Clone` is what lets `machine::RoundMachine` replay a round from its
+/// starting shoe: the clone is played speculatively and only becomes the
+/// session's shoe when the round completes on real answers.
+#[derive(Clone)]
 pub struct Shoe {
     cards: Vec<Rank>,
     /// Used cards awaiting return to the machine (CSM mode only).
@@ -449,6 +453,7 @@ impl DealSource for Shoe {
 /// A fixed card sequence injected from Python for parity testing. Never
 /// shuffles; dealing past the end reports `OutOfCards` so the caller can
 /// discard the incomplete round.
+#[derive(Clone)]
 pub struct CardStream {
     cards: Vec<Rank>,
     next: usize,

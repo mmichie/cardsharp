@@ -32,6 +32,19 @@ impl Action {
             Action::Surrender => "surrender",
         }
     }
+
+    /// Parse the string form. The inverse of `as_str`, and what the
+    /// session boundary uses to turn a caller's answer into an action.
+    pub fn parse(name: &str) -> Option<Self> {
+        Some(match name {
+            "hit" => Action::Hit,
+            "stand" => Action::Stand,
+            "double" => Action::Double,
+            "split" => Action::Split,
+            "surrender" => Action::Surrender,
+            _ => return None,
+        })
+    }
 }
 
 /// A cell in the strategy chart. `DoubleStand` is the chart's "DS"
@@ -266,7 +279,7 @@ impl StrategyTable {
 
 /// The set of currently legal actions, in the Python engine's list order
 /// (hit, stand, double, split, surrender).
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ValidActions {
     pub hit: bool,
     pub stand: bool,
