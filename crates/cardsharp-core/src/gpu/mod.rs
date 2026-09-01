@@ -1041,8 +1041,8 @@ fn run_shard_mode(
 // Python surface
 //
 // The kernel, the host replay and the exactness gates above are native;
-// only these two entry points need PyO3, so the whole section sits behind
-// the `python` feature and a `gpu`-only Rust build compiles clean.
+// only these two entry points need PyO3, so they carry the `python` gate
+// like every other entry point rather than relying on `gpu` implying it.
 // ---------------------------------------------------------------------
 
 /// Probe GPU availability: (available, adapter description or reason).

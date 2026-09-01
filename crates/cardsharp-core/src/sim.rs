@@ -89,13 +89,13 @@ impl PerDealTable {
         cell.2 += x * x;
     }
 
-    /// Element-wise fold in shard order: float sums stay deterministic
-    /// regardless of thread count, like SimStats::merge.
     /// The flat 10x10x10 grid of `(n, sum_x, sum_x2)` cells.
     pub fn cells(&self) -> &[(u64, f64, f64)] {
         &self.cells
     }
 
+    /// Element-wise fold in shard order: float sums stay deterministic
+    /// regardless of thread count, like SimStats::merge.
     fn merge(&mut self, other: &PerDealTable) {
         for (a, b) in self.cells.iter_mut().zip(&other.cells) {
             a.0 += b.0;
