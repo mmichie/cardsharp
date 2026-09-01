@@ -56,6 +56,10 @@ class Rules:
         use_csm: bool = False,
         double_on: str = "any",
     ) -> None: ...
+    # A stable 64-bit fingerprint of the rule set over a canonical field
+    # order, so a stored round can prove it resumes under the rules it was
+    # dealt with. Adding a rule field changes every digest.
+    def digest(self) -> int: ...
 
 class CountingConfig:
     def __init__(

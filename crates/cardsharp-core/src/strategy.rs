@@ -13,6 +13,8 @@ use crate::hand::Hand;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum Action {
     Hit,
     Stand,
@@ -23,6 +25,7 @@ pub enum Action {
 
 impl Action {
     /// String form matching `cardsharp.blackjack.action.Action.value`.
+    /// This is also the serde spelling.
     pub fn as_str(self) -> &'static str {
         match self {
             Action::Hit => "hit",
@@ -279,6 +282,7 @@ impl StrategyTable {
 
 /// The set of currently legal actions, in the Python engine's list order
 /// (hit, stand, double, split, surrender).
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ValidActions {
     pub hit: bool,

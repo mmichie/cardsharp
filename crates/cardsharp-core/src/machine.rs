@@ -66,6 +66,7 @@ use std::fmt;
 /// point. Carries everything the event-translation layer needs to render
 /// or emit per-card events by diffing consecutive snapshots.
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct SeatSnapshot {
     /// Hands as rank codes (Ace=1 .. King=13), in play order.
@@ -102,6 +103,7 @@ fn snapshot_players(players: &[PlayerRound]) -> Vec<SeatSnapshot> {
 }
 
 /// What the engine is waiting for.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AskKind {
     /// Insurance against a dealer ace. Answer with [`Answer::Insurance`].
@@ -116,6 +118,7 @@ pub enum AskKind {
 }
 
 /// A question the engine stopped on.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct Ask {
     pub kind: AskKind,
@@ -134,6 +137,7 @@ pub struct Ask {
 }
 
 /// A completed round.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct Finished {
     pub record: RoundRecord,
@@ -142,6 +146,7 @@ pub struct Finished {
 }
 
 /// Where the round stands after a [`RoundMachine::step`].
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub enum Step {
     /// The engine needs an answer before it can go on.
@@ -152,6 +157,7 @@ pub enum Step {
 }
 
 /// What the caller answers with.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Answer {
     /// One bet per seat: deal a new round. Only legal between rounds.
@@ -637,6 +643,8 @@ impl<S: DealSource + Clone> RoundMachine<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "serde")]
+    use crate::rules::DoubleOn;
 
     fn stream(codes: &[u8]) -> Source {
         Source::stream(codes.iter().map(|c| Rank::from_code(*c).unwrap()).collect())
@@ -867,5 +875,48 @@ mod tests {
         assert_send::<RoundMachine<Source>>();
         assert_send::<Step>();
         assert_send::<Answer>();
+    }
+
+    /// The `serde` feature is what makes a step storable, so the derives
+    /// are exercised rather than merely compiled.
+    #[cfg(feature = "serde")]
+    #[test]
+    fn steps_answers_and_rules_round_trip_through_serde() {
+        let mut t = table(&[10, 9, 6, 8, 5]);
+        let step = t.step(Answer::Bets(vec![10.0])).unwrap();
+        let json = serde_json::to_string(&step).unwrap();
+        let back: Step = serde_json::from_str(&json).unwrap();
+        assert_eq!(ask(&back).players[0].hands, ask(&step).players[0].hands);
+        assert_eq!(ask(&back).dealer_up, Rank::Nine);
+        assert_eq!(ask(&back).valid, ask(&step).valid);
+
+        let step = t.step(Answer::Action(Action::Stand)).unwrap();
+        let back: Step = serde_json::from_str(&serde_json::to_string(&step).unwrap()).unwrap();
+        // Stood on 16 against the dealer's 17.
+        assert_eq!(finished(&back).record.players[0].net, -10.0);
+        assert_eq!(finished(&back).money, finished(&step).money);
+
+        for answer in [
+            Answer::Bets(vec![10.0]),
+            Answer::Insurance(true),
+            Answer::Action(Action::Double),
+        ] {
+            let json = serde_json::to_string(&answer).unwrap();
+            assert_eq!(serde_json::from_str::<Answer>(&json).unwrap(), answer);
+        }
+
+        // Rules serialize with `double_on` as its canonical string, and
+        // a round trip preserves the digest -- which is the whole point
+        // of storing them.
+        let rules = Rules {
+            num_decks: 6,
+            double_on: DoubleOn::NineToEleven,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&rules).unwrap();
+        assert!(json.contains("\"double_on\":\"9-11\""));
+        let back: Rules = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, rules);
+        assert_eq!(back.digest(), rules.digest());
     }
 }

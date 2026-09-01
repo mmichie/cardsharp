@@ -340,6 +340,7 @@ fn accumulate(stats: &mut SimStats, result: &RoundResult) {
 
 /// One player's view of a completed round, for parity testing.
 #[cfg_attr(feature = "python", pyclass(get_all))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct PlayerRecord {
     /// Final hands as rank codes (Ace=1 .. King=13), in play order.
@@ -365,6 +366,7 @@ pub struct PlayerRecord {
 }
 
 #[cfg_attr(feature = "python", pyclass(get_all))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct RoundRecord {
     pub players: Vec<PlayerRecord>,

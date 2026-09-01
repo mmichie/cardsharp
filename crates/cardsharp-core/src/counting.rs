@@ -34,6 +34,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Deviation {
     pub hand_value: u32,
     pub is_soft: bool,
@@ -75,6 +76,7 @@ fn action_from_code(code: u8) -> Result<Action, InvalidActionCode> {
 /// table (from `strategy._COUNTING_DEVIATIONS`) plus the deck count the
 /// strategy was constructed with.
 #[cfg_attr(feature = "python", pyclass)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct CountingConfig {
     pub deviations: Vec<Deviation>,

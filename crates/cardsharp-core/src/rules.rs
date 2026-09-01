@@ -12,9 +12,16 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DoubleOn {
+    // The serde spellings are the canonical strings `parse` accepts and
+    // `as_str` emits, so a serialized rule set reads the same in JSON as
+    // it does through the Python constructor.
+    #[cfg_attr(feature = "serde", serde(rename = "any"))]
     Any,
+    #[cfg_attr(feature = "serde", serde(rename = "9-11"))]
     NineToEleven,
+    #[cfg_attr(feature = "serde", serde(rename = "10-11"))]
     TenToEleven,
 }
 
@@ -95,7 +102,11 @@ impl From<InvalidDoubleOn> for InvalidRules {
 /// constructor so a facade can pass through `Rules.to_dict()` directly,
 /// and `Default` carries the same values so a Rust caller can write
 /// `Rules { num_decks: 6, ..Default::default() }`.
+///
+/// **The field order below is the canonical order** -- `digest` hashes the
+/// fields in exactly this sequence. Reordering them changes every digest.
 #[cfg_attr(feature = "python", pyclass)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Rules {
     pub blackjack_payout: f64,
@@ -338,6 +349,13 @@ impl Rules {
     fn double_on_str(&self) -> &'static str {
         self.double_on.as_str()
     }
+
+    /// See `Rules::digest`. Exposed so a Python caller can stamp a stored
+    /// round with the rules it was dealt under.
+    #[pyo3(name = "digest")]
+    fn digest_py(&self) -> u64 {
+        self.digest()
+    }
 }
 
 impl Rules {
@@ -350,6 +368,59 @@ impl Rules {
             return Err(InvalidRules::Penetration);
         }
         Ok(())
+    }
+
+    /// A stable 64-bit fingerprint of the rule set, so a stored round can
+    /// prove it resumes under the rules it was dealt with.
+    ///
+    /// FNV-1a over the fields in the struct's declaration order, which is
+    /// the canonical order: booleans as one byte, integers little-endian,
+    /// floats as `to_bits` (two rule sets whose payouts differ in the last
+    /// ulp are different rule sets), `double_on` as its canonical string.
+    /// FNV rather than `DefaultHasher` because the standard hasher's
+    /// output is explicitly not guaranteed stable across Rust releases,
+    /// and this value is meant to be written down.
+    ///
+    /// **Adding a field changes every digest, and that is the point**: a
+    /// round stored under a rule set that did not yet have the field
+    /// cannot claim to resume under one that does. Widening the struct is
+    /// therefore a deliberate invalidation of every stored digest.
+    pub fn digest(&self) -> u64 {
+        const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+        const PRIME: u64 = 0x0000_0100_0000_01b3;
+
+        let mut hash = OFFSET;
+        let mut eat = |bytes: &[u8]| {
+            for b in bytes {
+                hash ^= u64::from(*b);
+                hash = hash.wrapping_mul(PRIME);
+            }
+        };
+
+        eat(&self.blackjack_payout.to_bits().to_le_bytes());
+        eat(&[u8::from(self.dealer_hit_soft_17)]);
+        eat(&[u8::from(self.allow_split)]);
+        eat(&[u8::from(self.allow_double_down)]);
+        eat(&[u8::from(self.allow_insurance)]);
+        eat(&[u8::from(self.allow_surrender)]);
+        eat(&[u8::from(self.allow_early_surrender)]);
+        eat(&[u8::from(self.allow_double_after_split)]);
+        eat(&[u8::from(self.allow_resplitting)]);
+        eat(&[u8::from(self.dealer_peek)]);
+        eat(&self.num_decks.to_le_bytes());
+        eat(&self.min_bet.to_bits().to_le_bytes());
+        eat(&self.max_bet.to_bits().to_le_bytes());
+        eat(&self.max_splits.to_le_bytes());
+        eat(&self.insurance_payout.to_bits().to_le_bytes());
+        eat(&[u8::from(self.five_card_charlie)]);
+        eat(&self.penetration.to_bits().to_le_bytes());
+        eat(&self.burn_cards.to_le_bytes());
+        eat(&[u8::from(self.resplit_aces)]);
+        eat(&[u8::from(self.hit_split_aces)]);
+        eat(&[u8::from(self.allow_obo)]);
+        eat(&[u8::from(self.use_csm)]);
+        eat(self.double_on.as_str().as_bytes());
+        hash
     }
 
     /// Mirrors `Rules.can_split` (rank-equality pair, resplit gating,
@@ -417,6 +488,137 @@ impl Rules {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The digest is written down by callers, so its value for the default
+    /// rule set is pinned. A change here is a change to every stored
+    /// digest and must be deliberate.
+    #[test]
+    fn the_default_rule_set_has_a_pinned_digest() {
+        assert_eq!(Rules::default().digest(), 0x9a92_3dad_61bb_a79f);
+    }
+
+    #[test]
+    fn the_digest_is_stable_across_calls_and_clones() {
+        let rules = Rules {
+            num_decks: 6,
+            double_on: DoubleOn::NineToEleven,
+            ..Default::default()
+        };
+        assert_eq!(rules.digest(), rules.digest());
+        assert_eq!(rules.digest(), rules.clone().digest());
+    }
+
+    #[test]
+    fn every_field_moves_the_digest() {
+        let base = Rules::default();
+        let mut seen = vec![base.digest()];
+        let variants = [
+            Rules {
+                blackjack_payout: 1.2,
+                ..base.clone()
+            },
+            Rules {
+                dealer_hit_soft_17: false,
+                ..base.clone()
+            },
+            Rules {
+                allow_split: false,
+                ..base.clone()
+            },
+            Rules {
+                allow_double_down: false,
+                ..base.clone()
+            },
+            Rules {
+                allow_insurance: false,
+                ..base.clone()
+            },
+            Rules {
+                allow_surrender: false,
+                ..base.clone()
+            },
+            Rules {
+                allow_early_surrender: true,
+                ..base.clone()
+            },
+            Rules {
+                allow_double_after_split: true,
+                ..base.clone()
+            },
+            Rules {
+                allow_resplitting: true,
+                ..base.clone()
+            },
+            Rules {
+                dealer_peek: true,
+                ..base.clone()
+            },
+            Rules {
+                num_decks: 6,
+                ..base.clone()
+            },
+            Rules {
+                min_bet: 5.0,
+                ..base.clone()
+            },
+            Rules {
+                max_bet: 500.0,
+                ..base.clone()
+            },
+            Rules {
+                max_splits: 1,
+                ..base.clone()
+            },
+            Rules {
+                insurance_payout: 3.0,
+                ..base.clone()
+            },
+            Rules {
+                five_card_charlie: true,
+                ..base.clone()
+            },
+            Rules {
+                penetration: 0.5,
+                ..base.clone()
+            },
+            Rules {
+                burn_cards: 1,
+                ..base.clone()
+            },
+            Rules {
+                resplit_aces: true,
+                ..base.clone()
+            },
+            Rules {
+                hit_split_aces: true,
+                ..base.clone()
+            },
+            Rules {
+                allow_obo: false,
+                ..base.clone()
+            },
+            Rules {
+                use_csm: true,
+                ..base.clone()
+            },
+            Rules {
+                double_on: DoubleOn::TenToEleven,
+                ..base.clone()
+            },
+        ];
+        // One variant per field, so a field left out of `digest` shows up
+        // here as a collision rather than as silently interchangeable
+        // rule sets.
+        assert_eq!(variants.len(), 23);
+        for variant in variants {
+            let digest = variant.digest();
+            assert!(
+                !seen.contains(&digest),
+                "digest collision: {variant:?} hashes to {digest:#x}"
+            );
+            seen.push(digest);
+        }
+    }
 
     #[test]
     fn double_on_round_trips_through_its_canonical_string() {

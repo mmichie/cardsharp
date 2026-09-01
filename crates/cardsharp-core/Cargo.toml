@@ -29,6 +29,12 @@ python = ["dep:pyo3"]
 # libpython, which is what makes an importable extension module. Implies
 # `python`, so maturin enabling this alone is sufficient.
 extension-module = ["python", "pyo3/extension-module"]
+# Serde derives on the types that cross a boundary -- Rules, the round
+# records, the seat snapshot and the session step/answer types -- so a
+# caller can persist a round or generate fixtures. Off by default and
+# never enabled by the wheel: the Python boundary carries its own
+# conversions.
+serde = ["dep:serde"]
 # Optional wgpu compute backend (--engine gpu). Compiled into the wheels
 # (see [tool.maturin] features in pyproject.toml); availability is
 # detected at runtime, so machines without a usable adapter simply
@@ -51,4 +57,10 @@ rand = "0.9"
 # Explicit, version-stable PRNG algorithm so seeded runs stay reproducible.
 rand_xoshiro = "0.7"
 rayon = "1"
+serde = { version = "1", features = ["derive"], optional = true }
 wgpu = { version = "30.0.1", optional = true }
+
+[dev-dependencies]
+# Only so the `serde` feature's derives are exercised by a round trip
+# rather than merely compiled. Never in a shipped artifact.
+serde_json = "1"
