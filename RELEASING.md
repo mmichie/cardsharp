@@ -80,6 +80,41 @@ dry-run a build before tagging.
    each natively built wheel, and waits at the `pypi` environment.
 5. Approve to publish.
 
+## The Rust crate: `publish = false`, pin by tag
+
+`cardsharp-core` is a Cargo crate as well as a Python package. It builds
+as a cdylib (the extension module) and as an rlib, so a Rust project can
+depend on the round engine directly, with PyO3 left out entirely:
+
+```toml
+[dependencies]
+cardsharp-core = { git = "https://github.com/mmichie/cardsharp", tag = "core-v0.1.0", default-features = false }
+```
+
+`default-features = false` is belt and braces -- there are no default
+features -- but it states the intent: the `python` feature is what
+compiles the PyO3 boundary, only maturin turns it on, and a Rust
+consumer never wants libpython on its link line. `serde` is the other
+one worth knowing about: it adds derives to `Rules`, the round records
+and the session step/answer types.
+
+**`publish = false` stays.** The crate is not on crates.io and there is
+no plan to put it there; the same `core-v*` tags the wheels are cut from
+are the Rust release line, so pinning by tag and pinning by wheel name
+the same version. That has one consequence a downstream should know:
+
+- **Pin by tag, not by branch.** `master` moves, and a `git` dependency
+  with no `tag`/`rev` re-resolves on every `cargo update`.
+- **A `core-v*` tag is a Rust release too.** Whoever cuts one owns the
+  Rust API in it, so a breaking change to `Rules`, `machine::Answer` /
+  `machine::Step`, or `Rules::digest`'s value belongs in the same
+  `CHANGELOG.md` entry as the Python-visible changes. `digest` is the
+  sharp one: adding a rule field changes every digest, on purpose, and a
+  downstream that stored digests has to be told.
+- **Versioning is the wheel's.** There is no separate Rust version line
+  to bump; step 1 above (keeping `Cargo.toml` and `pyproject.toml`
+  equal) is what a downstream reads off the tag.
+
 ## Verifying an install from PyPI
 
 ```bash
