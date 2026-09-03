@@ -26,10 +26,15 @@
 use crate::card::Rank;
 use crate::hand::Hand;
 use crate::strategy::Action;
+use std::fmt;
+
+#[cfg(feature = "python")]
 use pyo3::exceptions::PyValueError;
+#[cfg(feature = "python")]
 use pyo3::prelude::*;
 
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Deviation {
     pub hand_value: u32,
     pub is_soft: bool,
@@ -39,29 +44,46 @@ pub struct Deviation {
     pub below: Option<Action>,
 }
 
-fn action_from_code(code: u8) -> PyResult<Action> {
+/// A deviation table carried an action code outside the encoding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InvalidActionCode(pub u8);
+
+impl fmt::Display for InvalidActionCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "deviation action code {} not in {{0=Hit,1=Stand,2=Double}}",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for InvalidActionCode {}
+
+/// Decode a deviation-table action code. Only the Python constructor
+/// feeds codes in; a Rust caller builds `Deviation`s directly.
+#[cfg(feature = "python")]
+fn action_from_code(code: u8) -> Result<Action, InvalidActionCode> {
     Ok(match code {
         0 => Action::Hit,
         1 => Action::Stand,
         2 => Action::Double,
-        other => {
-            return Err(PyValueError::new_err(format!(
-                "deviation action code {other} not in {{0=Hit,1=Stand,2=Double}}"
-            )));
-        }
+        other => return Err(InvalidActionCode(other)),
     })
 }
 
 /// Counting configuration crossing the Python boundary: the deviation
 /// table (from `strategy._COUNTING_DEVIATIONS`) plus the deck count the
 /// strategy was constructed with.
-#[pyclass]
+#[cfg_attr(feature = "python", pyclass)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct CountingConfig {
     pub deviations: Vec<Deviation>,
     pub initial_decks: f64,
 }
 
+#[cfg(feature = "python")]
 #[pymethods]
 impl CountingConfig {
     #[new]
@@ -70,6 +92,11 @@ impl CountingConfig {
         deviations: Vec<(u32, bool, u32, f64, Option<u8>, Option<u8>)>,
         initial_decks: f64,
     ) -> PyResult<Self> {
+        let to_action = |code: Option<u8>| -> PyResult<Option<Action>> {
+            code.map(action_from_code)
+                .transpose()
+                .map_err(|e| PyValueError::new_err(e.to_string()))
+        };
         let deviations = deviations
             .into_iter()
             .map(
@@ -79,8 +106,8 @@ impl CountingConfig {
                         is_soft,
                         dealer_value,
                         threshold,
-                        above: above.map(action_from_code).transpose()?,
-                        below: below.map(action_from_code).transpose()?,
+                        above: to_action(above)?,
+                        below: to_action(below)?,
                     })
                 },
             )

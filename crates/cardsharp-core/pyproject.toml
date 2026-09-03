@@ -15,6 +15,10 @@ classifiers = [
 
 [tool.maturin]
 module-name = "cardsharp_core"
+# `python` is what compiles the PyO3 boundary at all -- it is off by
+# default in Cargo.toml so Rust consumers link no libpython, and THIS is
+# the line that turns it back on for the wheel. `extension-module` implies
+# it, but both are named so the wiring is legible from either file.
 # The gpu feature compiles the wgpu backend into every build; whether a
 # usable adapter exists is a runtime question (cardsharp_core.gpu_probe).
-features = ["extension-module", "gpu"]
+features = ["python", "extension-module", "gpu"]

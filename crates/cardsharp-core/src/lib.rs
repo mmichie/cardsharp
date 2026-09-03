@@ -6,37 +6,62 @@
 //! decisions, payouts, and card consumption. Strategy charts are compiled
 //! to a 370-byte table on the Python side
 //! (`cardsharp.fastsim.encoding.encode_strategy_table`).
+//!
+//! # Two consumers, one engine
+//!
+//! The crate builds as a **cdylib** (the `cardsharp_core` Python extension
+//! module, built by maturin) and as an **rlib** (a plain Rust dependency).
+//! Everything PyO3 sits behind the non-default `python` feature, which
+//! only maturin enables, so a Rust consumer links the rules with no
+//! libpython:
+//!
+//! ```text
+//! cardsharp-core = { git = "...", default-features = false }
+//! ```
+//!
+//! The Rust surface is the round engine ([`round::play_round`] and the
+//! [`round::Decider`] seam), the rule set ([`rules::Rules`]), the shoe
+//! ([`shoe`]), the strategy table ([`strategy`]), the Hi-Lo counter
+//! ([`counting`]) and the resumable round state machine
+//! ([`machine::RoundMachine`]). The `session` module -- the pyclass
+//! wrapper over that machine -- is the one module that exists only under
+//! `python`.
 
-mod card;
-mod counting;
+pub mod card;
+pub mod counting;
 #[cfg(feature = "gpu")]
 mod gpu;
-mod hand;
-mod round;
-mod rules;
+pub mod hand;
+pub mod machine;
+pub mod round;
+pub mod rules;
+#[cfg(feature = "python")]
 mod session;
-mod settle;
-mod shoe;
-mod sim;
-mod stats;
-mod strategy;
+pub mod settle;
+pub mod shoe;
+pub mod sim;
+pub mod stats;
+pub mod strategy;
 
+#[cfg(feature = "python")]
 use pyo3::prelude::*;
 
 /// Version of the compiled core, for the Python facade to report and to
 /// check against the expected interface version.
-#[pyfunction]
-fn engine_version() -> &'static str {
+#[cfg_attr(feature = "python", pyfunction)]
+pub fn engine_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
 /// Trivial round trip used by the smoke test to prove argument and
 /// return-value conversion across the extension boundary.
+#[cfg(feature = "python")]
 #[pyfunction]
 fn ping(value: u64) -> u64 {
     value.wrapping_add(1)
 }
 
+#[cfg(feature = "python")]
 #[pymodule]
 fn cardsharp_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(engine_version, m)?)?;
@@ -51,7 +76,7 @@ fn cardsharp_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<sim::PlayerRecord>()?;
     m.add_class::<session::Session>()?;
     m.add_class::<session::SessionStep>()?;
-    m.add_class::<session::SeatSnapshot>()?;
+    m.add_class::<machine::SeatSnapshot>()?;
     m.add("STRATEGY_TABLE_BYTES", strategy::TABLE_BYTES)?;
     // GPU engine surface: present only when the crate was built with the
     // `gpu` feature; availability is still a runtime question (gpu_probe).

@@ -13,6 +13,8 @@ use crate::hand::Hand;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum Action {
     Hit,
     Stand,
@@ -23,6 +25,7 @@ pub enum Action {
 
 impl Action {
     /// String form matching `cardsharp.blackjack.action.Action.value`.
+    /// This is also the serde spelling.
     pub fn as_str(self) -> &'static str {
         match self {
             Action::Hit => "hit",
@@ -31,6 +34,19 @@ impl Action {
             Action::Split => "split",
             Action::Surrender => "surrender",
         }
+    }
+
+    /// Parse the string form. The inverse of `as_str`, and what the
+    /// session boundary uses to turn a caller's answer into an action.
+    pub fn parse(name: &str) -> Option<Self> {
+        Some(match name {
+            "hit" => Action::Hit,
+            "stand" => Action::Stand,
+            "double" => Action::Double,
+            "split" => Action::Split,
+            "surrender" => Action::Surrender,
+            _ => return None,
+        })
     }
 }
 
@@ -266,7 +282,8 @@ impl StrategyTable {
 
 /// The set of currently legal actions, in the Python engine's list order
 /// (hit, stand, double, split, surrender).
-#[derive(Debug, Clone, Copy, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ValidActions {
     pub hit: bool,
     pub stand: bool,

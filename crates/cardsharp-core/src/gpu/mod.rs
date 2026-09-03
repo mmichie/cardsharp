@@ -42,8 +42,11 @@ use crate::shoe::{OrderingGen, ShoeOptions, ShuffleStyle};
 use crate::sim::{BatchCfg, run_shard, shard_layout};
 use crate::stats::SimStats;
 use crate::strategy::{Action, StrategyTable};
+#[cfg(feature = "python")]
 use pyo3::exceptions::PyValueError;
+#[cfg(feature = "python")]
 use pyo3::prelude::*;
+#[cfg(feature = "python")]
 use pyo3::types::PyDict;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256PlusPlus;
@@ -1036,9 +1039,14 @@ fn run_shard_mode(
 
 // ---------------------------------------------------------------------
 // Python surface
+//
+// The kernel, the host replay and the exactness gates above are native;
+// only these two entry points need PyO3, so they carry the `python` gate
+// like every other entry point rather than relying on `gpu` implying it.
 // ---------------------------------------------------------------------
 
 /// Probe GPU availability: (available, adapter description or reason).
+#[cfg(feature = "python")]
 #[pyfunction]
 pub fn gpu_probe() -> (bool, String) {
     match ctx() {
@@ -1054,6 +1062,7 @@ pub fn gpu_probe() -> (bool, String) {
 /// same seed and configuration. Configurations the GPU engine cannot
 /// reproduce exactly raise ValueError with the reason (the Python facade
 /// uses that to fall back or to error loudly under --engine gpu).
+#[cfg(feature = "python")]
 #[pyfunction]
 #[pyo3(signature = (rules, table, n_rounds, seed, n_players = 1, initial_bankroll = 1000.0, always_insure = false, threads = 0, counting = None, shuffle_type = "perfect", shuffle_count = None))]
 #[allow(clippy::too_many_arguments)]

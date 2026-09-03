@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+* The fast core builds as an rlib as well as a cdylib, and all of PyO3
+  sits behind a non-default `python` feature that only maturin enables
+  -- so a Rust project can depend on the round engine, the rules, the
+  shoe and the strategy table with no libpython in its graph. The wheel
+  is unchanged; `RELEASING.md` records the pin-by-tag policy
+* Interactive sessions run on a native, `Send` round state machine
+  (`machine::RoundMachine`, `step(answer) -> Step`) instead of a worker
+  thread and two channels per session. `cardsharp_core.Session` is now
+  a thin wrapper over it and is no longer `unsendable`; the round
+  implementation, the `Decider` seam and every observable session
+  behaviour are unchanged
+* Optional `serde` feature: derives on `Rules`, `RoundRecord`,
+  `PlayerRecord`, `SeatSnapshot` and the step/answer types, for
+  persistence and fixture generation
+* `Rules.digest()`: a stable 64-bit fingerprint over a canonical field
+  order, so a stored round can prove it resumes under the rules it was
+  dealt with. Adding a rule field changes every digest, deliberately
+
 ## 0.7.0
 
 * Rust fast core (crates/cardsharp-core): classic blackjack at ~2.9M
